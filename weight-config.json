@@ -1,0 +1,21 @@
+{
+  "freq": 0.32,
+  "miss": 0.23,
+  "trend": 0.25,
+  "zone": 0.2,
+  "version": 2,
+  "adjustments": [
+    {
+      "date": "2026-04-21",
+      "direction": "freq+",
+      "hot_wins": 5,
+      "cold_wins": 0,
+      "new_weights": {
+        "freq": 0.32,
+        "miss": 0.23,
+        "trend": 0.25,
+        "zone": 0.2
+      }
+    }
+  ]
+}

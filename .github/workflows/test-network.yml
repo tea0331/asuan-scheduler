@@ -1,0 +1,75 @@
+name: Network Test
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test 500.com access
+        run: |
+          echo "=== 500.com ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" https://datachart.500.com/ssq/history/newinc/history.php
+          echo ""
+          echo "=== kaijiang.500.com ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" https://kaijiang.500.com/qxc.shtml
+          echo ""
+
+      - name: Test DashScope API
+        run: |
+          echo "=== DashScope ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}" https://dashscope.aliyuncs.com/compatible-mode/v1/models
+          echo ""
+
+      - name: Test 163 SMTP
+        run: |
+          python3 -c "
+          import smtplib
+          try:
+              server = smtplib.SMTP_SSL('smtp.163.com', 465, timeout=10)
+              print('SMTP connection: OK')
+              server.quit()
+          except Exception as e:
+              print(f'SMTP connection: FAILED - {e}')
+          "
+
+      - name: Test lottery data fetch
+        run: |
+          pip install requests -q
+          python3 -c "
+          import requests
+          headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+          # Test SSQ
+          try:
+              resp = requests.get('https://datachart.500.com/ssq/history/newinc/history.php', headers=headers, timeout=15)
+              resp.encoding = 'gb2312'
+              periods = []
+              import re
+              for m in re.findall(r'>(\d{5})<', resp.text):
+                  if m.startswith('26'):
+                      periods.append(m)
+              print(f'SSQ: HTTP {resp.status_code}, found periods: {periods[:3]}')
+          except Exception as e:
+              print(f'SSQ: FAILED - {e}')
+
+          # Test DLT
+          try:
+              resp = requests.get('https://datachart.500.com/dlt/history/newinc/history.php', headers=headers, timeout=15)
+              resp.encoding = 'gb2312'
+              periods = []
+              import re
+              for m in re.findall(r'>(\d{5})<', resp.text):
+                  if m.startswith('26'):
+                      periods.append(m)
+              print(f'DLT: HTTP {resp.status_code}, found periods: {periods[:3]}')
+          except Exception as e:
+              print(f'DLT: FAILED - {e}')
+
+          # Test QXC
+          try:
+              resp = requests.get('https://kaijiang.500.com/qxc.shtml', headers=headers, timeout=15)
+              resp.encoding = 'gb2312'
+              periods = re.findall(r'qxc/(\d{5})\.shtml', resp.text)
+              print(f'QXC: HTTP {resp.status_code}, found periods: {periods[:3]}')
+          except Exception as e:
+              print(f'QXC: FAILED - {e}')
+          "
