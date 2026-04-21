@@ -1,0 +1,63 @@
+name: Weekly Audit
+
+on:
+  schedule:
+    - cron: "30 0 * * 1"  # 每周一0:30 CST
+      timezone: "Asia/Shanghai"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Restore state from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            state.db
+            lottery-backtest.json
+            lottery-predictions.json
+            weight-config.json
+          key: asuan-state-${{ github.run_id }}
+          restore-keys: |
+            asuan-state-
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run audit
+        run: python audit.py
+        env:
+          REPO_DIR: "."
+
+      - name: Create issue with audit results
+        run: |
+          if [ -f audit-report.md ]; then
+            TITLE="📋 计然审计报告 - $(date -u +%Y-%m-%d)"
+            gh issue create --title "$TITLE" --body-file audit-report.md --label "audit" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Weekly audit failed!"
