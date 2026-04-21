@@ -46,13 +46,14 @@ jobs:
           RUN_ENV: github-actions
 
       - name: Commit state changes
+        continue-on-error: true
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
           git add state.db lottery-backtest.json lottery-predictions.json weight-config.json 2>/dev/null || true
           git diff --staged --quiet || git commit -m "chore: update state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push
+          git push || echo "⚠️ git push failed, state not persisted to repo"
 
       - name: Notify on failure
         if: failure()
