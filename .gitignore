@@ -7,3 +7,4 @@ lottery-predictions.json
 sent-log.json*
 daemon.pid
 scheduler.pid
+output/
