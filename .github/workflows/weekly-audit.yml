@@ -52,7 +52,7 @@ jobs:
         run: |
           if [ -f audit-report.md ]; then
             TITLE="📋 计然审计报告 - $(date -u +%Y-%m-%d)"
-            gh issue create --title "$TITLE" --body-file audit-report.md --label "audit" || true
+            gh issue create --title "$TITLE" --body-file audit-report.md || echo "Issue creation failed, report saved in workflow logs"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
