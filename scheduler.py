@@ -56,10 +56,12 @@ OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', 'sk-lm-IPjU115B:U6iqyFE5DPKvzn
 OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
 OFFICE_ENABLED = False  # ⏸️ qwopus3.5还不稳定，等朋友确认后再开
 
+_BASE_DIR = os.environ.get('BASE_DIR', os.path.dirname(os.path.abspath(__file__)))
+
 TASKS = {
     'daily-digest': {
         'hour': 0, 'minute': 0,
-        'output_dir': os.environ.get('OUTPUT_DIR', '/workspace/ai-memory/daily-digest'),
+        'output_dir': os.environ.get('OUTPUT_DIR', os.path.join(_BASE_DIR, 'output')),
         'desc': '阿算日报',
         'email_subject_prefix': '阿算日报',
         'model': 'deepseek-r1',  # 合并后用R1，质量更好
