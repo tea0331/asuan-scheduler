@@ -32,12 +32,12 @@ from datetime import datetime, timezone, timedelta
 CST = timezone(timedelta(hours=8))
 
 # 百炼API配置 — 🔴 优先环境变量，回退硬编码
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', 'sk-a6149c2fa4534ee08fc5e46f797d32ef')
+DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 # 🔴 办公室qwopus3.5（免费不限量！彩票零隐私，优先走这里）
-OFFICE_API_BASE = 'http://1qm1752vy4744.vicp.fun:12305/v1'
-OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', 'sk-lm-IPjU115B:U6iqyFE5DPKvznOf6M3a')
+OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
+OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
 OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
 OFFICE_ENABLED = False  # ⏸️ qwopus3.5还不稳定，等朋友确认后再开
 
@@ -300,7 +300,7 @@ def _parse_ssq_html(html, max_periods):
         # 找到期号位置：5位数字且以26开头
         period_idx = None
         for i, td in enumerate(clean_tds):
-            if re.match(r'^2[56]\d{3}$', td):
+            if re.match(r'^2\d{4}$', td):
                 period_idx = i
                 break
         if period_idx is None:
@@ -326,7 +326,7 @@ def _parse_dlt_html(html, max_periods):
         clean_tds = [re.sub(r'<[^>]+>', '', td).strip() for td in tds]
         period_idx = None
         for i, td in enumerate(clean_tds):
-            if re.match(r'^2[56]\d{3}$', td):
+            if re.match(r'^2\d{4}$', td):
                 period_idx = i
                 break
         if period_idx is None:
@@ -351,7 +351,7 @@ def _parse_qxc_html(html, max_periods):
         clean_tds = [re.sub(r'<[^>]+>', '', td).strip() for td in tds]
         period_idx = None
         for i, td in enumerate(clean_tds):
-            if re.match(r'^2[56]\d{3}$', td):
+            if re.match(r'^2\d{4}$', td):
                 period_idx = i
                 break
         if period_idx is None:
@@ -939,7 +939,7 @@ def adjust_weights_from_backtest():
         config['freq'] = round(config['freq'] / total, 4)
         config['miss'] = round(config['miss'] / total, 4)
         config['trend'] = round(config['trend'] / total, 4)
-        config['zone'] = round(1.0 - config['freq'] - config['miss'] - config['trend'], 4)  # 余量给zone
+        config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))  # 余量给zone，防止负数
 
     config['version'] = config.get('version', 1) + 1
     from datetime import datetime as _dt

@@ -42,17 +42,17 @@ logging.basicConfig(
 # 邮件配置 — 🔴 优先环境变量，回退硬编码（sandbox兼容）
 SMTP_SERVER = 'smtp.163.com'
 SMTP_PORT = 465
-SMTP_USER = os.environ.get('SMTP_USER', 'tea0331@163.com')
-SMTP_PASS = os.environ.get('SMTP_PASSWORD', 'NYuLnGar8wT8RBit')
-SMTP_TO = os.environ.get('SMTP_TO', 'tea0331@163.com')
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASS = os.environ.get('SMTP_PASSWORD', '')
+SMTP_TO = os.environ.get('SMTP_TO', '')
 
 # API配置 — 🔴 优先环境变量，回退硬编码
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', 'sk-a6149c2fa4534ee08fc5e46f797d32ef')
+DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 # API配置 — 办公室qwopus3.5（免费，不限量）
-OFFICE_API_BASE = 'http://1qm1752vy4744.vicp.fun:12305/v1'
-OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', 'sk-lm-IPjU115B:U6iqyFE5DPKvznOf6M3a')
+OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
+OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
 OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
 OFFICE_ENABLED = False  # ⏸️ qwopus3.5还不稳定，等朋友确认后再开
 
@@ -66,8 +66,8 @@ TASKS = {
         'email_subject_prefix': '阿算日报',
         'model': 'deepseek-r1',  # 合并后用R1，质量更好
         'use_office': True,
-        'system_prompt': '你是阿算，一个投资分析AI助手。老板画像：上海普陀区、100-150万资金、英伟达算力设备、太太台湾人、一人公司、方向：算力掮客（国内出海+海外引入）/普陀区OPC政策+算力补贴/AI硬件出海/AI推理服务。',
-        'system_prompt_office': '你是阿算，一个投资分析AI助手。请为一人公司创业者生成每日综合报告，重点关注AI算力和出海方向。',  # 脱敏版
+        'system_prompt': os.environ.get('SYSTEM_PROMPT', '你是阿算，一个投资分析AI助手。请生成每日综合报告，重点关注AI算力和出海方向。'),
+        'system_prompt_office': os.environ.get('SYSTEM_PROMPT_OFFICE', '你是阿算，一个投资分析AI助手。请为一人公司创业者生成每日综合报告，重点关注AI算力和出海方向。'),  # 脱敏版
         'user_prompt_template': '''请生成{date}的每日综合报告，包含以下四大部分：
 
 ## 一、每日资讯
@@ -294,13 +294,13 @@ def send_email(subject, body_html):
     try:
         msg = MIMEMultipart()
         msg['From'] = SMTP_USER
-        msg['To'] = SMTP_USER
+        msg['To'] = SMTP_TO or SMTP_USER
         msg['Subject'] = subject
         msg.attach(MIMEText(body_html, 'html', 'utf-8'))
 
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30)
         server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, SMTP_USER, msg.as_string())
+        server.sendmail(SMTP_USER, SMTP_TO or SMTP_USER, msg.as_string())
         server.quit()
         logging.info(f"[邮件] 发送成功: {subject}")
         return True
@@ -393,6 +393,9 @@ def _call_api(task_name, base_url, api_key, model, system_prompt, user_prompt, m
         content = data['choices'][0]['message']['content']
         usage = data.get('usage', {})
         reasoning = data.get('completion_tokens_details', {}).get('reasoning_tokens', 0)
+
+        # 🔴 过滤R1的think标签（避免推理过程混入邮件内容）
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
 
         # Qwen3.6的reasoning在message.reasoning字段
         msg = data['choices'][0]['message']
