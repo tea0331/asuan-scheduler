@@ -20,6 +20,7 @@
 注意：彩票本质是随机事件，分析仅供娱乐参考。
 """
 
+import os
 import requests
 import re
 import random
