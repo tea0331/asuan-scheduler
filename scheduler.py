@@ -519,10 +519,15 @@ def run_task_and_email(task_name, task, today_str):
 
         output_file = file_path
 
-    # 第四步：发送邮件（🔴 如果NO_EMAIL环境变量则跳过，避免GitHub Actions和sandbox重复发邮件）
+    # 第四步：发送邮件
+    # 🔴 GitHub Actions默认发邮件（主力），sandbox默认不发（SEND_EMAIL控制）
     no_email = os.environ.get('NO_EMAIL', '').lower() in ('1', 'true', 'yes')
-    if no_email:
-        logging.info(f"[{task_name}] NO_EMAIL模式，跳过邮件发送")
+    send_email_flag = os.environ.get('SEND_EMAIL', '').lower() in ('1', 'true', 'yes')
+    # 默认行为：如果没设任何标志，GitHub Actions环境发邮件，sandbox不发
+    run_env = os.environ.get('RUN_ENV', '')
+    should_send = send_email_flag or (not no_email and run_env != 'sandbox')
+    if not should_send:
+        logging.info(f"[{task_name}] 跳过邮件发送（GitHub Actions主力发邮件）")
     elif output_file:
         send_task_email(task, today_str, output_file)
     else:
