@@ -516,8 +516,11 @@ def run_task_and_email(task_name, task, today_str):
 
         output_file = file_path
 
-    # 第四步：发送邮件
-    if output_file:
+    # 第四步：发送邮件（🔴 如果NO_EMAIL环境变量则跳过，避免GitHub Actions和sandbox重复发邮件）
+    no_email = os.environ.get('NO_EMAIL', '').lower() in ('1', 'true', 'yes')
+    if no_email:
+        logging.info(f"[{task_name}] NO_EMAIL模式，跳过邮件发送")
+    elif output_file:
         send_task_email(task, today_str, output_file)
     else:
         # 生成失败，找最近的文件

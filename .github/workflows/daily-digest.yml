@@ -54,6 +54,8 @@ jobs:
 
       - name: Run daily digest
         run: python scheduler.py --once
+        env:
+          NO_EMAIL: "true"
 
       - name: Commit state to repo
         run: |
