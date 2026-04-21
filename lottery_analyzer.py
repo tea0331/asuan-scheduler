@@ -88,10 +88,11 @@ def _get_miss_numbers(predicted, actual):
     """返回预测中未命中的号码"""
     return sorted(set(predicted) - set(actual))
 
+_BASE_DIR = os.environ.get('BASE_DIR', os.path.dirname(os.path.abspath(__file__)))
 # 回测记录文件
-BACKTEST_LOG = '/workspace/ai-memory/cron-scripts/lottery-backtest.json'
+BACKTEST_LOG = os.path.join(_BASE_DIR, 'lottery-backtest.json')
 # 昨日推荐记录
-PREDICTION_LOG = '/workspace/ai-memory/cron-scripts/lottery-predictions.json'
+PREDICTION_LOG = os.path.join(_BASE_DIR, 'lottery-predictions.json')
 
 
 # ===== 硬编码Fallback数据（2026-04-18更新） =====
@@ -838,7 +839,7 @@ def _load_predictions():
 # ===== 🟢 P1: 回测驱动权重自适应 =====
 
 # 权重配置文件（持久化，回测可修改）
-WEIGHT_CONFIG_FILE = '/workspace/ai-memory/cron-scripts/weight-config.json'
+WEIGHT_CONFIG_FILE = os.path.join(_BASE_DIR, 'weight-config.json')
 
 DEFAULT_WEIGHT_CONFIG = {
     'freq': 0.30,
