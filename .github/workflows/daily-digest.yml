@@ -5,15 +5,13 @@ on:
     - cron: "5 0 * * *"
       timezone: "Asia/Shanghai"
   workflow_dispatch:
-    inputs:
-      force_run:
-        description: 'Force run regardless of state'
-        required: false
-        default: 'false'
 
 concurrency:
   group: daily-digest
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   daily-digest:
@@ -30,6 +28,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore state from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            state.db
+            lottery-backtest.json
+            lottery-predictions.json
+            weight-config.json
+          key: asuan-state-${{ github.run_id }}
+          restore-keys: |
+            asuan-state-
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -42,18 +54,14 @@ jobs:
 
       - name: Run daily digest
         run: python scheduler.py --once
-        env:
-          RUN_ENV: github-actions
 
-      - name: Commit state changes
-        continue-on-error: true
+      - name: Commit state to repo
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add state.db lottery-backtest.json lottery-predictions.json weight-config.json 2>/dev/null || true
           git diff --staged --quiet || git commit -m "chore: update state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push || echo "⚠️ git push failed, state not persisted to repo"
+          git push
 
       - name: Notify on failure
         if: failure()
