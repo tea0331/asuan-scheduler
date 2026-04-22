@@ -17,6 +17,7 @@ jobs:
 
     env:
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      TOKU_API_KEY: ${{ secrets.TOKU_API_KEY }}
 
     steps:
       - name: Checkout repository

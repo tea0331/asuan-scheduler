@@ -1,0 +1,49 @@
+name: Toku Agent
+
+on:
+  schedule:
+    - cron: "0 0,12 * * *"  # 每天8:00和20:00 CST
+      timezone: "Asia/Shanghai"
+  workflow_dispatch:
+
+concurrency:
+  group: toku-agent
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  toku-ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      TOKU_API_KEY: ${{ secrets.TOKU_API_KEY }}
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      REPO_DIR: "."
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Toku Agent operations
+        run: python toku_agent.py
+
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add toku-daily-report.md 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: toku daily report $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
