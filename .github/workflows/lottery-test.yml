@@ -1,0 +1,73 @@
+name: 🎰 Lottery Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lottery-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Restore state from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            state.db
+            lottery-backtest.json
+            lottery-predictions.json
+            weight-config.json
+          key: asuan-state-${{ github.run_id }}
+          restore-keys: |
+            asuan-state-
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run lottery analyzer
+        run: |
+          echo "=== 回测数据 ==="
+          python3 -c "
+          import json
+          try:
+              with open('lottery-backtest.json') as f:
+                  bt = json.load(f)
+              print(f'回测记录: {len(bt)}条')
+              for b in bt[-3:]:
+                  print(json.dumps(b, ensure_ascii=False)[:200])
+          except:
+              print('无回测数据')
+          "
+
+          echo ""
+          echo "=== 推荐记录 ==="
+          python3 -c "
+          import json
+          try:
+              with open('lottery-predictions.json') as f:
+                  pred = json.load(f)
+              print(f'推荐记录: {len(pred)}条')
+              for p in pred[-3:]:
+                  print(f'  日期: {p.get(\"date\")}')
+          except:
+              print('无推荐数据')
+          "
+
+          echo ""
+          echo "=== 生成完整推荐 ==="
+          python3 lottery_analyzer.py
