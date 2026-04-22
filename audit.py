@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-计然自动审计 + Toku运营策略脚本
+计然自动审计 + 多平台运营策略 + Agent联盟维护
 功能：
 1. 代码审计（原有功能）
-2. 审查Toku运营数据，给出改善和增收建议
-3. 每周一生成策略讨论报告
+2. 多平台运营数据审查，给出改善和增收建议
+3. Agent联盟维护：跟进DM回复、扩大联盟网络
+4. 每周一生成综合策略报告
 """
 import os
 import sys
@@ -146,11 +147,45 @@ def get_toku_stats():
         oj_list = open_jobs if isinstance(open_jobs, list) else open_jobs.get('jobs', open_jobs.get('data', []))
         stats['open_jobs_count'] = len(oj_list) if oj_list else 0
 
+    # 联盟DM状态
+    dm_data = toku_get('/agents/dm')
+    dm_conversations = 0
+    unread_count = 0
+    if dm_data:
+        convos = dm_data if isinstance(dm_data, list) else dm_data.get('conversations', dm_data.get('data', []))
+        if convos:
+            dm_conversations = len(convos)
+            unread_count = sum(c.get('unreadCount', 0) for c in convos if isinstance(c, dict))
+
     return stats
 
 
+def check_alliance_status():
+    """检查联盟DM回复状态"""
+    if not TOKU_API_KEY:
+        return "无法检查（无API Key）"
+
+    dm_data = toku_get('/agents/dm')
+    if not dm_data:
+        return "无DM数据"
+
+    convos = dm_data if isinstance(dm_data, list) else dm_data.get('conversations', dm_data.get('data', []))
+    if not convos:
+        return "无对话"
+
+    status_lines = []
+    for c in convos[:10]:
+        name = c.get('agentName', c.get('with', 'Unknown'))
+        unread = c.get('unreadCount', 0)
+        last_msg = c.get('lastMessage', c.get('lastMessageContent', ''))[:50] if c.get('lastMessage') or c.get('lastMessageContent') else ''
+        mark = "🆕" if unread > 0 else "  "
+        status_lines.append(f"{mark} {name}: {last_msg}")
+
+    return "\n".join(status_lines) if status_lines else "无对话"
+
+
 def generate_toku_strategy(stats):
-    """生成Toku运营策略建议"""
+    """生成多平台运营策略建议"""
     profile = stats.get('profile') or {}
     wallet = stats.get('wallet') or {}
     jobs = stats.get('jobs_as_provider', [])
@@ -161,40 +196,54 @@ def generate_toku_strategy(stats):
 
     jobs_completed = profile.get('jobsCompleted', 0)
     rating = profile.get('rating', 0)
+    alliance_status = check_alliance_status()
 
-    system_prompt = """你是计然，负责AsuanAI在Toku.agency平台的运营策略。你的职责：
+    system_prompt = """你是计然，负责AsuanAI在多个AI Agent市场平台的运营策略。你的职责：
 1. 分析当前运营数据，给出具体改善建议
 2. 提出增收策略（新服务、定价调整、营销手段）
 3. 发现竞品动态和平台趋势
-4. 每次给出3-5个可执行的具体建议（不是空话）
+4. 维护Agent联盟：分析联盟伙伴的回复，建议下一步联络对象
+5. 每次给出3-5个可执行的具体建议（不是空话）
 
 输出格式：markdown，包含：
 - 📊 数据概览
 - 📈 改善建议（具体+可执行）
 - 💰 增收策略
+- 🤝 联盟动态
 - 🔍 下周重点行动
 
 注意：绝不能提及"刘海蟾点金"或任何彩票相关内容。"""
 
     user_prompt = f"""日期：{datetime.now(CST).strftime('%Y-%m-%d')}
-当前运营数据：
+当前运营数据（Toku）：
 - 完成订单：{jobs_completed}
 - 评分：{rating}
 - 钱包余额：${balance/100:.2f}
 - 进行中Job：{len(jobs)}个
 - 平台Open Jobs：{stats.get('open_jobs_count', '?')}个
 
+其他平台：
+- WorkProtocol：15个Agent，竞争极低，代码审计优势大
+- NEAR AI Market：100+ Agent，加密托管支付
+
 已有服务：
 1. Code Audit Pro ($10/$25/$50)
 2. Investment Research Brief ($15/$35/$70)
 3. Data Scrape and Analysis ($8/$20/$40)
+
+Agent联盟状态：
+{alliance_status}
+
+已联络的Agent：Lily, Topanga, kyrin-assistant, Chief-Matrix-Finance, Nyx
+推荐码：asuanai-709c6d
 
 请分析并给出：
 1. 当前定价是否合理？要不要调整？
 2. 有什么新服务方向可以上架？
 3. 如何提高首单成交率（目前0单）？
 4. 平台上的热门需求是什么？我们怎么切入？
-5. 下周3个最重要的行动项"""
+5. 联盟方面：谁回复了？下一步该联络谁？怎么深化合作？
+6. 下周3个最重要的行动项"""
 
     return call_deepseek(system_prompt, user_prompt, model='deepseek-chat')
 
@@ -227,11 +276,11 @@ def main():
         full_report += "## 一、代码审计\n\n⚠️ 审计结果为空或过短\n\n"
 
     if strategy_report and len(strategy_report) > 100:
-        full_report += "## 二、Toku运营策略\n\n"
+        full_report += "## 二、多平台运营策略\n\n"
         full_report += strategy_report
         full_report += "\n\n"
     else:
-        full_report += "## 二、Toku运营策略\n\n⚠️ 策略报告为空或过短\n\n"
+        full_report += "## 二、多平台运营策略\n\n⚠️ 策略报告为空或过短\n\n"
 
     # 4. 写入报告
     report_path = os.path.join(repo_dir, 'audit-report.md')
