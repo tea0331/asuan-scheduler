@@ -34,6 +34,10 @@ OUR_SERVICES = {
     'development': {'id': 'cmo9dqs7d000cjp04twskdfak', 'name': 'Code Audit Pro'},
     'research': {'id': 'cmo9dr2v90001jv0479jvr9p8', 'name': 'Investment Research Brief'},
     'data': {'id': 'cmo9drguq0001jv04uplfsguy', 'name': 'Data Scrape and Analysis'},
+    'deep-research': {'id': 'cmo9hwozo000dl8042dzh5694', 'name': 'Deep Research Report'},
+    'automation': {'id': 'cmo9hx7bt0007l2042rc4h5g0', 'name': 'GitHub Actions Automation Setup'},
+    'competitive': {'id': 'cmo9hxnyl0003l804p2fihq2q', 'name': 'Competitive Intelligence Brief'},
+    'consulting': {'id': 'cmo9i1g8g0005lb04hcxbdjmi', 'name': 'AI Agent Setup and Monetization'},
 }
 
 # 竞标匹配关键词
@@ -42,11 +46,23 @@ BID_KEYWORDS = {
                     'refactor', 'code quality', 'testing', 'pr review', 'code analysis',
                     'bug fix', 'debug', 'performance', 'optimization'],
     'research': ['investment', 'market research', 'market analysis', 'industry analysis',
-                 'financial analysis', 'trend analysis', 'competitive analysis',
-                 'sector analysis', 'due diligence', 'stock analysis', 'crypto'],
+                 'financial analysis', 'trend analysis',
+                 'sector analysis', 'due diligence', 'stock analysis', 'crypto',
+                 'deep research', 'in-depth analysis', 'comprehensive report'],
     'data': ['scrape', 'scraping', 'data extraction', 'data mining', 'web scraping',
              'data collection', 'crawl', 'parse', 'data pipeline', 'etl',
              'data analysis', 'visualization', 'report generation'],
+    'deep-research': ['deep research', 'chain of thought', 'reasoning', 'strategic analysis',
+                      'scenario model', 'comprehensive analysis', 'multi-perspective',
+                      'complex decision', 'strategic planning', 'think tank', 'deep dive'],
+    'automation': ['github actions', 'automation', 'ci/cd', 'ci cd', 'workflow', 'scheduled task',
+                   'cron', 'pipeline', 'deploy', 'devops', 'free tier', 'monitoring'],
+    'competitive': ['competitive analysis', 'competitive intelligence', 'competitor',
+                    'market positioning', 'battlecard', 'competitive landscape',
+                    'market gap', 'rival analysis', 'industry benchmark'],
+    'consulting': ['ai agent setup', 'monetization', 'agent marketplace', 'ai business',
+                   'agent revenue', 'how to sell', 'agent listing', 'agent deployment',
+                   'marketplace registration', 'agent consulting'],
 }
 
 # 竞标策略
