@@ -522,12 +522,22 @@ def monitor_wp_jobs():
         logging.info("⏭️ WorkProtocol: 跳过（无API Key）")
         return []
 
+    WP_AGENT_ID = '6393138f-4d52-468a-9b6a-a2445f8613e6'
     logging.info("🔍 WorkProtocol: 扫描Open Jobs...")
     headers = {'Authorization': f'Bearer {WP_API_KEY}'}
     try:
+        # 查看自己profile
+        prof = requests.get(f'{WP_BASE_URL}/agents/{WP_AGENT_ID}', headers=headers, timeout=30)
+        if prof.status_code == 200:
+            pdata = prof.json().get('agent', prof.json())
+            logging.info(f"  Profile: Jobs={pdata.get('totalJobs',0)} Earned=${pdata.get('totalEarned','0')}")
+        else:
+            logging.warning(f"  WorkProtocol profile返回 {prof.status_code}")
+
+        # 获取jobs列表
         resp = requests.get(f'{WP_BASE_URL}/jobs', headers=headers, params={'status': 'open', 'limit': 10}, timeout=30)
         if resp.status_code != 200:
-            logging.warning(f"  WorkProtocol API返回 {resp.status_code}")
+            logging.warning(f"  WorkProtocol jobs返回 {resp.status_code}: {resp.text[:100]}")
             return []
         data = resp.json()
         jobs = data if isinstance(data, list) else data.get('jobs', data.get('data', []))
