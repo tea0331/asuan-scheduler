@@ -1739,22 +1739,53 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     # 🔴 开奖日历速查
     lines.append("\n📅 **开奖日历**: 大乐透(一三六) | 双色球(二四日) | 七星彩(二五日)")
 
-    # 🟢 P2: Kelly仓位建议
+    # 🟢 P2: Kelly仓位建议 + 🔴 Kelly>5%重点关注复式建议
     config = _load_weight_config()
     lines.append(f"\n⚖️ **风控提示**:")
+    
+    # 收集Kelly>5%的彩种，用于生成复式建议
+    high_kelly_games = []
+    
     for game_name, game_key, total_nums in [('双色球', 'ssq', 7), ('大乐透', 'dlt', 7), ('七星彩', 'qxc', 7)]:
         hit_prob = estimate_hit_probability(game_key, 4, total_nums)
         # 🔴 BugD修复：Kelly赔率匹配真实奖级
-        # 双色球：6+1=500万倍, 6+0=18万倍, 5+1=3000倍, 5+0=200倍, 4+1=200倍, 4+0=10倍
-        # 大乐透：5+2=1000万倍, 5+1=5万倍, 5+0=3000倍, 4+2=3000倍, 4+1=200倍
-        # 七星彩：全中=500万倍, 6中=5万倍, 5中=3000倍
-        # 这里用"命中4个号"对应的合理赔率（约10-200倍，取50倍保守估计）
         odds_map = {'ssq': 50, 'dlt': 50, 'qxc': 100}
         k = kelly_fraction(hit_prob, odds_map.get(game_key, 200))
         if k > 0:
             lines.append(f"  {game_name}核心注: Kelly={k:.2%}（建议投入≤本金的{k:.1%}）")
+            if k > 0.05:
+                high_kelly_games.append((game_name, game_key, k))
         else:
             lines.append(f"  {game_name}核心注: Kelly≤0（❌不建议本期投注）")
+
+    # 🔴 Kelly>5%重点关注：复式购买建议
+    if high_kelly_games:
+        lines.append(f"\n🔥 **Kelly>5%重点关注**:")
+        for game_name, game_key, k in high_kelly_games:
+            lines.append(f"\n**{game_name}** Kelly={k:.2%} ⬆️ 值得加码")
+            
+            # 根据彩种生成复式建议
+            if game_key == 'ssq':
+                lines.append("  📋 复式方案建议：")
+                lines.append("  - 🔹 小复式：红7+1（14元）— 覆盖1个额外红球")
+                lines.append("  - 🔸 中复式：红8+1（56元）— 覆盖2个额外红球")
+                lines.append("  - 🔶 大复式：红6+2（12元）— 覆盖1个额外蓝球")
+                lines.append("  - 💡 推荐：红7+1或红6+2，性价比最高")
+            elif game_key == 'dlt':
+                lines.append("  📋 复式方案建议：")
+                lines.append("  - 🔹 小复式：前6+2（12元）— 覆盖1个额外前区")
+                lines.append("  - 🔸 中复式：前7+2（42元）— 覆盖2个额外前区")
+                lines.append("  - 🔶 大复式：前5+3（18元）— 覆盖1个额外后区")
+                lines.append("  - 💡 推荐：前6+2或前5+3，性价比最高")
+            elif game_key == 'qxc':
+                lines.append("  📋 复式方案建议：")
+                lines.append("  - 🔹 小复式：选8个号码复式（16元）— 多1位覆盖")
+                lines.append("  - 🔸 中复式：选9个号码复式（36元）— 多2位覆盖")
+                lines.append("  - 💡 推荐：选8个号码复式，性价比最高")
+            
+            lines.append(f"  ⚠️ Kelly={k:.1%}意味着建议用本金的{k:.1%}投注，不要超过此比例")
+    else:
+        lines.append(f"\n📌 本期无Kelly>5%彩种，建议单式小额为主")
 
     lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%}")
     lines.append("---\n")
