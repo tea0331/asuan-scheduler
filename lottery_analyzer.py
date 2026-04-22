@@ -1084,17 +1084,23 @@ def _run_backtest():
     draw_names = [LOTTERY_NAMES.get(g, g) for g in draw_games]
     print(f"[回测] 昨天开奖彩种: {', '.join(draw_names)}")
 
-    # 取最近一条推荐（昨天的）
-    yesterday_pred = predictions[-1]
-    if yesterday_pred.get('date') == today_str:
-        print("[回测] 今日推荐已生成，跳过回测")
+    # 🔴 修复：找到昨天的推荐来回测，而不是简单看predictions[-1]
+    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
+    yesterday_pred = None
+    for p in reversed(predictions):
+        if p.get('date') == yesterday:
+            yesterday_pred = p
+            break
+
+    if not yesterday_pred:
+        print(f"[回测] 无昨日({yesterday})推荐记录，跳过回测")
         return None
 
-    # 🔴 Bug2修复：验证predictions[-1]确实是昨天的推荐
-    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
-    if yesterday_pred.get('date') != yesterday:
-        print(f"[回测] 最近推荐日期={yesterday_pred.get('date')}，非昨日{yesterday}，跳过回测")
-        return None
+    # 🔴 防止重复回测：检查今天是否已回测过昨天的推荐
+    for bt in backtest_log:
+        if bt.get('date') == yesterday and bt.get('backtest_date') == today_str:
+            print(f"[回测] 昨日({yesterday})推荐已回测过，跳过")
+            return bt
 
     backtest_result = {
         'date': yesterday_pred.get('date', ''),
