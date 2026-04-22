@@ -10,6 +10,7 @@ v6.0改动：
 import time
 import os
 import sys
+import re
 import logging
 import smtplib
 import glob
