@@ -710,6 +710,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--once', action='store_true', help='Run once and exit (for GitHub Actions)')
+    parser.add_argument('--force', action='store_true', help='Force rerun even if already executed today')
     args = parser.parse_args()
 
     if args.once:
@@ -718,6 +719,13 @@ if __name__ == '__main__':
         now = datetime.now(CST)
         today = now.strftime('%Y-%m-%d')
         logging.info(f"单次执行模式: {today}")
+
+        if args.force:
+            # 清除今日执行记录，强制重新执行
+            logging.info(f"🔴 --force 模式：清除今日执行记录，强制重新执行")
+            db_exec("DELETE FROM executed_tasks WHERE date=?", (today,))
+            db_exec("DELETE FROM sent_log WHERE sent_at LIKE ?", (f'{today}%',))
+
         for task_name, task in TASKS.items():
             task['name'] = task_name
             if not is_task_executed(today, task_name):
