@@ -21,9 +21,13 @@ CST = timezone(timedelta(hours=8))
 
 # ============ 配置 ============
 TOKU_API_KEY = os.environ.get('TOKU_API_KEY', '')
+WP_API_KEY = os.environ.get('WP_API_KEY', '')        # WorkProtocol
+NEAR_API_KEY = os.environ.get('NEAR_API_KEY', '')    # NEAR AI Market
 DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 TOKU_BASE_URL = 'https://www.toku.agency/api'
+WP_BASE_URL = 'https://workprotocol.ai/api'
+NEAR_BASE_URL = 'https://market.near.ai/v1'
 
 # 服务ID映射（竞标时用）
 OUR_SERVICES = {
@@ -512,6 +516,105 @@ def daily_report(bids, replies, jobs_handled):
     return report
 
 
+def monitor_wp_jobs():
+    """监控WorkProtocol Open Jobs并竞标"""
+    if not WP_API_KEY:
+        logging.info("⏭️ WorkProtocol: 跳过（无API Key）")
+        return []
+
+    logging.info("🔍 WorkProtocol: 扫描Open Jobs...")
+    headers = {'Authorization': f'Bearer {WP_API_KEY}'}
+    try:
+        resp = requests.get(f'{WP_BASE_URL}/jobs', headers=headers, params={'status': 'open', 'limit': 10}, timeout=30)
+        if resp.status_code != 200:
+            logging.warning(f"  WorkProtocol API返回 {resp.status_code}")
+            return []
+        data = resp.json()
+        jobs = data if isinstance(data, list) else data.get('jobs', data.get('data', []))
+        if not jobs:
+            logging.info("  无Open Jobs")
+            return []
+
+        bids = []
+        for job in jobs[:5]:
+            title = job.get('title', '')
+            description = job.get('description', '') or ''
+            match_text = f"{title} {description}"
+            matched_cat = find_matching_category(match_text)
+            if not matched_cat:
+                continue
+
+            price = calculate_bid_price(matched_cat)
+            proposal = generate_bid_proposal(matched_cat, title, description, price)
+            if not proposal:
+                continue
+
+            bid_data = {'priceCents': price, 'proposal': proposal, 'deliveryDays': 2}
+            bid_resp = requests.post(
+                f'{WP_BASE_URL}/jobs/{job.get("id", "")}/bids',
+                headers={**headers, 'Content-Type': 'application/json'},
+                json=bid_data, timeout=30
+            )
+            if bid_resp.status_code in (200, 201):
+                logging.info(f"  ✅ WP竞标: {title[:50]} | ${price/100:.0f}")
+                bids.append({'platform': 'WorkProtocol', 'title': title, 'price': price})
+            time.sleep(1)
+        return bids
+    except Exception as e:
+        logging.error(f"  WorkProtocol失败: {e}")
+        return []
+
+
+def monitor_near_jobs():
+    """监控NEAR AI Market Jobs并竞标"""
+    if not NEAR_API_KEY:
+        logging.info("⏭️ NEAR AI Market: 跳过（无API Key）")
+        return []
+
+    logging.info("🔍 NEAR AI Market: 扫描Open Jobs...")
+    headers = {'Authorization': f'Bearer {NEAR_API_KEY}'}
+    try:
+        resp = requests.get(f'{NEAR_BASE_URL}/jobs', headers=headers, params={'status': 'open', 'limit': 10}, timeout=30)
+        if resp.status_code != 200:
+            logging.warning(f"  NEAR API返回 {resp.status_code}")
+            return []
+        data = resp.json()
+        jobs = data if isinstance(data, list) else data.get('jobs', data.get('data', []))
+        if not jobs:
+            logging.info("  无Open Jobs")
+            return []
+
+        bids = []
+        for job in jobs[:5]:
+            title = job.get('title', '')
+            description = job.get('description', '') or ''
+            match_text = f"{title} {description}"
+            matched_cat = find_matching_category(match_text)
+            if not matched_cat:
+                continue
+
+            # NEAR用NEAR代币计价，转换约0.5 NEAR起步
+            price_near = 0.5
+            proposal = generate_bid_proposal(matched_cat, title, description, int(price_near * 100))
+            if not proposal:
+                continue
+
+            bid_data = {'price': str(price_near), 'token': 'NEAR', 'proposal': proposal, 'delivery_hours': 48}
+            bid_resp = requests.post(
+                f'{NEAR_BASE_URL}/jobs/{job.get("id", "")}/bids',
+                headers={**headers, 'Content-Type': 'application/json'},
+                json=bid_data, timeout=30
+            )
+            if bid_resp.status_code in (200, 201):
+                logging.info(f"  ✅ NEAR竞标: {title[:50]} | {price_near} NEAR")
+                bids.append({'platform': 'NEAR', 'title': title, 'price_near': price_near})
+            time.sleep(1)
+        return bids
+    except Exception as e:
+        logging.error(f"  NEAR AI Market失败: {e}")
+        return []
+
+
 # ============ 主函数 ============
 
 def main():
@@ -523,29 +626,52 @@ def main():
         sys.exit(1)
 
     logging.info("=" * 50)
-    logging.info("🤖 AsuanAI Toku自动运营启动 — 计然管理")
+    logging.info("🤖 AsuanAI 多平台自动运营启动 — 计然管理")
     logging.info("=" * 50)
 
-    # 1. 监控Open Jobs并竞标
-    bids = monitor_and_bid()
+    all_bids = []
 
-    # 2. 处理DM消息
+    # === 平台1: Toku ===
+    logging.info("\n📌 [Toku.agency]")
+    toku_bids = monitor_and_bid()
     replies = handle_dm_messages()
-
-    # 3. 处理进行中的Job
     jobs_handled = handle_active_jobs()
-
-    # 4. 查看钱包
     check_wallet()
+    all_bids.extend([{'platform': 'Toku', **b} for b in toku_bids])
 
-    # 5. 生成运营报告
-    report = daily_report(bids, replies, jobs_handled)
+    # === 平台2: WorkProtocol ===
+    logging.info("\n📌 [WorkProtocol]")
+    wp_bids = monitor_wp_jobs()
+    all_bids.extend(wp_bids)
+
+    # === 平台3: NEAR AI Market ===
+    logging.info("\n📌 [NEAR AI Market]")
+    near_bids = monitor_near_jobs()
+    all_bids.extend(near_bids)
+
+    # 生成多平台运营报告
+    report = daily_report(toku_bids, replies, jobs_handled)
+
+    # 追加多平台汇总
+    report += f"""
+## 多平台汇总
+
+| 平台 | 竞标数 | 状态 |
+|------|--------|------|
+| Toku | {len(toku_bids)} | {'✅' if TOKU_API_KEY else '❌'} |
+| WorkProtocol | {len(wp_bids)} | {'✅' if WP_API_KEY else '⏭️'} |
+| NEAR AI Market | {len(near_bids)} | {'✅' if NEAR_API_KEY else '⏭️'} |
+
+---
+*由计然自动生成 | 多平台运营*
+"""
+
     report_path = os.environ.get('REPO_DIR', '.')
     with open(os.path.join(report_path, 'toku-daily-report.md'), 'w') as f:
         f.write(report)
 
-    logging.info(f"运营报告已生成")
-    logging.info(f"竞标{len(bids)}个 | DM回复{len(replies)}个 | Job处理{len(jobs_handled)}个")
+    logging.info(f"\n📊 多平台运营报告已生成")
+    logging.info(f"  总竞标: {len(all_bids)}个 | Toku={len(toku_bids)} WP={len(wp_bids)} NEAR={len(near_bids)}")
 
 
 if __name__ == '__main__':
