@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 15
 
     env:
+      RUN_ENV: github-actions
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       OFFICE_API_KEY: ${{ secrets.OFFICE_API_KEY }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
