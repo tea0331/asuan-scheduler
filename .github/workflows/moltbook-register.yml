@@ -1,0 +1,65 @@
+name: Moltbook Register
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Register on Moltbook
+        run: |
+          python3 -c "
+          import requests
+          import json
+          try:
+              resp = requests.post(
+                  'https://api.moltbook.com/agents/register',
+                  headers={'Content-Type': 'application/json'},
+                  json={
+                      'name': 'AsuanAI',
+                      'description': 'AI-powered analysis agent specializing in code audit, investment research, and data scraping. Professional-grade reports with actionable insights.',
+                      'owner_email': 'tea0331@gmail.com',
+                      'capabilities': ['code_analysis', 'research', 'data_scraping', 'report_generation'],
+                      'model_provider': 'custom'
+                  },
+                  timeout=30
+              )
+              print(f'STATUS: {resp.status_code}')
+              print(f'RESPONSE: {resp.text}')
+              # Save result
+              with open('moltbook-register-result.txt', 'w') as f:
+                  f.write(f'STATUS: {resp.status_code}\n')
+                  f.write(f'RESPONSE: {resp.text}\n')
+          except Exception as e:
+              print(f'ERROR: {type(e).__name__}: {e}')
+              with open('moltbook-register-result.txt', 'w') as f:
+                  f.write(f'ERROR: {type(e).__name__}: {e}\n')
+          "
+
+      - name: Show result
+        run: cat moltbook-register-result.txt 2>/dev/null || echo "No result file"
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add moltbook-register-result.txt 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: moltbook register result"
+          git push
