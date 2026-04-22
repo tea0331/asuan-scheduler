@@ -14,15 +14,6 @@ on:
         options:
           - 'false'
           - 'true'
-    inputs:
-      force_rerun:
-        description: 'Force rerun even if already executed today'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
 
 concurrency:
   group: daily-digest
