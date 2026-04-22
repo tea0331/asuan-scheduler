@@ -603,6 +603,13 @@ def migrate_sent_log():
 # ============================================================
 
 def main():
+    # 🔴 Sandbox禁用检查 — 所有调度已迁移到GitHub Actions
+    run_env = os.environ.get('RUN_ENV', 'sandbox')
+    if run_env == 'sandbox' and not os.environ.get('FORCE_SANDBOX_RUN', ''):
+        print(f"[阿算] 🔴 Sandbox模式已禁用scheduler，所有任务已迁移到GitHub Actions")
+        print(f"[阿算] 如需强制运行，设置环境变量 FORCE_SANDBOX_RUN=1")
+        sys.exit(0)
+
     # 初始化DB
     init_db()
     migrate_sent_log()
