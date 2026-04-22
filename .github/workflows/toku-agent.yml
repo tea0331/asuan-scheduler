@@ -1,4 +1,4 @@
-name: Toku Agent
+name: Agent Marketplace Ops
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: toku-agent
+  group: agent-marketplace
   cancel-in-progress: false
 
 permissions:
@@ -15,12 +15,14 @@ permissions:
   issues: write
 
 jobs:
-  toku-ops:
+  agent-ops:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     env:
       TOKU_API_KEY: ${{ secrets.TOKU_API_KEY }}
+      WP_API_KEY: ${{ secrets.WP_API_KEY }}
+      NEAR_API_KEY: ${{ secrets.NEAR_API_KEY }}
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       REPO_DIR: "."
 
