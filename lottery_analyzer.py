@@ -26,6 +26,7 @@ import re
 import random
 import json
 import math
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
 
@@ -155,7 +156,39 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
 }
+
+
+# ===== 期望期号计算（用于验证数据新鲜度）=====
+
+def _get_expected_ssq_period():
+    """根据当前日期估算双色球最新期号（用于数据新鲜度验证）
+    双色球每周二、四、日开奖，一年约153期
+    🔴 注意：此为估算值，实际期号由彩票中心分配，可能有调整
+    """
+    now = datetime.now(CST)
+    year_start = datetime(2026, 1, 1, tzinfo=CST)
+    if now < year_start:
+        return 26001
+    # 简单估算：自1月1日起每天约0.43期（3期/7天）
+    days_passed = (now - year_start).days
+    estimated = 26001 + int(days_passed * 3 / 7)
+    return estimated
+
+def _get_expected_dlt_period():
+    """根据当前日期估算大乐透最新期号
+    大乐透每周一、三、六开奖
+    """
+    now = datetime.now(CST)
+    year_start = datetime(2026, 1, 1, tzinfo=CST)
+    if now < year_start:
+        return 26001
+    days_passed = (now - year_start).days
+    estimated = 26001 + int(days_passed * 3 / 7)
+    return estimated
 
 
 # ===== 数据抓取 =====
@@ -198,20 +231,40 @@ def fetch_qxc_history(periods=15):
 
 def _fetch_ssq_500com(periods):
     try:
-        url = 'https://datachart.500.com/ssq/history/newinc/history.php'
+        # 🔴 添加时间戳防止缓存
+        ts = int(time.time())
+        url = f'https://datachart.500.com/ssq/history/newinc/history.php?t={ts}'
         resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/ssq/history/'}, timeout=15)
         resp.encoding = 'gb2312'
-        return _parse_ssq_html(resp.text, periods)
+        result = _parse_ssq_html(resp.text, periods)
+        # 🔴 验证期号合理性：不应该比期望的期号旧太多
+        if result and len(result) > 0:
+            latest_period = result[0]['period']
+            expected_min = _get_expected_ssq_period() - 5  # 允许滞后5期
+            if int(latest_period) < expected_min:
+                print(f"[双色球-500] 警告: 获取到期号 {latest_period}，期望至少 {expected_min}，可能数据未更新")
+                return None  # 让系统回退到备用源
+        return result
     except Exception as e:
         print(f"[双色球-500] 抓取失败: {e}")
         return None
 
 def _fetch_dlt_500com(periods):
     try:
-        url = 'https://datachart.500.com/dlt/history/newinc/history.php'
+        # 🔴 添加时间戳防止缓存
+        ts = int(time.time())
+        url = f'https://datachart.500.com/dlt/history/newinc/history.php?t={ts}'
         resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/dlt/history/'}, timeout=15)
         resp.encoding = 'gb2312'
-        return _parse_dlt_html(resp.text, periods)
+        result = _parse_dlt_html(resp.text, periods)
+        # 🔴 验证期号合理性
+        if result and len(result) > 0:
+            latest_period = result[0]['period']
+            expected_min = _get_expected_dlt_period() - 5
+            if int(latest_period) < expected_min:
+                print(f"[大乐透-500] 警告: 获取到期号 {latest_period}，期望至少 {expected_min}，可能数据未更新")
+                return None
+        return result
     except Exception as e:
         print(f"[大乐透-500] 抓取失败: {e}")
         return None
