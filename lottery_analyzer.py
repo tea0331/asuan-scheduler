@@ -199,23 +199,47 @@ def _get_expected_dlt_period():
 # ===== 数据抓取 =====
 
 def fetch_ssq_history(periods=15):
+    print(f"\n[双色球] 开始抓取，目标 {periods} 期...")
+    # 源1: datachart.500.com
     result = _fetch_ssq_500com(periods)
     if result and len(result) >= 3:
+        print(f"[双色球] ✅ datachart.500.com 成功: {len(result)} 期")
         return result
+    # 源2: cjcp.cn
+    print("[双色球] 尝试备用源 cjcp.cn...")
     result = _fetch_ssq_cjcp(periods)
     if result and len(result) >= 3:
+        print(f"[双色球] ✅ cjcp.cn 成功: {len(result)} 期")
         return result
-    print("[双色球] 网络抓取失败，使用硬编码数据")
+    # 源3: kaijiang.500.com 单页
+    print("[双色球] 尝试备用源 kaijiang.500.com...")
+    result = _fetch_ssq_kaijiang500(periods)
+    if result and len(result) >= 3:
+        print(f"[双色球] ✅ kaijiang.500.com 成功: {len(result)} 期")
+        return result
+    print("[双色球] ⚠️ 所有网络源失败，使用硬编码数据")
     return FALLBACK_SSQ[:periods]
 
 def fetch_dlt_history(periods=15):
+    print(f"\n[大乐透] 开始抓取，目标 {periods} 期...")
+    # 源1: datachart.500.com
     result = _fetch_dlt_500com(periods)
     if result and len(result) >= 3:
+        print(f"[大乐透] ✅ datachart.500.com 成功: {len(result)} 期")
         return result
+    # 源2: cjcp.cn
+    print("[大乐透] 尝试备用源 cjcp.cn...")
     result = _fetch_dlt_cjcp(periods)
     if result and len(result) >= 3:
+        print(f"[大乐透] ✅ cjcp.cn 成功: {len(result)} 期")
         return result
-    print("[大乐透] 网络抓取失败，使用硬编码数据")
+    # 源3: kaijiang.500.com 单页
+    print("[大乐透] 尝试备用源 kaijiang.500.com...")
+    result = _fetch_dlt_kaijiang500(periods)
+    if result and len(result) >= 3:
+        print(f"[大乐透] ✅ kaijiang.500.com 成功: {len(result)} 期")
+        return result
+    print("[大乐透] ⚠️ 所有网络源失败，使用硬编码数据")
     return FALLBACK_DLT[:periods]
 
 def fetch_qxc_history(periods=15):
@@ -234,49 +258,93 @@ def fetch_qxc_history(periods=15):
     return FALLBACK_QXC[:periods]
 
 
-def _fetch_ssq_500com(periods):
-    try:
-        # 🔴 添加时间戳防止缓存
-        ts = int(time.time())
-        url = f'https://datachart.500.com/ssq/history/newinc/history.php?t={ts}'
-        resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/ssq/history/'}, timeout=15)
-        resp.encoding = 'gb2312'
-        result = _parse_ssq_html(resp.text, periods)
-        # 🔴 验证期号合理性：不应该比期望的期号旧太多
-        if result and len(result) > 0:
-            latest_period = result[0]['period']
-            expected_min = _get_expected_ssq_period() - 5  # 允许滞后5期
-            if int(latest_period) < expected_min:
-                print(f"[双色球-500] 警告: 获取到期号 {latest_period}，期望至少 {expected_min}，可能数据未更新")
-                return None  # 让系统回退到备用源
-        return result
-    except Exception as e:
-        import traceback
-        print(f"[双色球-500] 抓取失败: {type(e).__name__}: {e}")
-        print(f"[双色球-500] 堆栈: {traceback.format_exc()[:200]}")
-        return None
-
-def _fetch_dlt_500com(periods):
-    try:
-        # 🔴 添加时间戳防止缓存
-        ts = int(time.time())
-        url = f'https://datachart.500.com/dlt/history/newinc/history.php?t={ts}'
-        resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/dlt/history/'}, timeout=15)
-        resp.encoding = 'gb2312'
-        result = _parse_dlt_html(resp.text, periods)
-        # 🔴 验证期号合理性
-        if result and len(result) > 0:
-            latest_period = result[0]['period']
-            expected_min = _get_expected_dlt_period() - 5
-            if int(latest_period) < expected_min:
-                print(f"[大乐透-500] 警告: 获取到期号 {latest_period}，期望至少 {expected_min}，可能数据未更新")
+def _fetch_ssq_500com(periods, retries=3):
+    """双色球历史数据 - datachart 页面（带重试）"""
+    for attempt in range(retries):
+        try:
+            ts = int(time.time())
+            url = f'https://datachart.500.com/ssq/history/newinc/history.php?t={ts}'
+            print(f"[双色球-500] 请求 (尝试{attempt+1}/{retries}): {url}")
+            resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/ssq/history/'}, timeout=15)
+            print(f"[双色球-500] 状态码: {resp.status_code}, 长度: {len(resp.text)}")
+            if resp.status_code != 200:
+                print(f"[双色球-500] HTTP错误: {resp.status_code}")
+                if attempt < retries - 1:
+                    time.sleep(2)
+                    continue
                 return None
-        return result
-    except Exception as e:
-        import traceback
-        print(f"[大乐透-500] 抓取失败: {type(e).__name__}: {e}")
-        print(f"[大乐透-500] 堆栈: {traceback.format_exc()[:200]}")
-        return None
+            resp.encoding = 'gb2312'
+            result = _parse_ssq_html(resp.text, periods)
+            if result and len(result) > 0:
+                latest_period = result[0]['period']
+                print(f"[双色球-500] 获取到期号: {latest_period}")
+                expected_min = _get_expected_ssq_period() - 5
+                if int(latest_period) < expected_min:
+                    print(f"[双色球-500] 警告: 数据过期，期望至少 {expected_min}")
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                        continue
+                    return None
+                return result
+            else:
+                print(f"[双色球-500] 解析结果为空")
+                if attempt < retries - 1:
+                    time.sleep(2)
+                    continue
+                return None
+        except Exception as e:
+            import traceback
+            print(f"[双色球-500] 抓取失败 (尝试{attempt+1}/{retries}): {type(e).__name__}: {e}")
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+            print(f"[双色球-500] 堆栈: {traceback.format_exc()[:200]}")
+            return None
+    return None
+
+def _fetch_dlt_500com(periods, retries=3):
+    """大乐透历史数据 - datachart 页面（带重试）"""
+    for attempt in range(retries):
+        try:
+            ts = int(time.time())
+            url = f'https://datachart.500.com/dlt/history/newinc/history.php?t={ts}'
+            print(f"[大乐透-500] 请求 (尝试{attempt+1}/{retries}): {url}")
+            resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/dlt/history/'}, timeout=15)
+            print(f"[大乐透-500] 状态码: {resp.status_code}, 长度: {len(resp.text)}")
+            if resp.status_code != 200:
+                print(f"[大乐透-500] HTTP错误: {resp.status_code}")
+                if attempt < retries - 1:
+                    time.sleep(2)
+                    continue
+                return None
+            resp.encoding = 'gb2312'
+            result = _parse_dlt_html(resp.text, periods)
+            if result and len(result) > 0:
+                latest_period = result[0]['period']
+                print(f"[大乐透-500] 获取到期号: {latest_period}")
+                expected_min = _get_expected_dlt_period() - 5
+                if int(latest_period) < expected_min:
+                    print(f"[大乐透-500] 警告: 数据过期，期望至少 {expected_min}")
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                        continue
+                    return None
+                return result
+            else:
+                print(f"[大乐透-500] 解析结果为空")
+                if attempt < retries - 1:
+                    time.sleep(2)
+                    continue
+                return None
+        except Exception as e:
+            import traceback
+            print(f"[大乐透-500] 抓取失败 (尝试{attempt+1}/{retries}): {type(e).__name__}: {e}")
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+            print(f"[大乐透-500] 堆栈: {traceback.format_exc()[:200]}")
+            return None
+    return None
 
 def _fetch_qxc_500com(periods):
     """七星彩：datachart历史页已404，改用kaijiang单期页面逐期抓取"""
@@ -345,6 +413,96 @@ def _fetch_qxc_cjcp(periods):
         return _parse_qxc_html(resp.text, periods)
     except Exception as e:
         print(f"[七星彩-cjcp] 抓取失败: {e}")
+        return None
+
+
+def _fetch_ssq_kaijiang500(periods):
+    """备用：kaijiang.500.com 双色球单页抓取"""
+    try:
+        # 先获取最新期号列表（跟随重定向）
+        index_url = 'https://kaijiang.500.com/ssq.shtml'
+        print(f"[双色球-kaijiang] 请求主页: {index_url}")
+        resp = requests.get(index_url, headers=HEADERS, timeout=15, allow_redirects=True)
+        print(f"[双色球-kaijiang] 状态码: {resp.status_code}, 最终URL: {resp.url}")
+        resp.encoding = 'gb2312'
+        # 尝试多种期号格式
+        period_list = re.findall(r'ssq/(\d{5})\.shtml', resp.text)
+        if not period_list:
+            # 尝试从链接中提取
+            period_list = re.findall(r'(\d{5})(?:\.shtml|/)</a>', resp.text)
+        if not period_list:
+            print(f"[双色球-kaijiang] 未找到期号列表，响应长度: {len(resp.text)}")
+            return None
+        # 去重保序
+        seen = set()
+        unique_periods = []
+        for p in period_list:
+            if p not in seen:
+                seen.add(p)
+                unique_periods.append(p)
+        results = []
+        for period in unique_periods[:periods]:
+            try:
+                page_url = f'https://kaijiang.500.com/shtml/ssq/{period}.shtml'
+                page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
+                page_resp.encoding = 'gb2312'
+                # 提取红球和蓝球
+                balls = re.findall(r'class="ball_red">(\d+)</span>', page_resp.text)
+                blue_match = re.search(r'class="ball_blue">(\d+)</span>', page_resp.text)
+                if len(balls) >= 6 and blue_match:
+                    results.append({
+                        'period': period,
+                        'reds': [int(balls[i]) for i in range(6)],
+                        'blue': int(blue_match.group(1))
+                    })
+            except Exception as e:
+                continue
+        print(f"[双色球-kaijiang] 获取到 {len(results)} 期")
+        return results if results else None
+    except Exception as e:
+        print(f"[双色球-kaijiang] 抓取失败: {e}")
+        return None
+
+
+def _fetch_dlt_kaijiang500(periods):
+    """备用：kaijiang.500.com 大乐透单页抓取"""
+    try:
+        index_url = 'https://kaijiang.500.com/dlt.shtml'
+        print(f"[大乐透-kaijiang] 请求主页: {index_url}")
+        resp = requests.get(index_url, headers=HEADERS, timeout=15)
+        resp.encoding = 'gb2312'
+        period_list = re.findall(r'dlt/(\d{5})\.shtml', resp.text)
+        if not period_list:
+            print("[大乐透-kaijiang] 未找到期号列表")
+            return None
+        seen = set()
+        unique_periods = []
+        for p in period_list:
+            if p not in seen:
+                seen.add(p)
+                unique_periods.append(p)
+        results = []
+        for period in unique_periods[:periods]:
+            try:
+                page_url = f'https://kaijiang.500.com/shtml/dlt/{period}.shtml'
+                page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
+                page_resp.encoding = 'gb2312'
+                # 提取前区号码（class包含ball_red或ball_1）
+                front_balls = re.findall(r'class="ball_red">(\d+)</span>', page_resp.text)
+                # 提取后区号码（class包含ball_blue）
+                back_balls = re.findall(r'class="ball_blue">(\d+)</span>', page_resp.text)
+                if len(front_balls) >= 5 and len(back_balls) >= 2:
+                    results.append({
+                        'period': period,
+                        'front': [int(front_balls[i]) for i in range(5)],
+                        'back': [int(back_balls[i]) for i in range(2)]
+                    })
+            except Exception as e:
+                continue
+        print(f"[大乐透-kaijiang] 获取到 {len(results)} 期")
+        return results if results else None
+    except Exception as e:
+        print(f"[大乐透-kaijiang] 抓取失败: {e}")
         return None
 
 
