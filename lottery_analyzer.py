@@ -99,6 +99,9 @@ PREDICTION_LOG = os.path.join(_BASE_DIR, 'lottery-predictions.json')
 # ===== 硬编码Fallback数据（2026-04-18更新） =====
 
 FALLBACK_SSQ = [
+    {'period': '26045', 'reds': [4, 11, 15, 17, 24, 30], 'blue': 15},
+    {'period': '26044', 'reds': [2, 14, 17, 18, 22, 30], 'blue': 1},
+    {'period': '26043', 'reds': [6, 9, 14, 16, 25, 32], 'blue': 16},
     {'period': '26042', 'reds': [2, 7, 12, 19, 24, 31], 'blue': 10},
     {'period': '26041', 'reds': [2, 8, 10, 17, 19, 24], 'blue': 13},
     {'period': '26040', 'reds': [3, 4, 14, 22, 23, 33], 'blue': 4},
@@ -117,8 +120,10 @@ FALLBACK_SSQ = [
 ]
 
 FALLBACK_DLT = [
-    {'period': '26040', 'front': [6, 12, 13, 21, 34], 'back': [8, 9]},
-    {'period': '26039', 'front': [9, 11, 20, 26, 27], 'back': [6, 9]},
+    {'period': '26043', 'front': [8, 12, 14, 19, 22], 'back': [11, 12]},
+    {'period': '26042', 'front': [2, 7, 13, 19, 24], 'back': [3, 8]},
+    {'period': '26041', 'front': [6, 12, 13, 21, 34], 'back': [8, 9]},
+    {'period': '26040', 'front': [9, 11, 20, 26, 27], 'back': [6, 9]},
     {'period': '26038', 'front': [8, 17, 21, 33, 35], 'back': [6, 7]},
     {'period': '26037', 'front': [7, 12, 13, 28, 32], 'back': [6, 8]},
     {'period': '26036', 'front': [4, 7, 16, 26, 32], 'back': [5, 8]},
@@ -246,7 +251,9 @@ def _fetch_ssq_500com(periods):
                 return None  # 让系统回退到备用源
         return result
     except Exception as e:
-        print(f"[双色球-500] 抓取失败: {e}")
+        import traceback
+        print(f"[双色球-500] 抓取失败: {type(e).__name__}: {e}")
+        print(f"[双色球-500] 堆栈: {traceback.format_exc()[:200]}")
         return None
 
 def _fetch_dlt_500com(periods):
@@ -266,7 +273,9 @@ def _fetch_dlt_500com(periods):
                 return None
         return result
     except Exception as e:
-        print(f"[大乐透-500] 抓取失败: {e}")
+        import traceback
+        print(f"[大乐透-500] 抓取失败: {type(e).__name__}: {e}")
+        print(f"[大乐透-500] 堆栈: {traceback.format_exc()[:200]}")
         return None
 
 def _fetch_qxc_500com(periods):
