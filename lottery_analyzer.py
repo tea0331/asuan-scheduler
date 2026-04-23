@@ -1066,16 +1066,22 @@ def _calc_hit_rate(predictions, actual):
 
 
 def _run_backtest():
-    """回测昨日推荐 vs 今日开奖结果（🔴只回测昨天开奖的彩种）"""
+    """回测前天推荐 vs 昨天开奖结果
+    🔴 修正：凌晨0:05运行时，昨天晚上的开奖数据可能还没更新到网站，
+    所以回测"前天推荐 vs 昨天开奖"更可靠（昨天的开奖数据已确认可抓取）
+    """
     predictions = _load_predictions()
     backtest_log = _load_backtest()
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
+    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
+    day_before = (datetime.now(CST) - timedelta(days=2)).strftime('%Y-%m-%d')
 
     if not predictions:
-        print("[回测] 无昨日推荐记录，跳过回测")
+        print("[回测] 无推荐记录，跳过回测")
         return None
 
-    # 🔴 只回测昨天开奖的彩种
+    # 🔴 修正：回测前天的推荐 vs 昨天的开奖
+    # 昨天开奖的彩种（昨天的开奖数据到凌晨已确认可抓取）
     draw_games = get_draw_games_yesterday()
     if not draw_games:
         print("[回测] 昨天无彩种开奖，跳过回测")
@@ -1084,37 +1090,36 @@ def _run_backtest():
     draw_names = [LOTTERY_NAMES.get(g, g) for g in draw_games]
     print(f"[回测] 昨天开奖彩种: {', '.join(draw_names)}")
 
-    # 🔴 修复：找到昨天的推荐来回测，而不是简单看predictions[-1]
-    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
-    yesterday_pred = None
+    # 🔴 找到前天的推荐来回测（前天推荐的号码 vs 昨天开奖结果）
+    pred = None
     for p in reversed(predictions):
-        if p.get('date') == yesterday:
-            yesterday_pred = p
+        if p.get('date') == day_before:
+            pred = p
             break
 
-    if not yesterday_pred:
-        print(f"[回测] 无昨日({yesterday})推荐记录，跳过回测")
+    if not pred:
+        print(f"[回测] 无前天({day_before})推荐记录，跳过回测")
         return None
 
-    # 🔴 防止重复回测：检查今天是否已回测过昨天的推荐
+    # 🔴 防止重复回测：检查今天是否已回测过前天的推荐
     for bt in backtest_log:
-        if bt.get('date') == yesterday and bt.get('backtest_date') == today_str:
-            print(f"[回测] 昨日({yesterday})推荐已回测过，跳过")
+        if bt.get('date') == day_before and bt.get('backtest_date') == today_str:
+            print(f"[回测] 前天({day_before})推荐已回测过，跳过")
             return bt
 
     backtest_result = {
-        'date': yesterday_pred.get('date', ''),
+        'date': pred.get('date', ''),
         'backtest_date': today_str,
         'draw_games': draw_games,  # 🔴 记录哪些彩种开奖了
     }
 
     # 双色球回测 — 只在昨天开奖时回测
-    if 'ssq' in draw_games and yesterday_pred.get('ssq_recs'):
+    if 'ssq' in draw_games and pred.get('ssq_recs'):
         ssq_actual = fetch_ssq_history(1)
         if ssq_actual:
             actual = ssq_actual[0]
             hits = []
-            for rec in yesterday_pred['ssq_recs']:
+            for rec in pred['ssq_recs']:
                 red_hit_nums = _get_hit_numbers(rec['reds'], actual['reds'])
                 blue_hit = 1 if rec['blue'] == actual['blue'] else 0
                 hits.append({
@@ -1139,12 +1144,12 @@ def _run_backtest():
             print(f"[回测] 双色球 第{actual['period']}期: 最佳策略={backtest_result['ssq']['best_strategy']}, 命中={backtest_result['ssq']['best_total']}个")
 
     # 大乐透回测 — 只在昨天开奖时回测
-    if 'dlt' in draw_games and yesterday_pred.get('dlt_recs'):
+    if 'dlt' in draw_games and pred.get('dlt_recs'):
         dlt_actual = fetch_dlt_history(1)
         if dlt_actual:
             actual = dlt_actual[0]
             hits = []
-            for rec in yesterday_pred['dlt_recs']:
+            for rec in pred['dlt_recs']:
                 front_hit_nums = _get_hit_numbers(rec['front'], actual['front'])
                 back_hit_nums = _get_hit_numbers(rec['back'], actual['back'])
                 hits.append({
@@ -1170,12 +1175,12 @@ def _run_backtest():
             print(f"[回测] 大乐透 第{actual['period']}期: 最佳策略={backtest_result['dlt']['best_strategy']}, 命中={backtest_result['dlt']['best_total']}个")
 
     # 七星彩回测 — 只在昨天开奖时回测
-    if 'qxc' in draw_games and yesterday_pred.get('qxc_recs'):
+    if 'qxc' in draw_games and pred.get('qxc_recs'):
         qxc_actual = fetch_qxc_history(1)
         if qxc_actual:
             actual = qxc_actual[0]
             hits = []
-            for rec in yesterday_pred['qxc_recs']:
+            for rec in pred['qxc_recs']:
                 digit_hits_detail = [(i, rec['digits'][i], actual['digits'][i], rec['digits'][i] == actual['digits'][i]) for i in range(7)]
                 digit_hit_count = sum(1 for _, _, _, hit in digit_hits_detail if hit)
                 hits.append({
@@ -1812,7 +1817,7 @@ def generate_lottery_recommendations():
     qxc_result = None
 
     # 0. 回测昨日推荐
-    print("[回测] 对比昨日推荐与今日开奖...")
+    print("[回测] 对比前天推荐与昨日开奖...")
     backtest_result = _run_backtest()
     backtest_feedback = _format_backtest_for_ai(backtest_result)
     if backtest_feedback:
