@@ -2,8 +2,10 @@ name: Daily Digest
 
 on:
   schedule:
-    # 每天 UTC 16:05（北京时间 00:05）
+    # 🔴 主时间：UTC 16:05（北京时间 00:05）
     - cron: "5 16 * * *"
+    # 🔴 备用时间：UTC 16:35（北京时间 00:35），防止主时间被GitHub跳过
+    - cron: "35 16 * * *"
   workflow_dispatch:
     inputs:
       force_rerun:
