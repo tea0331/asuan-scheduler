@@ -278,7 +278,7 @@ def _fetch_ssq_500com(periods, retries=3):
             if result and len(result) > 0:
                 latest_period = result[0]['period']
                 print(f"[双色球-500] 获取到期号: {latest_period}")
-                expected_min = _get_expected_ssq_period() - 5
+                expected_min = _get_expected_ssq_period() - 8  # 🔴 放宽容差，避免误判
                 if int(latest_period) < expected_min:
                     print(f"[双色球-500] 警告: 数据过期，期望至少 {expected_min}")
                     if attempt < retries - 1:
@@ -322,7 +322,7 @@ def _fetch_dlt_500com(periods, retries=3):
             if result and len(result) > 0:
                 latest_period = result[0]['period']
                 print(f"[大乐透-500] 获取到期号: {latest_period}")
-                expected_min = _get_expected_dlt_period() - 5
+                expected_min = _get_expected_dlt_period() - 8  # 🔴 放宽容差，避免误判
                 if int(latest_period) < expected_min:
                     print(f"[大乐透-500] 警告: 数据过期，期望至少 {expected_min}")
                     if attempt < retries - 1:
