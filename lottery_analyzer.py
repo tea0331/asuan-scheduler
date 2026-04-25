@@ -801,6 +801,40 @@ class WeightedAnalyzer:
             })
         return {'positions': pos_data, 'total_periods': total}
 
+    def _smart_blue_select(self, analysis, mode='hot'):
+        """🔴 双色球蓝球智能选号（1-16）
+        mode: 'hot'权重优先 / 'mix'均衡 / 'miss'遗漏回补
+        """
+        blue_weight_dict = dict(analysis['blue_weights'])
+        blue_miss = analysis['blue_miss']
+        blue_freq = analysis['blue_freq']
+
+        scores = {}
+        for n in range(1, 17):
+            weight_score = blue_weight_dict.get(n, 0)
+            miss_val = blue_miss.get(n, 0)
+            if miss_val >= 10:
+                miss_score = 3.0
+            elif miss_val >= 6:
+                miss_score = 2.5
+            elif miss_val >= 3:
+                miss_score = 1.5
+            elif miss_val == 0:
+                miss_score = 1.0
+            else:
+                miss_score = 0.8
+            freq_score = min(blue_freq.get(n, 0), 4) / 2.0
+
+            if mode == 'hot':
+                scores[n] = weight_score * 0.4 + freq_score * 0.4 + miss_score * 0.2
+            elif mode == 'mix':
+                scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
+            elif mode == 'miss':
+                scores[n] = weight_score * 0.2 + freq_score * 0.2 + miss_score * 0.6
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return ranked[0][0]
+
     def generate_recs_ssq(self, analysis):
         """根据加权分析生成双色球推荐（纯数学，不依赖AI）"""
         # 追热：权重最高的6个红球 + 最高权重蓝球
@@ -834,20 +868,20 @@ class WeightedAnalyzer:
         all_pool.sort(key=lambda x: x[1], reverse=True)
         core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]  # 🔴 保持权重排序（不sorted！）
         core_reds = sorted(core_reds_by_weight)  # 只用于显示
-        core_blue = analysis['blue_weights'][0][0]
+        core_blue = self._smart_blue_select(analysis, mode='hot')  # 🔴 v2: 智能蓝球
 
         # 🔴 Bug修复：扩展注保留的是权重最高的号，不是号码最小的号
         # 扩展1：保留权重最高的4号 + 替换权重最低的2号
         ext1_keep = sorted(core_reds_by_weight[:4])  # 权重TOP4
         ext1_new = sorted([n for n, w, f, m in all_pool[6:8] if n not in ext1_keep][:2])
         ext1_reds = sorted(ext1_keep + ext1_new)
-        ext1_blue = analysis['blue_weights'][1][0] if len(analysis['blue_weights']) > 1 else 1
+        ext1_blue = self._smart_blue_select(analysis, mode='mix')  # 🔴 v2: 均衡模式
 
         # 扩展2：保留权重最高的3号 + 替换权重最低的3号
         ext2_keep = sorted(core_reds_by_weight[:3])  # 权重TOP3
         ext2_new = sorted([n for n, w, f, m in all_pool[8:11] if n not in ext2_keep][:3])
         ext2_reds = sorted(ext2_keep + ext2_new)
-        ext2_blue = analysis['blue_weights'][2][0] if len(analysis['blue_weights']) > 2 else ext1_blue
+        ext2_blue = self._smart_blue_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': '核心注(加权)'},
@@ -855,46 +889,113 @@ class WeightedAnalyzer:
             {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': '扩展2(加权)'},
         ]
 
+    def _smart_back_select(self, analysis, count=2, mode='hot'):
+        """🔴 大乐透后区智能选号（v2优化版）
+        综合考虑：权重+遗漏+奇偶+大小+振幅，而非仅靠权重排名
+
+        mode:
+          - 'hot': 热号为主（核心注）
+          - 'mix': 热号+遗漏回补（扩展1）
+          - 'miss': 遗漏回补为主（扩展2）
+        """
+        back_weight_dict = dict(analysis['back_weights'])
+        back_miss = analysis['back_miss']
+        back_freq = analysis['back_freq']
+
+        # 综合评分：权重(40%) + 遗漏回补力(30%) + 近期活跃度(30%)
+        scores = {}
+        for n in range(1, 13):
+            weight_score = back_weight_dict.get(n, 0)
+            # 遗漏回补力：遗漏越大，回补概率越高（但超过10期可能偏冷）
+            miss_val = back_miss.get(n, 0)
+            if miss_val >= 8:
+                miss_score = 3.0  # 深度遗漏，强回补信号
+            elif miss_val >= 5:
+                miss_score = 2.5
+            elif miss_val >= 3:
+                miss_score = 1.5
+            elif miss_val == 0:
+                miss_score = 1.0  # 刚出，回补力弱
+            else:
+                miss_score = 0.8
+
+            # 近期活跃度：近5期出现次数
+            freq_score = min(back_freq.get(n, 0), 4) / 2.0
+
+            if mode == 'hot':
+                # 核心注：权重+活跃度优先
+                scores[n] = weight_score * 0.4 + freq_score * 0.4 + miss_score * 0.2
+            elif mode == 'mix':
+                # 扩展1：均衡
+                scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
+            elif mode == 'miss':
+                # 扩展2：遗漏回补优先
+                scores[n] = weight_score * 0.2 + freq_score * 0.2 + miss_score * 0.6
+
+        # 按评分排序
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        # 🔴 奇偶约束：优先选"一奇一偶"组合（占比47%，最高频）
+        # 🔴 大小约束：优先选"一小一大"组合（占比60%，最高频）
+        best_pair = None
+        best_score = -1
+
+        # 从TOP6候选中搜索最佳奇偶+大小组合
+        candidates = [n for n, s in ranked[:6]]
+        for i in range(len(candidates)):
+            for j in range(i+1, len(candidates)):
+                pair = sorted([candidates[i], candidates[j]])
+                # 奇偶检查
+                odd_count = sum(1 for n in pair if n % 2 == 1)
+                # 大小检查（1-6小，7-12大）
+                big_count = sum(1 for n in pair if n >= 7)
+
+                bonus = 0
+                # 奇偶加分：一奇一偶最优先
+                if odd_count == 1:
+                    bonus += 0.5
+                # 大小加分：一小一大最优先
+                if big_count == 1:
+                    bonus += 0.5
+                # 连号微调（出现概率17%，不算高但值得覆盖）
+                if abs(pair[0] - pair[1]) == 1:
+                    bonus += 0.2
+
+                pair_score = scores[candidates[i]] + scores[candidates[j]] + bonus
+                if pair_score > best_score:
+                    best_score = pair_score
+                    best_pair = pair
+
+        if best_pair:
+            return best_pair
+
+        # 降级：直接取评分前2
+        return sorted([ranked[0][0], ranked[1][0]])
+
     def generate_recs_dlt(self, analysis):
         """根据加权分析生成大乐透推荐"""
-        hot_front = sorted([n for n, w in analysis['front_weights'][:8]][:5])
-        hot_back = sorted([analysis['back_weights'][0][0], analysis['back_weights'][1][0]])
-
-        miss_fronts = sorted([(n, analysis['front_miss'].get(n, 0)) for n in range(1, 36)],
-                            key=lambda x: x[1], reverse=True)[:5]
-        miss_front_nums = sorted([n for n, m in miss_fronts])
-        miss_backs = sorted([(n, analysis['back_miss'].get(n, 0)) for n in range(1, 13)],
-                           key=lambda x: x[1], reverse=True)[:2]
-        miss_back_nums = sorted([n for n, m in miss_backs])
-
-        mid_pool = [n for n, f in analysis['front_freq'].items() if 2 <= f <= 4]
-        mid_front = sorted(mid_pool[:5]) if len(mid_pool) >= 5 else sorted([n for n, w in analysis['front_weights'][3:10]][:5])
-        mid_back = sorted([analysis['back_weights'][1][0], analysis['back_weights'][2][0]]) if len(analysis['back_weights']) > 2 else [1, 2]
-
-        # 🟢 核心注：权重最高5个前区 + 最高权重后区
-        # 🔴 Bug5修复：O(n²)→O(n)，用dict查找权重
+        # 🟢 核心注：权重最高5个前区 + 智能后区选号
         front_weight_dict = dict(analysis['front_weights'])
         all_pool = []
         for n in range(1, 36):
             w = front_weight_dict.get(n, 0)
             all_pool.append((n, w, analysis['front_freq'].get(n, 0), analysis['front_miss'].get(n, 0)))
         all_pool.sort(key=lambda x: x[1], reverse=True)
-        core_front_by_weight = [n for n, w, f, m in all_pool[:5]]  # 🔴 保持权重排序
-        core_front = sorted(core_front_by_weight)  # 只用于显示
-        core_back = sorted([analysis['back_weights'][0][0], analysis['back_weights'][1][0]])
+        core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
+        core_front = sorted(core_front_by_weight)
+        core_back = self._smart_back_select(analysis, mode='hot')  # 🔴 v2: 智能后区
 
-        # 🔴 Bug修复：保留权重最高的号，不是号码最小的号
         # 扩展1：保留权重TOP3 + 替换权重最低的2个
-        ext1_keep = sorted(core_front_by_weight[:3])  # 权重TOP3
+        ext1_keep = sorted(core_front_by_weight[:3])
         ext1_new = sorted([n for n, w, f, m in all_pool[5:7] if n not in ext1_keep][:2])
         ext1_front = sorted(ext1_keep + ext1_new)
-        ext1_back = sorted([analysis['back_weights'][0][0], analysis['back_weights'][2][0]]) if len(analysis['back_weights']) > 2 else core_back
+        ext1_back = self._smart_back_select(analysis, mode='mix')  # 🔴 v2: 均衡模式
 
         # 扩展2：保留权重TOP2 + 替换权重最低的3个
-        ext2_keep = sorted(core_front_by_weight[:2])  # 权重TOP2
+        ext2_keep = sorted(core_front_by_weight[:2])
         ext2_new = sorted([n for n, w, f, m in all_pool[7:10] if n not in ext2_keep][:3])
         ext2_front = sorted(ext2_keep + ext2_new)
-        ext2_back = sorted([analysis['back_weights'][1][0], analysis['back_weights'][2][0]]) if len(analysis['back_weights']) > 2 else core_back
+        ext2_back = self._smart_back_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
         return [
             {'front': core_front, 'back': core_back, 'strategy': '核心注(加权)'},
