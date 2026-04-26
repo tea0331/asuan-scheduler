@@ -962,14 +962,23 @@ class WeightedAnalyzer:
         ext2_reds = sorted(ext2_keep + ext2_new)
         ext2_blue = self._smart_blue_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
-        # 🟢 v6吸收：冷号注 — 遗漏值最高的6红+遗漏最高蓝（源自chinese-lottery-predict冷号策略）
-        cold_reds = sorted([(n, analysis['red_miss'].get(n, 0))
-                          for n in range(1, 34)], key=lambda x: x[1], reverse=True)[:6]
-        cold_red_nums = sorted([n for n, m in cold_reds])
-        # 冷号蓝球：遗漏最高的
-        cold_blues = sorted([(n, analysis['blue_miss'].get(n, 0))
-                           for n in range(1, 17)], key=lambda x: x[1], reverse=True)
-        cold_blue = cold_blues[0][0]
+        # 🟢 v6.1优化：冷号注前区 — 遗漏为主(60%) + 权重(20%) + 活跃度(20%)综合评分
+        # 不再纯遗漏排名，避免选出"死号"（长期不出但也没回补趋势的号）
+        cold_scores = []
+        for n in range(1, 34):
+            miss_val = analysis['red_miss'].get(n, 0)
+            miss_score = min(miss_val / 10.0, 3.0)  # 遗漏归一化，上限3.0
+            w = red_weight_dict.get(n, 0)
+            w_score = min(w / 5.0, 2.0)  # 权重归一化
+            f = analysis['red_freq'].get(n, 0)
+            f_score = min(f / 3.0, 1.5)  # 活跃度归一化（有点出现但不算热）
+            score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+            cold_scores.append((n, score))
+        cold_scores.sort(key=lambda x: x[1], reverse=True)
+        cold_red_nums = sorted([n for n, s in cold_scores[:6]])
+        # 🟢 v6.1修复：冷号蓝球改用_smart_blue_select(mode='miss')
+        # 之前直接取遗漏最高1个，没有多因子评分
+        cold_blue = self._smart_blue_select(analysis, mode='miss')
 
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
@@ -1098,16 +1107,22 @@ class WeightedAnalyzer:
         ext2_front = sorted(ext2_keep + ext2_new)
         ext2_back = self._smart_back_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
-        # 🟢 v6吸收：冷号注 — 遗漏值最高的5前区+遗漏最高2后区
-        cold_front = sorted([(n, analysis['front_miss'].get(n, 0))
-                           for n in range(1, 36)], key=lambda x: x[1], reverse=True)[:5]
-        cold_front_nums = sorted([n for n, m in cold_front])
-        # 冷号后区：遗漏最高的2个
-        cold_back = self._smart_back_select(analysis, mode='miss')
-        # 但冷号注后区直接用遗漏TOP2
-        cold_back_sorted = sorted([(n, analysis['back_miss'].get(n, 0))
-                                 for n in range(1, 13)], key=lambda x: x[1], reverse=True)[:2]
-        cold_back_nums = sorted([n for n, m in cold_back_sorted])
+        # 🟢 v6.1优化：冷号注前区 — 遗漏(60%)+权重(20%)+活跃度(20%)综合评分
+        cold_front_scores = []
+        for n in range(1, 36):
+            miss_val = analysis['front_miss'].get(n, 0)
+            miss_score = min(miss_val / 10.0, 3.0)
+            w = front_weight_dict.get(n, 0)
+            w_score = min(w / 5.0, 2.0)
+            f = analysis['front_freq'].get(n, 0)
+            f_score = min(f / 3.0, 1.5)
+            score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+            cold_front_scores.append((n, score))
+        cold_front_scores.sort(key=lambda x: x[1], reverse=True)
+        cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
+        # 🟢 v6.1修复：冷号注后区改用_smart_back_select(mode='miss')
+        # 之前直接取遗漏TOP2，没有奇偶/大小约束，命中率低
+        cold_back_nums = self._smart_back_select(analysis, mode='miss')
 
         return [
             {'front': core_front, 'back': core_back, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
