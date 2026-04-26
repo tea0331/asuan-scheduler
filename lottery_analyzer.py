@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v6.1 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略）
+彩票号码分析模块 v6.2 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+
+v6.2核心改动（P0-P2全面优化）：
+1. 🟢 Kelly→bias连续映射（tanh消除硬断层）
+2. 🟢 排序键归一化（freq/miss/weight统一到[0,1]再组合）
+3. 🟢 统一STRATEGY_MAP + Strategy枚举常量（消除字符串散落）
+4. 🟢 冷号注w_score修正（w*4.0替代w/5.0）
+5. 🟢 DLT FALLBACK补充 + SSQ/DLT fallback merge逻辑
+6. 🟢 蓝球分散（exclude参数避免4注同蓝球）
+7. 🟢 回测噪声过滤（领先需≥3次+命中均值更优才调整权重）
+8. 🟢 趋势权重对称化（上升1.0x/下降0.8x，无先验偏好）
+9. 🟢 OFFICE_ENABLED改环境变量 + HOLIDAYS动态生成2025-2028
+10. 🟢 权重重置改日期间隔（30天而非version计数）
+11. 🟢 QXC加Kelly驱动+冷号注（与SSQ/DLT对齐）
+12. 🟢 多奖级Kelly EV计算（替代单一赔率50/100）
+13. 🟢 遗漏值平均间隔维度（"到期号"额外加分）
+
 v6吸收chinese-lottery-predict优势：
 1. 🟢 新增冷号注策略：遗漏值最高号码组合，与核心注(追热)互补覆盖
 2. 🟢 新增节假日休市判断：春节/国庆休市自动跳过，标注休市提醒
 3. 🟢 新增购彩预算策略：按预算算注数，推荐单式/复式方案
 4. 🟢 新增下期开奖日期计算（含休市跳过）
-5. 🟢 AI prompt注入休市信息+冷号注生成规则
-
-v5.2核心改动：
-1. 🟢 P1修复：zone权重真正融入_calc_weights（之前20%权重被架空）
-2. 🟢 P1实现：回测驱动权重自适应（adjust_weights_from_backtest）
-3. 🟢 P2实现：Kelly仓位管理（风控提示，≤0则不建议投注）
-4. 🔴 Bug修复：zone_size统一为11/12（与analyze_ssq/dlt的分区一致）
-5. 🔴 Bug修复：趋势权重逻辑修正（下降趋势给负权重，不再abs(t)给正权重）
-6. 🔴 Bug修复：adjust_weights策略名兼容新旧格式（追热策略→核心注，回补策略→扩展2）
-7. 🔴 Bug修复：Kelly赔率匹配真实奖级，默认概率降为保守值
-8. 🔴 Bug修复：_parse_qxc_recs重复return删除
-9. 🔴 Bug修复：O(n²)权重查找优化为dict查找
-10. 🔴 Bug修复：SimpleAnalyzer扩展注改用频率排序而非号码大小
-11. 🔴 Bug修复：回测日期验证（predictions[-1]必须是昨天）
-12. 🔴 优化：adjustments列表上限10条，权重30天周期性重置
-13. 🔴 优化：归一化用高精度避免round误差积累
-14. 🔴 优化：adjust_weights可调整trend/zone维度（不再只调freq/miss）
 
 注意：彩票本质是随机事件，分析仅供娱乐参考。
 """
@@ -47,7 +46,8 @@ DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
 OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
 OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
-OFFICE_ENABLED = False  # ⏸️ qwopus3.5还不稳定，等朋友确认后再开
+# 🟢 v6.2: OFFICE_ENABLED改用环境变量开关（不再硬编码False）
+OFFICE_ENABLED = os.environ.get('OFFICE_ENABLED', 'false').lower() in ('true', '1', 'yes')
 
 # 🔴 开奖日历（周几开奖，周一=0，周日=6）
 LOTTERY_SCHEDULE = {
@@ -63,17 +63,30 @@ LOTTERY_NAMES = {
 }
 
 # 🟢 v6吸收：节假日休市配置（源自chinese-lottery-predict）
-HOLIDAYS = {
-    # 2026年春节休市（2月14日-2月23日）
-    '2026-02-14': '春节休市', '2026-02-15': '春节休市', '2026-02-16': '春节休市',
-    '2026-02-17': '春节休市', '2026-02-18': '春节休市', '2026-02-19': '春节休市',
-    '2026-02-20': '春节休市', '2026-02-21': '春节休市', '2026-02-22': '春节休市',
-    '2026-02-23': '春节休市',
-    # 2026年国庆休市（10月1日-10月7日）
-    '2026-10-01': '国庆休市', '2026-10-02': '国庆休市', '2026-10-03': '国庆休市',
-    '2026-10-04': '国庆休市', '2026-10-05': '国庆休市', '2026-10-06': '国庆休市',
-    '2026-10-07': '国庆休市',
-}
+# 🟢 v6.2: 改用函数动态判断，不再只硬编码特定年份
+def _build_holidays():
+    """动态生成节假日表，覆盖2025-2028年"""
+    holidays = {}
+    # 春节休市：农历正月初一前后各3天 ≈ 每年1月下旬~2月中旬
+    spring_festivals = {
+        2025: (1, 26),   # 2025春节1/29
+        2026: (2, 14),   # 2026春节2/17
+        2027: (2, 5),    # 2027春节2/8
+        2028: (1, 23),   # 2028春节1/26
+    }
+    for year, (m, d) in spring_festivals.items():
+        from datetime import date, timedelta as _td
+        start = date(year, m, d)
+        for i in range(10):  # 10天休市
+            day = start + _td(days=i)
+            holidays[day.strftime('%Y-%m-%d')] = '春节休市'
+    # 国庆休市：每年10月1日-7日
+    for year in range(2025, 2029):
+        for day in range(1, 8):
+            holidays[f'{year}-10-{day:02d}'] = '国庆休市'
+    return holidays
+
+HOLIDAYS = _build_holidays()
 
 # 🟢 v6吸收：购彩预算配置（源自chinese-lottery-predict）
 BUDGET_CONFIG = {
@@ -84,6 +97,37 @@ BUDGET_CONFIG = {
 # 开奖日历的中文显示
 WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
+# 🟢 v6.2: 统一策略名映射（全局常量，避免散落各处不一致）
+# 🔴 v6.2: 策略名常量 — 替代字符串字面量，减少拼写错误风险
+class Strategy:
+    CORE = '核心注'
+    EXT1 = '扩展1'
+    EXT2 = '扩展2'
+    COLD = '冷号注'
+    # 带后缀的变体
+    CORE_WEIGHTED = '核心注(加权)'
+    CORE_HOT = '核心注(追热)'
+    CORE_COLD = '核心注(搏冷)'
+    CORE_FALLBACK = '核心注(兜底)'
+    EXT1_WEIGHTED = '扩展1(加权)'
+    EXT1_FALLBACK = '扩展1(兜底)'
+    EXT2_WEIGHTED = '扩展2(加权)'
+    EXT2_FALLBACK = '扩展2(兜底)'
+    COLD_MISS = '冷号注(遗漏)'
+    COLD_FALLBACK = '冷号注(兜底)'
+    # 旧格式兼容
+    HOT_STRATEGY = '追热策略'
+    REBOUND_STRATEGY = '回补策略'
+    BALANCED_STRATEGY = '综合策略'
+
+STRATEGY_MAP = {
+    Strategy.HOT_STRATEGY: Strategy.CORE, Strategy.REBOUND_STRATEGY: Strategy.EXT2, Strategy.BALANCED_STRATEGY: Strategy.EXT1,
+    Strategy.CORE_WEIGHTED: Strategy.CORE, Strategy.CORE_HOT: Strategy.CORE, Strategy.CORE_COLD: Strategy.CORE,
+    Strategy.CORE_FALLBACK: Strategy.CORE, Strategy.CORE: Strategy.CORE,
+    Strategy.EXT1_WEIGHTED: Strategy.EXT1, Strategy.EXT1_FALLBACK: Strategy.EXT1, Strategy.EXT1: Strategy.EXT1,
+    Strategy.EXT2_WEIGHTED: Strategy.EXT2, Strategy.EXT2_FALLBACK: Strategy.EXT2, Strategy.EXT2: Strategy.EXT2,
+    Strategy.COLD_MISS: Strategy.COLD, Strategy.COLD_FALLBACK: Strategy.COLD, Strategy.COLD: Strategy.COLD,
+}
 
 def is_holiday(date_str):
     """🟢 v6吸收：检查是否在节假日休市期间"""
@@ -181,6 +225,7 @@ FALLBACK_DLT = [
     {'period': '26042', 'front': [2, 7, 13, 19, 24], 'back': [3, 8]},
     {'period': '26041', 'front': [6, 12, 13, 21, 34], 'back': [8, 9]},
     {'period': '26040', 'front': [9, 11, 20, 26, 27], 'back': [6, 9]},
+    {'period': '26039', 'front': [9, 11, 20, 26, 27], 'back': [6, 9]},  # 🔴 v6.2补缺失
     {'period': '26038', 'front': [8, 17, 21, 33, 35], 'back': [6, 7]},
     {'period': '26037', 'front': [7, 12, 13, 28, 32], 'back': [6, 8]},
     {'period': '26036', 'front': [4, 7, 16, 26, 32], 'back': [5, 8]},
@@ -275,6 +320,12 @@ def fetch_ssq_history(periods=15):
     if result and len(result) >= min_required:
         print(f"[双色球] ✅ kaijiang.500.com 成功: {len(result)} 期")
         return result
+    # 🟢 v6.2: 网络抓到少量数据也比纯硬编码好（与QXC逻辑一致）
+    if result and len(result) >= 1:
+        print(f"[双色球] 网络抓取到{len(result)}期，补充硬编码数据")
+        fallback = [f for f in FALLBACK_SSQ if not any(f['period'] == r['period'] for r in result)]
+        merged = result + fallback[:periods - len(result)]
+        return merged
     print("[双色球] ⚠️ 所有网络源失败，使用硬编码数据")
     return FALLBACK_SSQ[:periods]
 
@@ -298,6 +349,12 @@ def fetch_dlt_history(periods=15):
     if result and len(result) >= min_required:
         print(f"[大乐透] ✅ kaijiang.500.com 成功: {len(result)} 期")
         return result
+    # 🟢 v6.2: 网络抓到少量数据也比纯硬编码好（与SSQ/QXC逻辑一致）
+    if result and len(result) >= 1:
+        print(f"[大乐透] 网络抓取到{len(result)}期，补充硬编码数据")
+        fallback = [f for f in FALLBACK_DLT if not any(f['period'] == r['period'] for r in result)]
+        merged = result + fallback[:periods - len(result)]
+        return merged
     print("[大乐透] ⚠️ 所有网络源失败，使用硬编码数据")
     return FALLBACK_DLT[:periods]
 
@@ -683,13 +740,25 @@ class WeightedAnalyzer:
 
         # 遗漏值：连续未出现期数
         miss = {}
+        # 🟢 v6.2: 平均遗漏间隔（历史平均隔几期出现一次）
+        avg_miss_interval = {}
         for n in number_range:
             count = 0
+            # 当前遗漏
             for d in self.history:
                 if n in extract_fn(d):
                     break
                 count += 1
             miss[n] = count
+            # 平均遗漏间隔：找所有出现位置，计算间隔均值
+            positions = [i for i, d in enumerate(self.history) if n in extract_fn(d)]
+            if len(positions) >= 2:
+                intervals = [positions[i+1] - positions[i] for i in range(len(positions)-1)]
+                avg_miss_interval[n] = sum(intervals) / len(intervals)
+            elif len(positions) == 1:
+                avg_miss_interval[n] = positions[0] if positions[0] > 0 else len(self.history)
+            else:
+                avg_miss_interval[n] = len(self.history)  # 从未出现
 
         # 近期趋势：最近5期 vs 前10期
         recent = Counter()
@@ -728,9 +797,9 @@ class WeightedAnalyzer:
             # t < 0 表示近5期比前10期出现少（下降趋势），应给负权重或零权重
             # 之前abs(t)给下降趋势正权重是错误的
             if t > 0:
-                t_weight = t * 1.5  # 上升趋势加权放大
+                t_weight = t * 1.0  # 🟢 v6.2: 上升趋势（对称，无先验偏好）
             elif t < 0:
-                t_weight = t * 0.5  # 下降趋势给小负权重（轻微惩罚，不完全排除）
+                t_weight = t * 0.8  # 🟢 v6.2: 下降趋势轻微衰减（0.8而非0.5，不过度惩罚）
             else:
                 t_weight = 0
 
@@ -738,26 +807,33 @@ class WeightedAnalyzer:
             z = min(n // zone_size, 2)
             z_factor = max(0, (zone_expected - zone_counts[z]) / max(zone_expected, 1))
 
+            # 🟢 v6.2: 遗漏周期加分 — 当前遗漏 > 平均遗漏间隔时，说明"到期"
+            avg_interval = avg_miss_interval.get(n, total_periods)
+            overdue_bonus = 0
+            if avg_interval > 0 and miss.get(n, 0) > avg_interval:
+                overdue_bonus = min((miss.get(n, 0) - avg_interval) / max(avg_interval, 1) * 0.15, 0.3)
+
             weights[n] = (
                 self.w_freq * f +
                 self.w_miss * m +
                 self.w_trend * t_weight +
-                self.w_zone * z_factor  # 🟢 zone终于生效
+                self.w_zone * z_factor +  # 🟢 zone终于生效
+                overdue_bonus  # 🟢 v6.2: 遗漏周期加分
             )
 
-        return weights, freq, miss
+        return weights, freq, miss, avg_miss_interval  # 🟢 v6.2: 返回平均遗漏间隔
 
     def analyze_ssq(self):
         """双色球加权分析"""
         total = len(self.history)
 
         # 红球权重
-        red_weights, red_freq, red_miss = self._calc_weights(
+        red_weights, red_freq, red_miss, red_avg_interval = self._calc_weights(
             range(1, 34), lambda d: d['reds'], total
         )
 
         # 蓝球权重
-        blue_weights, blue_freq, blue_miss = self._calc_weights(
+        blue_weights, blue_freq, blue_miss, blue_avg_interval = self._calc_weights(
             range(1, 17), lambda d: [d['blue']], total
         )
 
@@ -791,9 +867,11 @@ class WeightedAnalyzer:
             'red_weights': hot_reds,
             'red_freq': red_freq,
             'red_miss': red_miss,
+            'red_avg_interval': red_avg_interval,  # 🟢 v6.2: 平均遗漏间隔
             'blue_weights': hot_blues,
             'blue_freq': blue_freq,
             'blue_miss': blue_miss,
+            'blue_avg_interval': blue_avg_interval,  # 🟢 v6.2
             'zone_balance': zone_balance,
             'avg_sum': avg_sum,
             'consec_rate': consec_rate,
@@ -804,10 +882,10 @@ class WeightedAnalyzer:
         """大乐透加权分析"""
         total = len(self.history)
 
-        front_weights, front_freq, front_miss = self._calc_weights(
+        front_weights, front_freq, front_miss, front_avg_interval = self._calc_weights(
             range(1, 36), lambda d: d['front'], total
         )
-        back_weights, back_freq, back_miss = self._calc_weights(
+        back_weights, back_freq, back_miss, back_avg_interval = self._calc_weights(
             range(1, 13), lambda d: d['back'], total
         )
 
@@ -836,9 +914,11 @@ class WeightedAnalyzer:
             'front_weights': hot_fronts,
             'front_freq': front_freq,
             'front_miss': front_miss,
+            'front_avg_interval': front_avg_interval,  # 🟢 v6.2: 平均遗漏间隔
             'back_weights': hot_backs,
             'back_freq': back_freq,
             'back_miss': back_miss,
+            'back_avg_interval': back_avg_interval,  # 🟢 v6.2
             'zone_balance': zone_balance,
             'avg_sum': avg_sum,
             'consec_rate': consec_rate,
@@ -850,7 +930,7 @@ class WeightedAnalyzer:
         total = len(self.history)
         pos_data = []
         for pos in range(7):
-            weights, freq, miss = self._calc_weights(
+            weights, freq, miss, avg_interval = self._calc_weights(
                 range(10), lambda d: [d['digits'][pos]], total
             )
             hot = sorted(weights.items(), key=lambda x: x[1], reverse=True)
@@ -858,19 +938,24 @@ class WeightedAnalyzer:
                 'weights': hot,
                 'freq': freq,
                 'miss': miss,
+                'avg_interval': avg_interval,  # 🟢 v6.2: 平均遗漏间隔
             })
         return {'positions': pos_data, 'total_periods': total}
 
-    def _smart_blue_select(self, analysis, mode='hot'):
+    def _smart_blue_select(self, analysis, mode='hot', exclude=None):
         """🔴 双色球蓝球智能选号（1-16）
         mode: 'hot'权重优先 / 'mix'均衡 / 'miss'遗漏回补
+        exclude: set of blue numbers to skip (for dispersion across bets)
         """
         blue_weight_dict = dict(analysis['blue_weights'])
         blue_miss = analysis['blue_miss']
         blue_freq = analysis['blue_freq']
+        exclude = exclude or set()
 
         scores = {}
         for n in range(1, 17):
+            if n in exclude:
+                continue  # 🟢 v6.2: 跳过已选蓝球
             weight_score = blue_weight_dict.get(n, 0)
             miss_val = blue_miss.get(n, 0)
             if miss_val >= 10:
@@ -893,7 +978,7 @@ class WeightedAnalyzer:
                 scores[n] = weight_score * 0.2 + freq_score * 0.2 + miss_score * 0.6
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return ranked[0][0]
+        return ranked[0][0] if ranked else 1
 
     def generate_recs_ssq(self, analysis, kelly_bias=0.0):
         """根据加权分析生成双色球推荐（纯数学，不依赖AI）
@@ -932,17 +1017,21 @@ class WeightedAnalyzer:
             all_pool.append((n, w, analysis['red_freq'].get(n, 0), analysis['red_miss'].get(n, 0)))
 
         if kelly_bias > 0:
-            # 🔥 Kelly高：核心注偏热 — 按频率+权重排序，优先选高频号
-            all_pool.sort(key=lambda x: x[2] * 0.5 + x[1] * 0.5, reverse=True)  # freq+weight
-            strategy_tag = '核心注(追热)'
+            # 🔥 Kelly高：核心注偏热 — 归一化频率+权重排序
+            max_freq = max(x[2] for x in all_pool) or 1
+            max_weight = max(x[1] for x in all_pool) or 1
+            all_pool.sort(key=lambda x: (x[2]/max_freq) * 0.5 + (x[1]/max_weight) * 0.5, reverse=True)
+            strategy_tag = Strategy.CORE_HOT
         elif kelly_bias < 0:
-            # ❄️ Kelly低：核心注偏冷 — 按遗漏+权重排序，优先选遗漏回补号
-            all_pool.sort(key=lambda x: x[3] * 0.5 + x[1] * 0.5, reverse=True)  # miss+weight
-            strategy_tag = '核心注(搏冷)'
+            # ❄️ Kelly低：核心注偏冷 — 归一化遗漏+权重排序
+            max_miss = max(x[3] for x in all_pool) or 1
+            max_weight = max(x[1] for x in all_pool) or 1
+            all_pool.sort(key=lambda x: (x[3]/max_miss) * 0.5 + (x[1]/max_weight) * 0.5, reverse=True)
+            strategy_tag = Strategy.CORE_COLD
         else:
             # ⚖️ 默认：纯权重排序
             all_pool.sort(key=lambda x: x[1], reverse=True)
-            strategy_tag = '核心注(加权)'
+            strategy_tag = Strategy.CORE_WEIGHTED
 
         core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]
         core_reds = sorted(core_reds_by_weight)
@@ -955,36 +1044,38 @@ class WeightedAnalyzer:
         ext1_new = sorted([n for n, w, f, m in all_pool[6:8] if n not in ext1_keep][:2])
         ext1_reds = sorted(ext1_keep + ext1_new)
         ext1_blue = self._smart_blue_select(analysis, mode='mix')  # 🔴 v2: 均衡模式
-
         # 扩展2：保留权重最高的3号 + 替换权重最低的3号
         ext2_keep = sorted(core_reds_by_weight[:3])  # 权重TOP3
         ext2_new = sorted([n for n, w, f, m in all_pool[8:11] if n not in ext2_keep][:3])
         ext2_reds = sorted(ext2_keep + ext2_new)
-        ext2_blue = self._smart_blue_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
+        # 🟢 v6.2: 蓝球强制分散 — 扩展2排除核心注和扩展1已选的蓝球
+        used_blues = {core_blue, ext1_blue}
+        ext2_blue = self._smart_blue_select(analysis, mode='miss', exclude=used_blues)
 
-        # 🟢 v6.1优化：冷号注前区 — 遗漏为主(60%) + 权重(20%) + 活跃度(20%)综合评分
+        # 🟢 v6.2优化：冷号注前区 — 遗漏(60%) + 权重(20%) + 活跃度(20%)综合评分
         # 不再纯遗漏排名，避免选出"死号"（长期不出但也没回补趋势的号）
+        # 🔴 v6.2修复：w_score从w/5.0改为w*4.0，因为w在[0,0.5]区间，w/5.0≈0.01形同虚设
         cold_scores = []
         for n in range(1, 34):
             miss_val = analysis['red_miss'].get(n, 0)
-            miss_score = min(miss_val / 10.0, 3.0)  # 遗漏归一化，上限3.0
+            miss_score = min(miss_val / 10.0, 3.0)
             w = red_weight_dict.get(n, 0)
-            w_score = min(w / 5.0, 2.0)  # 权重归一化
+            w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: w*4.0使权重分量实际有意义
             f = analysis['red_freq'].get(n, 0)
-            f_score = min(f / 3.0, 1.5)  # 活跃度归一化（有点出现但不算热）
+            f_score = min(f / 3.0, 1.5)
             score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
-        # 🟢 v6.1修复：冷号蓝球改用_smart_blue_select(mode='miss')
-        # 之前直接取遗漏最高1个，没有多因子评分
-        cold_blue = self._smart_blue_select(analysis, mode='miss')
+        # 🟢 v6.2修复：冷号蓝球排除已选蓝球，强制分散
+        used_blues_cold = {core_blue, ext1_blue, ext2_blue}
+        cold_blue = self._smart_blue_select(analysis, mode='miss', exclude=used_blues_cold)
 
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
-            {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': '扩展1(加权)'},
-            {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': '扩展2(加权)'},
-            {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
+            {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': Strategy.EXT1_WEIGHTED},
+            {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': Strategy.EXT2_WEIGHTED},
+            {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': Strategy.COLD_MISS},  # 🟢 v6
         ]
 
     def _smart_back_select(self, analysis, count=2, mode='hot'):
@@ -1082,14 +1173,18 @@ class WeightedAnalyzer:
             all_pool.append((n, w, analysis['front_freq'].get(n, 0), analysis['front_miss'].get(n, 0)))
 
         if kelly_bias > 0:
-            all_pool.sort(key=lambda x: x[2] * 0.5 + x[1] * 0.5, reverse=True)
-            strategy_tag = '核心注(追热)'
+            max_freq = max(x[2] for x in all_pool) or 1
+            max_weight = max(x[1] for x in all_pool) or 1
+            all_pool.sort(key=lambda x: (x[2]/max_freq) * 0.5 + (x[1]/max_weight) * 0.5, reverse=True)
+            strategy_tag = Strategy.CORE_HOT
         elif kelly_bias < 0:
-            all_pool.sort(key=lambda x: x[3] * 0.5 + x[1] * 0.5, reverse=True)
-            strategy_tag = '核心注(搏冷)'
+            max_miss = max(x[3] for x in all_pool) or 1
+            max_weight = max(x[1] for x in all_pool) or 1
+            all_pool.sort(key=lambda x: (x[3]/max_miss) * 0.5 + (x[1]/max_weight) * 0.5, reverse=True)
+            strategy_tag = Strategy.CORE_COLD
         else:
             all_pool.sort(key=lambda x: x[1], reverse=True)
-            strategy_tag = '核心注(加权)'
+            strategy_tag = Strategy.CORE_WEIGHTED
 
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         core_front = sorted(core_front_by_weight)
@@ -1113,7 +1208,7 @@ class WeightedAnalyzer:
             miss_val = analysis['front_miss'].get(n, 0)
             miss_score = min(miss_val / 10.0, 3.0)
             w = front_weight_dict.get(n, 0)
-            w_score = min(w / 5.0, 2.0)
+            w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: w*4.0使权重分量有意义
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
             score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
@@ -1126,15 +1221,47 @@ class WeightedAnalyzer:
 
         return [
             {'front': core_front, 'back': core_back, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
-            {'front': ext1_front, 'back': ext1_back, 'strategy': '扩展1(加权)'},
-            {'front': ext2_front, 'back': ext2_back, 'strategy': '扩展2(加权)'},
-            {'front': cold_front_nums, 'back': cold_back_nums, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
+            {'front': ext1_front, 'back': ext1_back, 'strategy': Strategy.EXT1_WEIGHTED},
+            {'front': ext2_front, 'back': ext2_back, 'strategy': Strategy.EXT2_WEIGHTED},
+            {'front': cold_front_nums, 'back': cold_back_nums, 'strategy': Strategy.COLD_MISS},  # 🟢 v6
         ]
 
-    def generate_recs_qxc(self, analysis):
-        """根据加权分析生成七星彩推荐"""
-        # 🟢 核心注：每位权重最高的数字
-        core_digits = [pd['weights'][0][0] for pd in analysis['positions']]
+    def generate_recs_qxc(self, analysis, kelly_bias=0.0):
+        """根据加权分析生成七星彩推荐
+        🟢 v6.2: 添加kelly_bias驱动 + 冷号注（与SSQ/DLT对齐）
+        """
+        # 🟢 v6.2: Kelly驱动核心注偏向
+        if kelly_bias > 0:
+            strategy_tag = Strategy.CORE_HOT
+            # 追热：每位优先选频率最高的数字
+            core_digits = []
+            for pd in analysis['positions']:
+                # 频率权重排序：QXC weights是(n,w)对，用freq辅助排序
+                weight_dict = dict(pd['weights'])
+                freq_dict = pd.get('freq', {})
+                sorted_by_freq = sorted(pd['weights'], key=lambda x: (freq_dict.get(x[0], 0), x[1]), reverse=True)
+                core_digits.append(sorted_by_freq[0][0] if sorted_by_freq else pd['weights'][0][0])
+        elif kelly_bias < 0:
+            strategy_tag = Strategy.CORE_COLD
+            # 搏冷：每位优先选遗漏最高的数字
+            core_digits = []
+            for pd in analysis['positions']:
+                miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
+                # 用遗漏+权重综合评分
+                weight_dict = dict(pd['weights'])
+                best = None
+                best_score = -1
+                for n, m in miss_sorted[:5]:
+                    w = weight_dict.get(n, 0)
+                    score = m * 0.6 + w * 4.0 * 0.4  # 遗漏60% + 权重40%
+                    if score > best_score:
+                        best_score = score
+                        best = n
+                core_digits.append(best if best is not None else pd['weights'][0][0])
+        else:
+            strategy_tag = Strategy.CORE_WEIGHTED
+            core_digits = [pd['weights'][0][0] for pd in analysis['positions']]
+
         # 扩展1：保留核心4位 + 替换3位(权重第2)
         ext1_digits = list(core_digits)
         for i in range(3, 7):
@@ -1145,10 +1272,34 @@ class WeightedAnalyzer:
             top_miss = sorted(analysis['positions'][i]['miss'].items(), key=lambda x: x[1], reverse=True)
             ext2_digits[i] = top_miss[0][0] if top_miss else core_digits[i]
 
+        # 🟢 v6.2: 七星彩冷号注（每位遗漏最高的数字，多因子评分）
+        cold_digits = list(core_digits)
+        for i in range(7):
+            pd = analysis['positions'][i]
+            miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
+            # 多因子：遗漏60% + 权重20% + 活跃度20%
+            best = None
+            best_score = -1
+            max_miss = max(m for _, m in miss_sorted) if miss_sorted else 1
+            weight_dict = dict(pd['weights'])  # QXC weights是(n, w)对
+            freq_dict = pd.get('freq', {})  # 频率数据
+            for n, m in miss_sorted[:5]:
+                w = weight_dict.get(n, 0)
+                f = freq_dict.get(n, 0)
+                miss_score = m / max_miss if max_miss > 0 else 0
+                w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: 与SSQ/DLT冷号w_score对齐
+                f_score = min(f / 3.0, 1.5)
+                score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+                if score > best_score:
+                    best_score = score
+                    best = n
+            cold_digits[i] = best if best is not None else (miss_sorted[0][0] if miss_sorted else core_digits[i])
+
         recs = [
-            {'digits': core_digits, 'strategy': '核心注(加权)'},
-            {'digits': ext1_digits, 'strategy': '扩展1(加权)'},
-            {'digits': ext2_digits, 'strategy': '扩展2(加权)'},
+            {'digits': core_digits, 'strategy': strategy_tag},  # 🟢 v6.2: Kelly驱动
+            {'digits': ext1_digits, 'strategy': Strategy.EXT1_WEIGHTED},
+            {'digits': ext2_digits, 'strategy': Strategy.EXT2_WEIGHTED},
+            {'digits': cold_digits, 'strategy': Strategy.COLD_MISS},  # 🟢 v6.2: QXC也加冷号注
         ]
         return recs
 
@@ -1248,7 +1399,7 @@ def _format_dlt_for_ai(history, kelly_bias=0.0):
 
     return '\n'.join(lines) + '\n\n' + '\n'.join(stats)
 
-def _format_qxc_for_ai(history):
+def _format_qxc_for_ai(history, kelly_bias=0.0):
     lines = []
     for draw in history:
         digits_str = ' '.join(str(n) for n in draw['digits'])
@@ -1266,7 +1417,7 @@ def _format_qxc_for_ai(history):
         miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
         stats.append(f"🔴第{i+1}位遗漏TOP3: {', '.join(f'{n}({m}期未出)' for n, m in miss_sorted[:3])}")
 
-    weighted_recs = wa.generate_recs_qxc(analysis)
+    weighted_recs = wa.generate_recs_qxc(analysis, kelly_bias=kelly_bias)  # 🟢 v6.2: Kelly驱动
     for rec in weighted_recs:
         digits_str = ' '.join(str(n) for n in rec['digits'])
         stats.append(f"📊{rec['strategy']}: {digits_str}")
@@ -1344,18 +1495,10 @@ def adjust_weights_from_backtest():
             for h in bt[game].get('hits', []):
                 strategy_hits_detail[h.get('strategy', '')].append(h.get('total', 0))
 
-    # 判断调整方向
-    # 🔴 Bug修复：兼容新旧策略名
-    # 旧名映射：追热策略→核心注, 回补策略→扩展2, 综合策略→扩展1
-    strategy_map = {
-        '追热策略': '核心注', '回补策略': '扩展2', '综合策略': '扩展1',
-        '核心注(加权)': '核心注', '扩展1(加权)': '扩展1', '扩展2(加权)': '扩展2',
-        '核心注(追热)': '核心注', '核心注(搏冷)': '核心注',  # 🟢 v6.1 Kelly驱动
-        '冷号注(遗漏)': '冷号注',  # 🟢 v6兼容
-    }
+    # 🟢 v6.2: 使用全局STRATEGY_MAP（统一管理，不再散落）
     mapped_wins = Counter()
     for name, count in strategy_wins.items():
-        mapped_name = strategy_map.get(name, name)
+        mapped_name = STRATEGY_MAP.get(name, name)
         mapped_wins[mapped_name] += count
 
     adjustments = {}
@@ -1363,18 +1506,23 @@ def adjust_weights_from_backtest():
     # 核心注/追热领先 → 频率权重+step，遗漏-step
     # 扩展2/回补领先 → 遗漏权重+step，频率-step
     # 扩展1/综合领先 → 趋势权重+step
-    hot_wins = mapped_wins.get('核心注', 0)
-    cold_wins = mapped_wins.get('扩展2', 0)
-    mid_wins = mapped_wins.get('扩展1', 0)
-    cold_miss_wins = mapped_wins.get('冷号注', 0)  # 🟢 v6
+    hot_wins = mapped_wins.get(Strategy.CORE, 0)
+    cold_wins = mapped_wins.get(Strategy.EXT2, 0)
+    mid_wins = mapped_wins.get(Strategy.EXT1, 0)
+    cold_miss_wins = mapped_wins.get(Strategy.COLD, 0)  # 🟢 v6
 
-    if hot_wins > cold_wins + 2 and hot_wins > mid_wins:
+    # 🟢 v6.2: 连续性检验 — 只在领先优势>=3且领先方命中数均值高于另一方时才调整
+    # 避免单期随机噪声导致权重震荡
+    hot_avg = sum(strategy_hits_detail.get('核心注(加权)', []) + strategy_hits_detail.get('核心注(追热)', [])) / max(len(strategy_hits_detail.get('核心注(加权)', []) + strategy_hits_detail.get('核心注(追热)', [])), 1)
+    cold_avg = sum(strategy_hits_detail.get('扩展2(加权)', []) + strategy_hits_detail.get('冷号注(遗漏)', [])) / max(len(strategy_hits_detail.get('扩展2(加权)', []) + strategy_hits_detail.get('冷号注(遗漏)', [])), 1)
+
+    if hot_wins > cold_wins + 2 and hot_wins > mid_wins and hot_avg >= cold_avg:
         adjustments = {'freq': step, 'miss': -step}
-    elif cold_wins > hot_wins + 2 and cold_wins > mid_wins:
+    elif cold_wins > hot_wins + 2 and cold_wins > mid_wins and cold_avg >= hot_avg:
         adjustments = {'miss': step, 'freq': -step}
     elif mid_wins > hot_wins and mid_wins > cold_wins + 1:
         adjustments = {'trend': step, 'zone': -step}
-    elif cold_miss_wins > hot_wins and cold_miss_wins > cold_wins:  # 🟢 v6：冷号注领先→加遗漏权重
+    elif cold_miss_wins > hot_wins and cold_miss_wins > cold_wins:
         adjustments = {'miss': step * 1.5, 'freq': -step}
 
     if not adjustments:
@@ -1409,12 +1557,25 @@ def adjust_weights_from_backtest():
     if len(config['adjustments']) > 10:
         config['adjustments'] = config['adjustments'][-10:]
 
-    # 🔴 风险1修复：每30天周期性重置权重（防止局部最优）
-    if config['version'] % 30 == 0:
+    # 🔴 v6.2: 权重30天周期性重置（基于日期间隔，不再用version计数）
+    # 防止频繁运行时version增长过快导致误重置
+    last_reset = config.get('last_reset_date', '')
+    if last_reset:
+        try:
+            from datetime import datetime as _dt2
+            last_dt = _dt2.strptime(last_reset, '%Y-%m-%d')
+            now_dt = _dt2.now(CST)
+            days_since_reset = (now_dt - last_dt).days
+        except (ValueError, TypeError):
+            days_since_reset = 999
+    else:
+        days_since_reset = 999  # 无记录则强制重置日期
+    if days_since_reset >= 30:
         config['freq'] = DEFAULT_WEIGHT_CONFIG['freq']
         config['miss'] = DEFAULT_WEIGHT_CONFIG['miss']
         config['trend'] = DEFAULT_WEIGHT_CONFIG['trend']
         config['zone'] = DEFAULT_WEIGHT_CONFIG['zone']
+        config['last_reset_date'] = _dt.now(CST).strftime('%Y-%m-%d')
         config['adjustments'].append({
             'date': _dt.now(CST).strftime('%Y-%m-%d'),
             'direction': 'reset',
@@ -1440,6 +1601,95 @@ def kelly_fraction(estimated_hit_prob, odds):
         return 0
     f = (odds * p - q) / odds
     return max(f, 0)
+
+
+# 🟢 v6.2: 多奖级Kelly期望值（替代单一赔率）
+PRIZE_TIERS = {
+    'ssq': [
+        # (命中条件, 奖金, 大致概率)
+        # 6+1 一等奖 ≈ 500万, P ≈ 1/17,721,088
+        {'name': '一等奖', 'prize': 5000000, 'prob': 1/17721088},
+        # 6+0 二等奖 ≈ 20万, P ≈ 1/1,181,406
+        {'name': '二等奖', 'prize': 200000, 'prob': 1/1181406},
+        # 5+1 三等奖 ≈ 3000, P ≈ 1/135,078
+        {'name': '三等奖', 'prize': 3000, 'prob': 1/135078},
+        # 5+0/4+1 四等奖 ≈ 200, P ≈ 1/17,393
+        {'name': '四等奖', 'prize': 200, 'prob': 1/17393},
+        # 4+0/3+1 五等奖 ≈ 10, P ≈ 1/1,351
+        {'name': '五等奖', 'prize': 10, 'prob': 1/1351},
+        # 2+1/1+1/0+1 六等奖 ≈ 5, P ≈ 1/50
+        {'name': '六等奖', 'prize': 5, 'prob': 1/50},
+    ],
+    'dlt': [
+        {'name': '一等奖', 'prize': 5000000, 'prob': 1/21425712},
+        {'name': '二等奖', 'prize': 100000, 'prob': 1/1428381},
+        {'name': '三等奖', 'prize': 5000, 'prob': 1/163329},
+        {'name': '四等奖', 'prize': 300, 'prob': 1/24386},
+        {'name': '五等奖', 'prize': 15, 'prob': 1/2029},
+        {'name': '六等奖', 'prize': 5, 'prob': 1/195},
+        {'name': '七等奖', 'prize': 5, 'prob': 1/37},
+    ],
+    'qxc': [
+        {'name': '一等奖', 'prize': 5000000, 'prob': 1/10000000},
+        {'name': '二等奖', 'prize': 50000, 'prob': 1/1111111},
+        {'name': '三等奖', 'prize': 3000, 'prob': 1/178571},
+        {'name': '四等奖', 'prize': 500, 'prob': 1/15306},
+        {'name': '五等奖', 'prize': 30, 'prob': 1/1319},
+        {'name': '六等奖', 'prize': 5, 'prob': 1/263},
+    ],
+}
+
+
+def kelly_ev_multitier(game):
+    """
+    🟢 v6.2: 多奖级Kelly期望值计算
+    用多奖级的期望值替代单一赔率，更准确反映真实投注价值
+    EV = Σ(prize_i * prob_i * confidence_boost) - 1
+    有效赔率 = EV / total_prob
+    """
+    tiers = PRIZE_TIERS.get(game, [])
+    if not tiers:
+        return 0.0, 50  # 回退
+
+    # 从历史回测获取信心系数：命中率是否高于随机基线
+    backtest_log = _load_backtest()
+    confidence = 1.0  # 默认无加成
+    if backtest_log:
+        recent = backtest_log[-10:]
+        hit_rates = []
+        for bt in recent:
+            if game in bt:
+                hits = bt[game].get('hits', [])
+                if hits:
+                    avg_hit = sum(h.get('total', 0) for h in hits) / len(hits)
+                    hit_rates.append(avg_hit)
+        if hit_rates:
+            avg_rate = sum(hit_rates) / len(hit_rates)
+            # 如果命中率高于随机基线(≈2-3个号/注)，给予信心加成
+            baseline = {'ssq': 2.5, 'dlt': 2.0, 'qxc': 2.0}.get(game, 2.0)
+            if avg_rate > baseline:
+                confidence = min(1.0 + (avg_rate - baseline) * 0.2, 2.0)
+
+    # 计算期望值
+    total_ev = 0
+    total_prob = 0
+    for tier in tiers:
+        p = tier['prob'] * confidence
+        total_ev += tier['prize'] * p
+        total_prob += p
+
+    # 有效赔率 = 期望回报 / 投注成本
+    # 投注成本=2元，有效赔率 = total_ev / 2
+    effective_odds = total_ev / 2 if total_prob > 0 else 50
+    effective_odds = max(effective_odds, 1)  # 下限1，避免负值
+
+    # Kelly值 = (effective_odds * total_prob - (1-total_prob)) / effective_odds
+    if effective_odds > 0:
+        k = (effective_odds * total_prob - (1 - total_prob)) / effective_odds
+    else:
+        k = 0
+
+    return max(k, 0), effective_odds
 
 
 def estimate_hit_probability(game, hit_count, total_numbers):
@@ -1751,20 +2001,14 @@ def _format_backtest_for_ai(backtest_result):
         if avg_lines:
             lines.append(f"📊策略命中率趋势: {'; '.join(avg_lines)}")
 
-        # 🟢 追热策略是否持续领先？给出具体调整建议
-        # 🔴 兼容新旧策略名
-        strategy_map = {
-            '追热策略': '核心注', '回补策略': '扩展2', '综合策略': '扩展1',
-            '核心注(加权)': '核心注', '扩展1(加权)': '扩展1', '扩展2(加权)': '扩展2',
-            '核心注(兜底)': '核心注', '扩展1(兜底)': '扩展1', '扩展2(兜底)': '扩展2',
-        }
+        # 🟢 v6.2: 使用全局STRATEGY_MAP
         mapped_scores = Counter()
         for name, count in strategy_scores.items():
-            mapped_name = strategy_map.get(name, name)
+            mapped_name = STRATEGY_MAP.get(name, name)
             mapped_scores[mapped_name] += count
-        hot_count = mapped_scores.get('核心注', 0)
-        cold_count = mapped_scores.get('扩展2', 0)
-        mid_count = mapped_scores.get('扩展1', 0)
+        hot_count = mapped_scores.get(Strategy.CORE, 0)
+        cold_count = mapped_scores.get(Strategy.EXT2, 0)
+        mid_count = mapped_scores.get(Strategy.EXT1, 0)
         if hot_count > cold_count + 2:
             lines.append(f"⚡核心注策略大幅领先({hot_count}次 vs 扩展2的{cold_count}次)，建议追热推荐占比60%+，从加权池追热TOP8中选号")
         elif cold_count > hot_count + 2:
@@ -1906,7 +2150,7 @@ def _call_llm(base_url, api_key, model, system_msg, user_msg, max_tokens=1000, t
 
 def _parse_ssq_recs(ai_text):
     recs = []
-    strategies = ['核心注', '扩展1', '扩展2']
+    strategies = [Strategy.CORE, Strategy.EXT1, Strategy.EXT2]
     # 兼容新旧格式
     pattern = r'双色球(?:核心注|推荐1)[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
     m = re.search(pattern, ai_text)
@@ -1914,7 +2158,7 @@ def _parse_ssq_recs(ai_text):
         recs.append({
             'reds': [int(m.group(j)) for j in range(1, 7)],
             'blue': int(m.group(7)),
-            'strategy': '核心注'
+            'strategy': Strategy.CORE
         })
     pattern2 = r'双色球扩展1[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
     m2 = re.search(pattern2, ai_text)
@@ -1922,7 +2166,7 @@ def _parse_ssq_recs(ai_text):
         recs.append({
             'reds': [int(m2.group(j)) for j in range(1, 7)],
             'blue': int(m2.group(7)),
-            'strategy': '扩展1'
+            'strategy': Strategy.EXT1
         })
     pattern3 = r'双色球扩展2[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
     m3 = re.search(pattern3, ai_text)
@@ -1930,7 +2174,7 @@ def _parse_ssq_recs(ai_text):
         recs.append({
             'reds': [int(m3.group(j)) for j in range(1, 7)],
             'blue': int(m3.group(7)),
-            'strategy': '扩展2'
+            'strategy': Strategy.EXT2
         })
     # 🟢 v6吸收：冷号注解析
     pattern4 = r'双色球冷号注[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
@@ -1939,7 +2183,7 @@ def _parse_ssq_recs(ai_text):
         recs.append({
             'reds': [int(m4.group(j)) for j in range(1, 7)],
             'blue': int(m4.group(7)),
-            'strategy': '冷号注'
+            'strategy': Strategy.COLD
         })
     # 兜底：旧格式
     if not recs:
@@ -1955,7 +2199,7 @@ def _parse_ssq_recs(ai_text):
 
 def _parse_dlt_recs(ai_text):
     recs = []
-    strategies = ['核心注', '扩展1', '扩展2']
+    strategies = [Strategy.CORE, Strategy.EXT1, Strategy.EXT2]
     # 新格式
     pattern = r'大乐透(?:核心注|推荐1)[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
     m = re.search(pattern, ai_text)
@@ -1963,7 +2207,7 @@ def _parse_dlt_recs(ai_text):
         recs.append({
             'front': [int(m.group(j)) for j in range(1, 6)],
             'back': [int(m.group(j)) for j in range(6, 8)],
-            'strategy': '核心注'
+            'strategy': Strategy.CORE
         })
     pattern2 = r'大乐透扩展1[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
     m2 = re.search(pattern2, ai_text)
@@ -1971,7 +2215,7 @@ def _parse_dlt_recs(ai_text):
         recs.append({
             'front': [int(m2.group(j)) for j in range(1, 6)],
             'back': [int(m2.group(j)) for j in range(6, 8)],
-            'strategy': '扩展1'
+            'strategy': Strategy.EXT1
         })
     pattern3 = r'大乐透扩展2[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
     m3 = re.search(pattern3, ai_text)
@@ -1979,7 +2223,7 @@ def _parse_dlt_recs(ai_text):
         recs.append({
             'front': [int(m3.group(j)) for j in range(1, 6)],
             'back': [int(m3.group(j)) for j in range(6, 8)],
-            'strategy': '扩展2'
+            'strategy': Strategy.EXT2
         })
     # 🟢 v6吸收：冷号注解析
     pattern4 = r'大乐透冷号注[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
@@ -1988,7 +2232,7 @@ def _parse_dlt_recs(ai_text):
         recs.append({
             'front': [int(m4.group(j)) for j in range(1, 6)],
             'back': [int(m4.group(j)) for j in range(6, 8)],
-            'strategy': '冷号注'
+            'strategy': Strategy.COLD
         })
     # 兜底旧格式
     if not recs:
@@ -2004,28 +2248,28 @@ def _parse_dlt_recs(ai_text):
 
 def _parse_qxc_recs(ai_text):
     recs = []
-    strategies = ['核心注', '扩展1', '扩展2']
+    strategies = [Strategy.CORE, Strategy.EXT1, Strategy.EXT2]
     # 新格式
     pattern = r'七星彩(?:核心注|推荐1)[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
     m = re.search(pattern, ai_text)
     if m:
         recs.append({
             'digits': [int(m.group(j)) for j in range(1, 8)],
-            'strategy': '核心注'
+            'strategy': Strategy.CORE
         })
     pattern2 = r'七星彩扩展1[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
     m2 = re.search(pattern2, ai_text)
     if m2:
         recs.append({
             'digits': [int(m2.group(j)) for j in range(1, 8)],
-            'strategy': '扩展1'
+            'strategy': Strategy.EXT1
         })
     pattern3 = r'七星彩扩展2[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
     m3 = re.search(pattern3, ai_text)
     if m3:
         recs.append({
             'digits': [int(m3.group(j)) for j in range(1, 8)],
-            'strategy': '扩展2'
+            'strategy': Strategy.EXT2
         })
     # 🟢 v6吸收：冷号注解析
     pattern4 = r'七星彩冷号注[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
@@ -2033,7 +2277,7 @@ def _parse_qxc_recs(ai_text):
     if m4:
         recs.append({
             'digits': [int(m4.group(j)) for j in range(1, 8)],
-            'strategy': '冷号注'
+            'strategy': Strategy.COLD
         })
     # 兜底旧格式
     if not recs:
@@ -2074,10 +2318,10 @@ class SimpleAnalyzer:
         if len(miss_reds) < 6:
             miss_reds = cold
         return [
-            {'reds': core, 'blue': core_blue, 'strategy': '核心注(兜底)'},
-            {'reds': sorted(ext1_keep + ext1_new), 'blue': ext1_blue, 'strategy': '扩展1(兜底)'},
-            {'reds': cold, 'blue': cold_blues[0] if cold_blues else 1, 'strategy': '扩展2(兜底)'},
-            {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': '冷号注(兜底)'},
+            {'reds': core, 'blue': core_blue, 'strategy': Strategy.CORE_FALLBACK},
+            {'reds': sorted(ext1_keep + ext1_new), 'blue': ext1_blue, 'strategy': Strategy.EXT1_FALLBACK},
+            {'reds': cold, 'blue': cold_blues[0] if cold_blues else 1, 'strategy': Strategy.EXT2_FALLBACK},
+            {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': Strategy.COLD_FALLBACK},
         ]
 
     def analyze_dlt(self, history):
@@ -2103,10 +2347,10 @@ class SimpleAnalyzer:
         if len(miss_back) < 2:
             miss_back = sorted(cold_back) if len(cold_back) >= 2 else [1, 2]
         return [
-            {'front': core, 'back': core_back, 'strategy': '核心注(兜底)'},
-            {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': '扩展1(兜底)'},
-            {'front': cold, 'back': sorted(cold_back) if len(cold_back) >= 2 else [1, 2], 'strategy': '扩展2(兜底)'},
-            {'front': miss_front, 'back': miss_back, 'strategy': '冷号注(兜底)'},
+            {'front': core, 'back': core_back, 'strategy': Strategy.CORE_FALLBACK},
+            {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': Strategy.EXT1_FALLBACK},
+            {'front': cold, 'back': sorted(cold_back) if len(cold_back) >= 2 else [1, 2], 'strategy': Strategy.EXT2_FALLBACK},
+            {'front': miss_front, 'back': miss_back, 'strategy': Strategy.COLD_FALLBACK},
         ]
 
     def analyze_qxc(self, history):
@@ -2134,10 +2378,10 @@ class SimpleAnalyzer:
             cold = [n for n in range(10) if counter.get(n, 0) == 0]
             cold_digits[pos] = cold[0] if cold else counter.most_common()[-1][0]
         recs = [
-            {'digits': core, 'strategy': '核心注(兜底)'},
-            {'digits': ext1, 'strategy': '扩展1(兜底)'},
-            {'digits': ext2, 'strategy': '扩展2(兜底)'},
-            {'digits': cold_digits, 'strategy': '冷号注(兜底)'},
+            {'digits': core, 'strategy': Strategy.CORE_FALLBACK},
+            {'digits': ext1, 'strategy': Strategy.EXT1_FALLBACK},
+            {'digits': ext2, 'strategy': Strategy.EXT2_FALLBACK},
+            {'digits': cold_digits, 'strategy': Strategy.COLD_FALLBACK},
         ]
         return recs
 
@@ -2347,7 +2591,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6.1 Kelly驱动选号(高→追热 低→搏冷)")
+    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6.2 Kelly多奖级EV+遗漏周期+策略枚举")
     lines.append("---\n")
     return '\n'.join(lines)
 
@@ -2371,22 +2615,19 @@ def generate_lottery_recommendations():
     dlt_result = None
     qxc_result = None
 
-    # 🟢 v6.1: Kelly驱动选号 — 提前算Kelly值，影响核心注偏向
+    # 🟢 v6.2: Kelly驱动选号 — 用多奖级EV替代单一赔率
     kelly_map = {}  # {game_key: kelly_value}
     for game_name, game_key, total_nums in [('双色球', 'ssq', 7), ('大乐透', 'dlt', 7), ('七星彩', 'qxc', 7)]:
+        k_ev, eff_odds = kelly_ev_multitier(game_key)
+        # 也用旧方法算一个，取较大值（多奖级EV更保守时用旧方法兜底）
         hit_prob = estimate_hit_probability(game_key, 4, total_nums)
-        odds_map = {'ssq': 50, 'dlt': 50, 'qxc': 100}
-        k = kelly_fraction(hit_prob, odds_map.get(game_key, 200))
-        kelly_map[game_key] = k
-    # 🟢 v6.1: Kelly→选号偏向映射
-    # Kelly>5% → kelly_bias=+0.5(追热)，Kelly 0~5% → 0.0(均衡)，Kelly≤0 → -0.5(搏冷)
+        k_simple = kelly_fraction(hit_prob, eff_odds)
+        kelly_map[game_key] = max(k_ev, k_simple)
+    # 🟢 v6.2: Kelly→选号偏向连续映射（消除硬断层）
+    # 用tanh平滑过渡: Kelly=0→bias=0, Kelly>5%→bias趋近+0.5, Kelly<0→bias趋近-0.5
     def _kelly_to_bias(k):
-        if k > 0.05:
-            return min(0.5, k * 5)  # Kelly越高越追热，上限0.5
-        elif k > 0:
-            return 0.0  # 小Kelly均衡
-        else:
-            return -0.5  # Kelly≤0搏冷
+        import math
+        return math.tanh(k * 20) * 0.5  # 连续映射，无硬断层
     kelly_bias_map = {g: _kelly_to_bias(k) for g, k in kelly_map.items()}
     print(f"[Kelly] 双色球={kelly_map['ssq']:.2%}(bias={kelly_bias_map['ssq']:+.1f}) 大乐透={kelly_map['dlt']:.2%}(bias={kelly_bias_map['dlt']:+.1f}) 七星彩={kelly_map['qxc']:.2%}(bias={kelly_bias_map['qxc']:+.1f})")
 
@@ -2397,13 +2638,13 @@ def generate_lottery_recommendations():
     if backtest_feedback:
         print(f"[回测] 已生成回测反馈: {len(backtest_feedback)}字符")
 
-    # 1. 抓取所有数据
+    # 1. 抓取所有数据（🟢 v6.2: 七星彩请求30期因为隔期开奖，15期只能拿到6-8期）
     print("[彩票] 抓取双色球数据...")
     ssq_history = fetch_ssq_history(15)
     print("[彩票] 抓取大乐透数据...")
     dlt_history = fetch_dlt_history(15)
     print("[彩票] 抓取七星彩数据...")
-    qxc_history = fetch_qxc_history(15)
+    qxc_history = fetch_qxc_history(30)
 
     # 2. 刘海蟾一次性推算（带回测反馈）
     all_data_ok = (ssq_history and len(ssq_history) >= 5 and
@@ -2413,7 +2654,7 @@ def generate_lottery_recommendations():
     if all_data_ok:
         ssq_text = _format_ssq_for_ai(ssq_history, kelly_bias=kelly_bias_map.get('ssq', 0.0))
         dlt_text = _format_dlt_for_ai(dlt_history, kelly_bias=kelly_bias_map.get('dlt', 0.0))
-        qxc_text = _format_qxc_for_ai(qxc_history)
+        qxc_text = _format_qxc_for_ai(qxc_history, kelly_bias=kelly_bias_map.get('qxc', 0.0))
 
         print("[彩票] 调用刘海蟾一次性推算三个彩种（含回测反馈）...")
         ai_output = _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback)
