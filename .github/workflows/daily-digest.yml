@@ -33,6 +33,8 @@ jobs:
       RUN_ENV: github-actions
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       OFFICE_API_KEY: ${{ secrets.OFFICE_API_KEY }}
+      OFFICE_API_BASE: ${{ secrets.OFFICE_API_BASE }}
+      OFFICE_ENABLED: ${{ secrets.OFFICE_ENABLED }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_TO: ${{ secrets.SMTP_TO }}

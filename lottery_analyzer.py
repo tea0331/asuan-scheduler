@@ -42,12 +42,12 @@ CST = timezone(timedelta(hours=8))
 DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
-# 🔴 办公室qwopus3.5（免费不限量！彩票零隐私，优先走这里）
+# 🔴 办公室Qwen3.6-abliterated（免费不限量！彩票零隐私，优先走这里）
 OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
 OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
-OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
-# 🟢 v6.2: OFFICE_ENABLED改用环境变量开关（不再硬编码False）
-OFFICE_ENABLED = os.environ.get('OFFICE_ENABLED', 'false').lower() in ('true', '1', 'yes')
+OFFICE_MODEL = 'huihui-qwen3.6-27b-abliterated'
+# 🟢 v6.5: OFFICE_ENABLED改用环境变量开关，默认开启（新模型更稳定）
+OFFICE_ENABLED = os.environ.get('OFFICE_ENABLED', 'true').lower() in ('true', '1', 'yes')
 
 # 🔴 开奖日历（周几开奖，周一=0，周日=6）
 LOTTERY_SCHEDULE = {
@@ -2292,11 +2292,11 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 
     system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v6升级：核心注+缩水扩展+冷号注策略。核心改进：历史回测显示追热和回补分别命中不同号，合并后单注命中更高！v6新增冷号注（遗漏值最高号码组合），与核心注（追热）互补覆盖。4注梯度：核心注(追热)→扩展1(微调)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注从加权池取综合权重TOP6；2.扩展1保留核心4号换2号，扩展2保留3号换3号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。休市期间仍可推荐，但标注仅供参考。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
 
-    # 🔴 优先办公室qwopus3.5（彩票零隐私，免费不限量）
+    # 🔴 优先办公室Qwen3.6-abliterated（彩票零隐私，免费不限量，不会拒绝预测）
     if OFFICE_ENABLED:
         result = _call_llm(OFFICE_API_BASE, OFFICE_API_KEY, OFFICE_MODEL, system_msg, prompt, max_tokens=1000, timeout=120)
         if result:
-            print(f"[刘海蟾] 办公室qwopus3.5推算完成: {len(result)}字符")
+            print(f"[刘海蟾] 办公室Qwen3.6-abliterated推算完成: {len(result)}字符")
             return result
         print("[刘海蟾] 办公室API失败，回退百炼DeepSeek-V3")
 
