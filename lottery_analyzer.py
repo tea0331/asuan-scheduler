@@ -992,7 +992,7 @@ class WeightedAnalyzer:
                 # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
                 blue_avg_interval = analysis.get('blue_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(blue_avg_interval, 1), 2.0)  # >1=到期, <1=未到
-                scores[n] = miss_score * 0.35 + cycle_signal * 0.35 + freq_score * 0.30
+                scores[n] = miss_score * 0.30 + cycle_signal * 0.40 + freq_score * 0.30
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[0][0] if ranked else 1
@@ -1120,47 +1120,45 @@ class WeightedAnalyzer:
 
         return result
 
-    def _shape_optimized_select(self, candidates, n_select, target_sum, target_odd, target_big, must_include=None):
-        """🟢 v6.3: 形态优化选号 — 从候选池中搜和值/奇偶/大小最优组合
-        candidates: 候选号码列表
+    def _shape_optimized_select(self, candidates, n_select, target_sum, target_odd, target_big, must_include=None, big_threshold=17):
+        """🟢 v6.4: 形态优化选号 — 贪心搜索，支持大候选池
+        candidates: 候选号码列表（支持20+个）
         n_select: 选几个号
         target_sum: 目标和值
         target_odd: 目标奇数个数
         target_big: 目标大号个数
         must_include: 必须包含的号码
+        big_threshold: 大号阈值（SSQ=17, DLT=18）
         """
-        from itertools import combinations
         must_include = must_include or []
-        best_combo = None
-        best_score = -999
-
-        # 限制搜索范围，候选太多组合爆炸
-        if len(candidates) > 15:
-            candidates = candidates[:15]
-
-        for combo in combinations(candidates, n_select):
-            # 必须包含检查
-            if must_include and not all(n in combo for n in must_include):
-                continue
-            combo = tuple(combo)
-            s = sum(combo)
-            odd_count = sum(1 for n in combo if n % 2 == 1)
-            big_count = sum(1 for n in combo if n >= 17)  # 双色球大号>=17
-
-            # 评分：和值偏差 + 奇偶偏差 + 大小偏差
-            sum_penalty = -abs(s - target_sum) / max(target_sum, 1) * 2.0
-            odd_penalty = -abs(odd_count - target_odd) * 1.5
-            big_penalty = -abs(big_count - target_big) * 1.5
-
-            score = sum_penalty + odd_penalty + big_penalty
-            if score > best_score:
-                best_score = score
-                best_combo = combo
-
-        if best_combo:
-            return sorted(best_combo)
-        # 回退：取前n_select个
-        return sorted(candidates[:n_select])
+        # 🟢 v6.4: 贪心搜索替代暴力枚举，支持20+候选
+        # 策略：必须包含的号先加入，然后贪心添加最改善形态的号
+        result = list(must_include)
+        remaining = [n for n in candidates if n not in result]
+        
+        while len(result) < n_select and remaining:
+            best_n = None
+            best_score = -999
+            for n in remaining:
+                trial = sorted(result + [n])
+                s = sum(trial)
+                odd_count = sum(1 for x in trial if x % 2 == 1)
+                big_count = sum(1 for x in trial if x >= big_threshold)
+                # 评分：和值偏差 + 奇偶偏差 + 大小偏差
+                sum_penalty = -abs(s - target_sum) / max(target_sum, 1) * 2.0
+                odd_penalty = -abs(odd_count - target_odd) * 1.5
+                big_penalty = -abs(big_count - target_big) * 1.5
+                score = sum_penalty + odd_penalty + big_penalty
+                if score > best_score:
+                    best_score = score
+                    best_n = n
+            if best_n is not None:
+                result.append(best_n)
+                remaining.remove(best_n)
+            else:
+                break
+        
+        return sorted(result)
 
     def generate_recs_ssq(self, analysis, kelly_bias=0.0):
         """根据加权分析生成双色球推荐（纯数学，不依赖AI）
@@ -1217,28 +1215,25 @@ class WeightedAnalyzer:
 
         core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]
         core_reds = sorted(core_reds_by_weight)
-        # 🟢 v6.3: 蓝球整体选号 — 4个蓝球满足奇偶2:2+大小2:2形态约束
-        blues = self._select_blues_with_shape(analysis, n_blues=4)
-        core_blue = blues[0]
-        ext1_blue = blues[1]
-        ext2_blue = blues[2]
-        cold_blue = blues[3]
+        # 🟢 v6.4: 蓝球按策略需求分配 — 核心注得热蓝，冷号注得周期回补蓝
+        core_blue = self._smart_blue_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
+        ext1_blue = self._smart_blue_select(analysis, mode='mix', exclude={core_blue})
+        ext2_blue = self._smart_blue_select(analysis, mode='miss', exclude={core_blue, ext1_blue})
+        cold_blue = self._smart_blue_select(analysis, mode='miss', exclude={core_blue, ext1_blue, ext2_blue})
 
         # 🔴 Bug修复：扩展注保留的是权重最高的号，不是号码最小的号
         # 扩展1：保留权重最高的4号 + 替换权重最低的2号
         ext1_keep = sorted(core_reds_by_weight[:4])  # 权重TOP4
         ext1_new = sorted([n for n, w, f, m in all_pool[6:8] if n not in ext1_keep][:2])
         ext1_reds = sorted(ext1_keep + ext1_new)
-        # 🟢 v6.3: 扩展2 — 形态模拟选号（从TOP15中搜和值/奇偶/大小最优组合）
-        # 动态目标：用近10期统计生成和值/奇偶/大小目标
+        # 🟢 v6.4: 扩展2 — 形态模拟选号（从TOP20贪心搜索和值/奇偶/大小最优组合）
         target_sum = analysis.get('avg_sum', 100)
-        target_odd = 3  # 奇数个数，双色球最常见3奇3偶
-        target_big = 3  # 大号(>=17)个数
+        target_odd = 3
+        target_big = 3
 
-        # 从权重TOP15中搜索最优6号组合
-        top15 = [n for n, w, f, m in all_pool[:15]]
-        ext2_reds = self._shape_optimized_select(top15, 6, target_sum, target_odd, target_big,
-                                                  core_reds_by_weight[:3])  # 保留核心TOP3
+        top20 = [n for n, w, f, m in all_pool[:20]]
+        ext2_reds = self._shape_optimized_select(top20, 6, target_sum, target_odd, target_big,
+                                                  core_reds_by_weight[:3])
 
         # 🟢 v6.3: 冷号注红球 — 遗漏(35%) + 周期回补信号(35%) + 近期活跃度(30%)
         # 不再纯遗漏排名，"到期号"比"万年冷号"更有回补价值
@@ -1252,7 +1247,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
+            score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
@@ -1307,7 +1302,7 @@ class WeightedAnalyzer:
                 # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
                 back_avg_interval = analysis.get('back_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(back_avg_interval, 1), 2.0)
-                scores[n] = miss_score * 0.35 + cycle_signal * 0.35 + freq_score * 0.30
+                scores[n] = miss_score * 0.30 + cycle_signal * 0.40 + freq_score * 0.30
 
         # 按评分排序
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -1352,7 +1347,10 @@ class WeightedAnalyzer:
     def generate_recs_dlt(self, analysis, kelly_bias=0.0):
         """根据加权分析生成大乐透推荐
         🟢 v6.1: Kelly驱动选号 — kelly_bias越高越偏热号，越低越偏冷号
+        🟢 v6.4: DLT用更小gamma(0.85)加速衰减，35选5比33选6更稀疏
         """
+        # 🟢 v6.4: DLT前区衰减更快
+        self.gamma = min(self.gamma, 0.85)
         # 🟢 v6.1: Kelly驱动核心注
         front_weight_dict = dict(analysis['front_weights'])
         all_pool = []
@@ -1389,10 +1387,13 @@ class WeightedAnalyzer:
         ext1_new = sorted([n for n, w, f, m in all_pool[5:7] if n not in ext1_keep][:2])
         ext1_front = sorted(ext1_keep + ext1_new)
 
-        # 扩展2：保留权重TOP2 + 替换权重最低的3个
-        ext2_keep = sorted(core_front_by_weight[:2])
-        ext2_new = sorted([n for n, w, f, m in all_pool[7:10] if n not in ext2_keep][:3])
-        ext2_front = sorted(ext2_keep + ext2_new)
+        # 🟢 v6.4: DLT扩展2 — 形态模拟选号（从TOP20贪心搜索）
+        target_sum_dlt = analysis.get('avg_sum', 80)
+        target_odd_dlt = 3
+        target_big_dlt = 3
+        top20_dlt = [n for n, w, f, m in all_pool[:20]]
+        ext2_front = self._shape_optimized_select(top20_dlt, 5, target_sum_dlt, target_odd_dlt, target_big_dlt,
+                                                   core_front_by_weight[:2], big_threshold=18)
 
         # 🟢 v6.3: 冷号注前区 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
         cold_front_scores = []
@@ -1404,7 +1405,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
+            score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
             cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
@@ -1479,7 +1480,7 @@ class WeightedAnalyzer:
                 avg_interval = avg_interval_dict.get(n, 5)
                 cycle_signal = min(m / max(avg_interval, 1), 2.0)
                 f_score = min(f / 3.0, 1.5)
-                score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
+                score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
                 if score > best_score:
                     best_score = score
                     best = n
