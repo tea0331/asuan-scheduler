@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v6.0 — 刘海蟾点金（加权统计+回测驱动+Kelly风控+冷号注+休市+预算策略）
+彩票号码分析模块 v6.1 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略）
 v6吸收chinese-lottery-predict优势：
 1. 🟢 新增冷号注策略：遗漏值最高号码组合，与核心注(追热)互补覆盖
 2. 🟢 新增节假日休市判断：春节/国庆休市自动跳过，标注休市提醒
@@ -895,8 +895,11 @@ class WeightedAnalyzer:
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[0][0]
 
-    def generate_recs_ssq(self, analysis):
-        """根据加权分析生成双色球推荐（纯数学，不依赖AI）"""
+    def generate_recs_ssq(self, analysis, kelly_bias=0.0):
+        """根据加权分析生成双色球推荐（纯数学，不依赖AI）
+        🟢 v6.1: Kelly驱动选号 — kelly_bias越高越偏热号(追命中率)，越低越偏冷号(搏大奖)
+        kelly_bias范围: -1.0(纯冷号) ~ +1.0(纯热号)，0.0=默认均衡
+        """
         # 追热：权重最高的6个红球 + 最高权重蓝球
         hot_reds = sorted([n for n, w in analysis['red_weights'][:10]][:6])
         hot_blue = analysis['blue_weights'][0][0]
@@ -918,17 +921,33 @@ class WeightedAnalyzer:
             mid_pool = sorted([n for n, w in analysis['red_weights'][3:12]][:6])
         mid_blue = analysis['blue_weights'][1][0] if len(analysis['blue_weights']) > 1 else 1
 
-        # 🟢 核心注：追热+回补的TOP6合并（权重最高6个）
-        # 🔴 Bug5修复：O(n²)→O(n)，用dict查找权重
+        # 🟢 v6.1: Kelly驱动核心注 — kelly_bias调节热号/冷号比例
+        # kelly_bias > 0 → 核心注偏热号（追求命中率，Kelly高时值得投）
+        # kelly_bias < 0 → 核心注偏冷号（搏大奖小注，Kelly低时小博大）
+        # kelly_bias = 0 → 默认均衡（纯权重排名）
         red_weight_dict = dict(analysis['red_weights'])
         all_pool = []
         for n in range(1, 34):
             w = red_weight_dict.get(n, 0)
             all_pool.append((n, w, analysis['red_freq'].get(n, 0), analysis['red_miss'].get(n, 0)))
-        all_pool.sort(key=lambda x: x[1], reverse=True)
-        core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]  # 🔴 保持权重排序（不sorted！）
-        core_reds = sorted(core_reds_by_weight)  # 只用于显示
-        core_blue = self._smart_blue_select(analysis, mode='hot')  # 🔴 v2: 智能蓝球
+
+        if kelly_bias > 0:
+            # 🔥 Kelly高：核心注偏热 — 按频率+权重排序，优先选高频号
+            all_pool.sort(key=lambda x: x[2] * 0.5 + x[1] * 0.5, reverse=True)  # freq+weight
+            strategy_tag = '核心注(追热)'
+        elif kelly_bias < 0:
+            # ❄️ Kelly低：核心注偏冷 — 按遗漏+权重排序，优先选遗漏回补号
+            all_pool.sort(key=lambda x: x[3] * 0.5 + x[1] * 0.5, reverse=True)  # miss+weight
+            strategy_tag = '核心注(搏冷)'
+        else:
+            # ⚖️ 默认：纯权重排序
+            all_pool.sort(key=lambda x: x[1], reverse=True)
+            strategy_tag = '核心注(加权)'
+
+        core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]
+        core_reds = sorted(core_reds_by_weight)
+        # 🟢 v6.1: Kelly高偏热号蓝球，Kelly低偏遗漏蓝球
+        core_blue = self._smart_blue_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
 
         # 🔴 Bug修复：扩展注保留的是权重最高的号，不是号码最小的号
         # 扩展1：保留权重最高的4号 + 替换权重最低的2号
@@ -953,7 +972,7 @@ class WeightedAnalyzer:
         cold_blue = cold_blues[0][0]
 
         return [
-            {'reds': core_reds, 'blue': core_blue, 'strategy': '核心注(加权)'},
+            {'reds': core_reds, 'blue': core_blue, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
             {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': '扩展1(加权)'},
             {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': '扩展2(加权)'},
             {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
@@ -1042,18 +1061,30 @@ class WeightedAnalyzer:
         # 降级：直接取评分前2
         return sorted([ranked[0][0], ranked[1][0]])
 
-    def generate_recs_dlt(self, analysis):
-        """根据加权分析生成大乐透推荐"""
-        # 🟢 核心注：权重最高5个前区 + 智能后区选号
+    def generate_recs_dlt(self, analysis, kelly_bias=0.0):
+        """根据加权分析生成大乐透推荐
+        🟢 v6.1: Kelly驱动选号 — kelly_bias越高越偏热号，越低越偏冷号
+        """
+        # 🟢 v6.1: Kelly驱动核心注
         front_weight_dict = dict(analysis['front_weights'])
         all_pool = []
         for n in range(1, 36):
             w = front_weight_dict.get(n, 0)
             all_pool.append((n, w, analysis['front_freq'].get(n, 0), analysis['front_miss'].get(n, 0)))
-        all_pool.sort(key=lambda x: x[1], reverse=True)
+
+        if kelly_bias > 0:
+            all_pool.sort(key=lambda x: x[2] * 0.5 + x[1] * 0.5, reverse=True)
+            strategy_tag = '核心注(追热)'
+        elif kelly_bias < 0:
+            all_pool.sort(key=lambda x: x[3] * 0.5 + x[1] * 0.5, reverse=True)
+            strategy_tag = '核心注(搏冷)'
+        else:
+            all_pool.sort(key=lambda x: x[1], reverse=True)
+            strategy_tag = '核心注(加权)'
+
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         core_front = sorted(core_front_by_weight)
-        core_back = self._smart_back_select(analysis, mode='hot')  # 🔴 v2: 智能后区
+        core_back = self._smart_back_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
 
         # 扩展1：保留权重TOP3 + 替换权重最低的2个
         ext1_keep = sorted(core_front_by_weight[:3])
@@ -1079,7 +1110,7 @@ class WeightedAnalyzer:
         cold_back_nums = sorted([n for n, m in cold_back_sorted])
 
         return [
-            {'front': core_front, 'back': core_back, 'strategy': '核心注(加权)'},
+            {'front': core_front, 'back': core_back, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
             {'front': ext1_front, 'back': ext1_back, 'strategy': '扩展1(加权)'},
             {'front': ext2_front, 'back': ext2_back, 'strategy': '扩展2(加权)'},
             {'front': cold_front_nums, 'back': cold_back_nums, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
@@ -1109,7 +1140,7 @@ class WeightedAnalyzer:
 
 # ===== 数据格式化（给刘海蟾看） =====
 
-def _format_ssq_for_ai(history):
+def _format_ssq_for_ai(history, kelly_bias=0.0):
     lines = []
     for draw in history:
         reds_str = ' '.join(f'{n:02d}' for n in draw['reds'])
@@ -1142,7 +1173,7 @@ def _format_ssq_for_ai(history):
     stats.append(f"🔴蓝球遗漏: {', '.join(f'{n}({m}期未出)' for n, m in blue_miss_sorted[:5])}")
 
     # 加权号码池（追热/回补/综合各6个）
-    weighted_recs = wa.generate_recs_ssq(analysis)
+    weighted_recs = wa.generate_recs_ssq(analysis, kelly_bias=kelly_bias)  # 🟢 v6.1: Kelly驱动
     for rec in weighted_recs:
         reds_str = ' '.join(f'{n:02d}' for n in rec['reds'])
         stats.append(f"📊{rec['strategy']}: {reds_str} + 蓝{rec['blue']:02d}")
@@ -1157,7 +1188,7 @@ def _format_ssq_for_ai(history):
 
     return '\n'.join(lines) + '\n\n' + '\n'.join(stats)
 
-def _format_dlt_for_ai(history):
+def _format_dlt_for_ai(history, kelly_bias=0.0):
     lines = []
     for draw in history:
         front_str = ' '.join(f'{n:02d}' for n in draw['front'])
@@ -1189,7 +1220,7 @@ def _format_dlt_for_ai(history):
     back_miss_sorted = sorted(analysis['back_miss'].items(), key=lambda x: x[1], reverse=True)
     stats.append(f"🔴后区遗漏: {', '.join(f'{n}({m}期未出)' for n, m in back_miss_sorted[:5])}")
 
-    weighted_recs = wa.generate_recs_dlt(analysis)
+    weighted_recs = wa.generate_recs_dlt(analysis, kelly_bias=kelly_bias)  # 🟢 v6.1: Kelly驱动
     for rec in weighted_recs:
         front_str = ' '.join(f'{n:02d}' for n in rec['front'])
         back_str = ' '.join(f'{n:02d}' for n in rec['back'])
@@ -1304,6 +1335,7 @@ def adjust_weights_from_backtest():
     strategy_map = {
         '追热策略': '核心注', '回补策略': '扩展2', '综合策略': '扩展1',
         '核心注(加权)': '核心注', '扩展1(加权)': '扩展1', '扩展2(加权)': '扩展2',
+        '核心注(追热)': '核心注', '核心注(搏冷)': '核心注',  # 🟢 v6.1 Kelly驱动
         '冷号注(遗漏)': '冷号注',  # 🟢 v6兼容
     }
     mapped_wins = Counter()
@@ -2300,7 +2332,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6+冷号注+预算策略+休市")
+    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6.1 Kelly驱动选号(高→追热 低→搏冷)")
     lines.append("---\n")
     return '\n'.join(lines)
 
@@ -2324,6 +2356,25 @@ def generate_lottery_recommendations():
     dlt_result = None
     qxc_result = None
 
+    # 🟢 v6.1: Kelly驱动选号 — 提前算Kelly值，影响核心注偏向
+    kelly_map = {}  # {game_key: kelly_value}
+    for game_name, game_key, total_nums in [('双色球', 'ssq', 7), ('大乐透', 'dlt', 7), ('七星彩', 'qxc', 7)]:
+        hit_prob = estimate_hit_probability(game_key, 4, total_nums)
+        odds_map = {'ssq': 50, 'dlt': 50, 'qxc': 100}
+        k = kelly_fraction(hit_prob, odds_map.get(game_key, 200))
+        kelly_map[game_key] = k
+    # 🟢 v6.1: Kelly→选号偏向映射
+    # Kelly>5% → kelly_bias=+0.5(追热)，Kelly 0~5% → 0.0(均衡)，Kelly≤0 → -0.5(搏冷)
+    def _kelly_to_bias(k):
+        if k > 0.05:
+            return min(0.5, k * 5)  # Kelly越高越追热，上限0.5
+        elif k > 0:
+            return 0.0  # 小Kelly均衡
+        else:
+            return -0.5  # Kelly≤0搏冷
+    kelly_bias_map = {g: _kelly_to_bias(k) for g, k in kelly_map.items()}
+    print(f"[Kelly] 双色球={kelly_map['ssq']:.2%}(bias={kelly_bias_map['ssq']:+.1f}) 大乐透={kelly_map['dlt']:.2%}(bias={kelly_bias_map['dlt']:+.1f}) 七星彩={kelly_map['qxc']:.2%}(bias={kelly_bias_map['qxc']:+.1f})")
+
     # 0. 回测昨日推荐
     print("[回测] 对比前天推荐与昨日开奖...")
     backtest_result = _run_backtest()
@@ -2345,8 +2396,8 @@ def generate_lottery_recommendations():
                    qxc_history and len(qxc_history) >= 5)
 
     if all_data_ok:
-        ssq_text = _format_ssq_for_ai(ssq_history)
-        dlt_text = _format_dlt_for_ai(dlt_history)
+        ssq_text = _format_ssq_for_ai(ssq_history, kelly_bias=kelly_bias_map.get('ssq', 0.0))
+        dlt_text = _format_dlt_for_ai(dlt_history, kelly_bias=kelly_bias_map.get('dlt', 0.0))
         qxc_text = _format_qxc_for_ai(qxc_history)
 
         print("[彩票] 调用刘海蟾一次性推算三个彩种（含回测反馈）...")
