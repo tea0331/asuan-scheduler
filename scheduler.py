@@ -51,11 +51,11 @@ SMTP_TO = os.environ.get('SMTP_TO', '')
 DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
-# API配置 — 办公室qwopus3.5（免费，不限量）
+# API配置 — 办公室Qwen3.6-abliterated（免费，不限量，不会拒绝彩票预测）
 OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
 OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
-OFFICE_MODEL = 'qwopus3.5-27b-v3.5'
-OFFICE_ENABLED = False  # ⏸️ qwopus3.5还不稳定，等朋友确认后再开
+OFFICE_MODEL = 'huihui-qwen3.6-27b-abliterated'
+OFFICE_ENABLED = os.environ.get('OFFICE_ENABLED', 'true').lower() in ('true', '1', 'yes')  # 🟢 v6.5: 新模型更稳定，默认开启
 
 _BASE_DIR = os.environ.get('BASE_DIR', os.path.dirname(os.path.abspath(__file__)))
 
@@ -329,7 +329,7 @@ def generate_with_deepseek(task_name, task, today_str):
     use_office = task.get('use_office', True)
 
     if use_office and OFFICE_ENABLED:
-        logging.info(f"[{task_name}] 尝试办公室qwopus3.5（脱敏模式）...")
+        logging.info(f"[{task_name}] 尝试办公室Qwen3.6-abliterated（脱敏模式）...")
         office_system = task.get('system_prompt_office', system_prompt)
         office_prompt_template = task.get('user_prompt_template_office', task['user_prompt_template'])
         office_user_prompt = office_prompt_template.format(date=today_str)
