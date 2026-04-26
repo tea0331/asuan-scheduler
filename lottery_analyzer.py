@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v5.2 — 刘海蟾点金（加权统计+回测驱动+Kelly风控）
-核心改动（v5.2）：
+彩票号码分析模块 v6.0 — 刘海蟾点金（加权统计+回测驱动+Kelly风控+冷号注+休市+预算策略）
+v6吸收chinese-lottery-predict优势：
+1. 🟢 新增冷号注策略：遗漏值最高号码组合，与核心注(追热)互补覆盖
+2. 🟢 新增节假日休市判断：春节/国庆休市自动跳过，标注休市提醒
+3. 🟢 新增购彩预算策略：按预算算注数，推荐单式/复式方案
+4. 🟢 新增下期开奖日期计算（含休市跳过）
+5. 🟢 AI prompt注入休市信息+冷号注生成规则
+
+v5.2核心改动：
 1. 🟢 P1修复：zone权重真正融入_calc_weights（之前20%权重被架空）
 2. 🟢 P1实现：回测驱动权重自适应（adjust_weights_from_backtest）
 3. 🟢 P2实现：Kelly仓位管理（风控提示，≤0则不建议投注）
@@ -55,8 +62,57 @@ LOTTERY_NAMES = {
     'qxc': '七星彩',
 }
 
+# 🟢 v6吸收：节假日休市配置（源自chinese-lottery-predict）
+HOLIDAYS = {
+    # 2026年春节休市（2月14日-2月23日）
+    '2026-02-14': '春节休市', '2026-02-15': '春节休市', '2026-02-16': '春节休市',
+    '2026-02-17': '春节休市', '2026-02-18': '春节休市', '2026-02-19': '春节休市',
+    '2026-02-20': '春节休市', '2026-02-21': '春节休市', '2026-02-22': '春节休市',
+    '2026-02-23': '春节休市',
+    # 2026年国庆休市（10月1日-10月7日）
+    '2026-10-01': '国庆休市', '2026-10-02': '国庆休市', '2026-10-03': '国庆休市',
+    '2026-10-04': '国庆休市', '2026-10-05': '国庆休市', '2026-10-06': '国庆休市',
+    '2026-10-07': '国庆休市',
+}
+
+# 🟢 v6吸收：购彩预算配置（源自chinese-lottery-predict）
+BUDGET_CONFIG = {
+    'default': 10,       # 默认预算(元)
+    'price_per_bet': 2,  # 单注价格(元)
+}
+
 # 开奖日历的中文显示
 WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+
+def is_holiday(date_str):
+    """🟢 v6吸收：检查是否在节假日休市期间"""
+    return HOLIDAYS.get(date_str)
+
+
+def get_next_draw_date(game, from_date=None):
+    """🟢 v6吸收：计算下期开奖日期（含节假日跳过）
+    返回: (日期字符串, 星期几, 是否在休市期) 或 None
+    """
+    if game not in LOTTERY_SCHEDULE:
+        return None
+    draw_days = LOTTERY_SCHEDULE[game]
+    current = from_date or datetime.now(CST)
+    for offset in range(1, 15):  # 最多往后看2周
+        check = current + timedelta(days=offset)
+        date_str = check.strftime('%Y-%m-%d')
+        holiday = is_holiday(date_str)
+        if holiday:
+            continue  # 跳过休市日
+        if check.weekday() in draw_days:
+            return (check.strftime('%m月%d日'), WEEKDAY_NAMES[check.weekday()], False)
+    # 2周内都是休市？返回第一个开奖日（带休市标记）
+    for offset in range(1, 30):
+        check = current + timedelta(days=offset)
+        if check.weekday() in draw_days:
+            date_str = check.strftime('%Y-%m-%d')
+            return (check.strftime('%m月%d日'), WEEKDAY_NAMES[check.weekday()], bool(is_holiday(date_str)))
+    return None
 
 
 def get_draw_games(date=None):
@@ -887,10 +943,20 @@ class WeightedAnalyzer:
         ext2_reds = sorted(ext2_keep + ext2_new)
         ext2_blue = self._smart_blue_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
+        # 🟢 v6吸收：冷号注 — 遗漏值最高的6红+遗漏最高蓝（源自chinese-lottery-predict冷号策略）
+        cold_reds = sorted([(n, analysis['red_miss'].get(n, 0))
+                          for n in range(1, 34)], key=lambda x: x[1], reverse=True)[:6]
+        cold_red_nums = sorted([n for n, m in cold_reds])
+        # 冷号蓝球：遗漏最高的
+        cold_blues = sorted([(n, analysis['blue_miss'].get(n, 0))
+                           for n in range(1, 17)], key=lambda x: x[1], reverse=True)
+        cold_blue = cold_blues[0][0]
+
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': '核心注(加权)'},
             {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': '扩展1(加权)'},
             {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': '扩展2(加权)'},
+            {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
         ]
 
     def _smart_back_select(self, analysis, count=2, mode='hot'):
@@ -1001,10 +1067,22 @@ class WeightedAnalyzer:
         ext2_front = sorted(ext2_keep + ext2_new)
         ext2_back = self._smart_back_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
+        # 🟢 v6吸收：冷号注 — 遗漏值最高的5前区+遗漏最高2后区
+        cold_front = sorted([(n, analysis['front_miss'].get(n, 0))
+                           for n in range(1, 36)], key=lambda x: x[1], reverse=True)[:5]
+        cold_front_nums = sorted([n for n, m in cold_front])
+        # 冷号后区：遗漏最高的2个
+        cold_back = self._smart_back_select(analysis, mode='miss')
+        # 但冷号注后区直接用遗漏TOP2
+        cold_back_sorted = sorted([(n, analysis['back_miss'].get(n, 0))
+                                 for n in range(1, 13)], key=lambda x: x[1], reverse=True)[:2]
+        cold_back_nums = sorted([n for n, m in cold_back_sorted])
+
         return [
             {'front': core_front, 'back': core_back, 'strategy': '核心注(加权)'},
             {'front': ext1_front, 'back': ext1_back, 'strategy': '扩展1(加权)'},
             {'front': ext2_front, 'back': ext2_back, 'strategy': '扩展2(加权)'},
+            {'front': cold_front_nums, 'back': cold_back_nums, 'strategy': '冷号注(遗漏)'},  # 🟢 v6
         ]
 
     def generate_recs_qxc(self, analysis):
@@ -1226,6 +1304,7 @@ def adjust_weights_from_backtest():
     strategy_map = {
         '追热策略': '核心注', '回补策略': '扩展2', '综合策略': '扩展1',
         '核心注(加权)': '核心注', '扩展1(加权)': '扩展1', '扩展2(加权)': '扩展2',
+        '冷号注(遗漏)': '冷号注',  # 🟢 v6兼容
     }
     mapped_wins = Counter()
     for name, count in strategy_wins.items():
@@ -1240,14 +1319,16 @@ def adjust_weights_from_backtest():
     hot_wins = mapped_wins.get('核心注', 0)
     cold_wins = mapped_wins.get('扩展2', 0)
     mid_wins = mapped_wins.get('扩展1', 0)
+    cold_miss_wins = mapped_wins.get('冷号注', 0)  # 🟢 v6
 
     if hot_wins > cold_wins + 2 and hot_wins > mid_wins:
         adjustments = {'freq': step, 'miss': -step}
     elif cold_wins > hot_wins + 2 and cold_wins > mid_wins:
         adjustments = {'miss': step, 'freq': -step}
     elif mid_wins > hot_wins and mid_wins > cold_wins + 1:
-        # 🔴 新增：综合策略领先时调整趋势维度
         adjustments = {'trend': step, 'zone': -step}
+    elif cold_miss_wins > hot_wins and cold_miss_wins > cold_wins:  # 🟢 v6：冷号注领先→加遗漏权重
+        adjustments = {'miss': step * 1.5, 'freq': -step}
 
     if not adjustments:
         return None
@@ -1657,7 +1738,22 @@ def _format_backtest_for_ai(backtest_result):
 
 def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
     """一次性调用刘海蟾点金三个彩种 — 优先办公室Qwen3.6（免费），失败回退百炼"""
+    # 🟢 v6吸收：休市信息注入AI prompt
+    today_date_str = datetime.now(CST).strftime('%Y-%m-%d')
+    holiday_info = is_holiday(today_date_str)
+    holiday_prompt = f"\n🔴 今日({today_date_str})处于{holiday_info}期间，休市暂停开奖，推荐仅供参考。\n" if holiday_info else ""
+
+    next_draw_lines = []
+    for game in ['ssq', 'dlt', 'qxc']:
+        nd = get_next_draw_date(game)
+        if nd:
+            name = LOTTERY_NAMES.get(game, game)
+            next_draw_lines.append(f"{name}下期开奖: {nd[0]}({nd[1]})")
+    next_draw_prompt = '\n'.join(next_draw_lines) if next_draw_lines else ""
+
     prompt = f"""请基于以下近15期开奖数据，分别为三个彩种推算下期号码。
+{holiday_prompt}
+{next_draw_prompt}
 
 === 双色球（红球1-33选6，蓝球1-16选1）===
 {ssq_text}
@@ -1668,17 +1764,20 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 === 七星彩（7位数字0-9）===
 {qxc_text}
 {backtest_feedback}
-请为每个彩种给出3组推荐号码，格式严格要求如下（不要输出其他内容）：
+请为每个彩种给出4组推荐号码，格式严格要求如下（不要输出其他内容）：
 
 双色球核心注：红球 NN NN NN NN NN NN | 蓝球 NN
 双色球扩展1：红球 NN NN NN NN NN NN | 蓝球 NN
 双色球扩展2：红球 NN NN NN NN NN NN | 蓝球 NN
+双色球冷号注：红球 NN NN NN NN NN NN | 蓝球 NN
 大乐透核心注：前区 NN NN NN NN NN | 后区 NN NN
 大乐透扩展1：前区 NN NN NN NN NN | 后区 NN NN
 大乐透扩展2：前区 NN NN NN NN NN | 后区 NN NN
+大乐透冷号注：前区 NN NN NN NN NN | 后区 NN NN
 七星彩核心注：N N N N N N N
 七星彩扩展1：N N N N N N N
 七星彩扩展2：N N N N N N N
+七星彩冷号注：N N N N N N N
 
 🔴 核心注生成规则（最重要！）：
 - 核心注 = 从加权号码池的追热+回补+综合三组中，选综合权重最高的6个号
@@ -1691,9 +1790,14 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 - 扩展2：保留核心注3个号 + 替换3个为权重第7-12高的号（大换血）
 - 这样3注形成"核心→微调→大换"梯度，既保核心命中又扩展覆盖
 
+🔴 冷号注生成规则（v6新增）：
+- 冷号注 = 选择遗漏值最高的6个红球/5个前区 + 遗漏最高的蓝球/2个后区
+- 冷号注与核心注互补：核心注追热，冷号注搏冷，两者覆盖面最广
+- 如果某号同时是权重最高和遗漏最高，优先放冷号注
+
 红球/前区从小到大排列，用两位数（如02 07 12）。"""
 
-    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v5.1升级：核心注+缩水扩展策略。核心改进：历史回测显示追热和回补分别命中不同号，分开写每组只中2-3个，但合并后单注可命中5-6个！所以核心注=追热+回补的TOP6合并（权重最高6个号），不再按策略分散。规则：1.核心注必须从加权池追热+回补+综合三组中取综合权重TOP6；2.扩展1保留核心4号换2号，扩展2保留3号换3号；3.严格按格式输出，不输出分析过程。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
+    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v6升级：核心注+缩水扩展+冷号注策略。核心改进：历史回测显示追热和回补分别命中不同号，合并后单注命中更高！v6新增冷号注（遗漏值最高号码组合），与核心注（追热）互补覆盖。4注梯度：核心注(追热)→扩展1(微调)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注从加权池取综合权重TOP6；2.扩展1保留核心4号换2号，扩展2保留3号换3号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。休市期间仍可推荐，但标注仅供参考。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
 
     # 🔴 优先办公室qwopus3.5（彩票零隐私，免费不限量）
     if OFFICE_ENABLED:
@@ -1781,6 +1885,15 @@ def _parse_ssq_recs(ai_text):
             'blue': int(m3.group(7)),
             'strategy': '扩展2'
         })
+    # 🟢 v6吸收：冷号注解析
+    pattern4 = r'双色球冷号注[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
+    m4 = re.search(pattern4, ai_text)
+    if m4:
+        recs.append({
+            'reds': [int(m4.group(j)) for j in range(1, 7)],
+            'blue': int(m4.group(7)),
+            'strategy': '冷号注'
+        })
     # 兜底：旧格式
     if not recs:
         old_pattern = r'双色球推荐\d[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
@@ -1821,6 +1934,15 @@ def _parse_dlt_recs(ai_text):
             'back': [int(m3.group(j)) for j in range(6, 8)],
             'strategy': '扩展2'
         })
+    # 🟢 v6吸收：冷号注解析
+    pattern4 = r'大乐透冷号注[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
+    m4 = re.search(pattern4, ai_text)
+    if m4:
+        recs.append({
+            'front': [int(m4.group(j)) for j in range(1, 6)],
+            'back': [int(m4.group(j)) for j in range(6, 8)],
+            'strategy': '冷号注'
+        })
     # 兜底旧格式
     if not recs:
         old_pattern = r'大乐透推荐\d[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
@@ -1858,6 +1980,14 @@ def _parse_qxc_recs(ai_text):
             'digits': [int(m3.group(j)) for j in range(1, 8)],
             'strategy': '扩展2'
         })
+    # 🟢 v6吸收：冷号注解析
+    pattern4 = r'七星彩冷号注[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
+    m4 = re.search(pattern4, ai_text)
+    if m4:
+        recs.append({
+            'digits': [int(m4.group(j)) for j in range(1, 8)],
+            'strategy': '冷号注'
+        })
     # 兜底旧格式
     if not recs:
         old_pattern = r'七星彩推荐\d[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
@@ -1891,10 +2021,16 @@ class SimpleAnalyzer:
         # 扩展2：遗漏号
         cold = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1][:6])
         cold_blues = [n for n in range(1, 17) if blue_counter.get(n, 0) == 0]
+        # 🟢 v6吸收：冷号注（遗漏最高的号码）
+        miss_reds = sorted([n for n in range(1, 34) if n not in red_counter or red_counter.get(n, 0) <= 1][:6])
+        miss_blues = sorted([n for n in range(1, 17) if n not in blue_counter or blue_counter.get(n, 0) == 0])
+        if len(miss_reds) < 6:
+            miss_reds = cold
         return [
             {'reds': core, 'blue': core_blue, 'strategy': '核心注(兜底)'},
             {'reds': sorted(ext1_keep + ext1_new), 'blue': ext1_blue, 'strategy': '扩展1(兜底)'},
             {'reds': cold, 'blue': cold_blues[0] if cold_blues else 1, 'strategy': '扩展2(兜底)'},
+            {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': '冷号注(兜底)'},
         ]
 
     def analyze_dlt(self, history):
@@ -1912,10 +2048,18 @@ class SimpleAnalyzer:
         ext1_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(3)[1][0]]) if len(back_counter.most_common(3)) > 1 else core_back
         cold = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1][:5])
         cold_back = [n for n in range(1, 13) if back_counter.get(n, 0) <= 1][:2]
+        # 🟢 v6吸收：冷号注（遗漏最高的号码）
+        miss_front = sorted([n for n in range(1, 36) if n not in front_counter or front_counter.get(n, 0) <= 1][:5])
+        miss_back = sorted([n for n in range(1, 13) if n not in back_counter or back_counter.get(n, 0) == 0][:2])
+        if len(miss_front) < 5:
+            miss_front = cold
+        if len(miss_back) < 2:
+            miss_back = sorted(cold_back) if len(cold_back) >= 2 else [1, 2]
         return [
             {'front': core, 'back': core_back, 'strategy': '核心注(兜底)'},
             {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': '扩展1(兜底)'},
             {'front': cold, 'back': sorted(cold_back) if len(cold_back) >= 2 else [1, 2], 'strategy': '扩展2(兜底)'},
+            {'front': miss_front, 'back': miss_back, 'strategy': '冷号注(兜底)'},
         ]
 
     def analyze_qxc(self, history):
@@ -1936,10 +2080,17 @@ class SimpleAnalyzer:
             counter = Counter(d['digits'][pos] for d in history)
             cold = [n for n in range(10) if counter.get(n, 0) <= 1]
             ext2[pos] = cold[0] if cold else counter.most_common()[-1][0]
+        # 🟢 v6吸收：冷号注（每位遗漏最高的数字）
+        cold_digits = list(core)
+        for pos in range(7):
+            counter = Counter(d['digits'][pos] for d in history)
+            cold = [n for n in range(10) if counter.get(n, 0) == 0]
+            cold_digits[pos] = cold[0] if cold else counter.most_common()[-1][0]
         recs = [
             {'digits': core, 'strategy': '核心注(兜底)'},
             {'digits': ext1, 'strategy': '扩展1(兜底)'},
             {'digits': ext2, 'strategy': '扩展2(兜底)'},
+            {'digits': cold_digits, 'strategy': '冷号注(兜底)'},
         ]
         return recs
 
@@ -1952,7 +2103,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     lines.append("## 🎰 彩票号码推荐 — 刘海蟾点金（仅供娱乐参考）\n")
     lines.append("> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n")
 
-    # 🔴 开奖日历提示
+    # 🔴 开奖日历提示 + 🟢 v6吸收：下期开奖日期+休市提示
     today_games = get_draw_games()
     tomorrow_games = get_draw_games_tomorrow()
     if today_games:
@@ -1961,6 +2112,22 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     if tomorrow_games:
         tomorrow_names = '、'.join(LOTTERY_NAMES.get(g, g) for g in tomorrow_games)
         lines.append(f"📅 **明天开奖**: {tomorrow_names}\n")
+
+    # 🟢 v6吸收：下期开奖日期（含休市跳过）+ 今日是否休市
+    today_str = datetime.now(CST).strftime('%Y-%m-%d')
+    today_holiday = is_holiday(today_str)
+    if today_holiday:
+        lines.append(f"🔴 **休市提醒**: 今日({today_str})处于{today_holiday}期间，暂停开奖\n")
+    next_draw_info = []
+    for game in ['ssq', 'dlt', 'qxc']:
+        nd = get_next_draw_date(game)
+        if nd:
+            name = LOTTERY_NAMES.get(game, game)
+            date_str, weekday, is_hol = nd
+            hol_mark = ' ⚠️可能受休市影响' if is_hol else ''
+            next_draw_info.append(f"{name}: {date_str}({weekday}){hol_mark}")
+    if next_draw_info:
+        lines.append("📅 **下期开奖**: " + ' | '.join(next_draw_info) + "\n")
     if not today_games and not tomorrow_games:
         lines.append("📅 今明两天无开奖\n")
 
@@ -2117,7 +2284,23 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     else:
         lines.append(f"\n📌 本期无Kelly>5%彩种，建议单式小额为主")
 
-    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%}")
+    # 🟢 v6吸收：购彩策略建议（源自chinese-lottery-predict预算模块）
+    budget = BUDGET_CONFIG['default']
+    price = BUDGET_CONFIG['price_per_bet']
+    max_bets = budget // price
+    lines.append(f"\n💡 **购彩策略** (预算{budget}元):")
+    if max_bets >= 4:
+        lines.append(f"  - 可购{max_bets}注（每注{price}元），推荐：核心注×1 + 扩展1×1 + 冷号注×1 + 备选×1")
+        lines.append(f"  - 💰 省钱方案：核心注×1 + 冷号注×1 = {price*2}元（覆盖追热+搏冷）")
+    elif max_bets >= 2:
+        lines.append(f"  - 可购{max_bets}注，推荐：核心注×1 + 冷号注×1")
+    elif max_bets >= 1:
+        lines.append(f"  - 可购{max_bets}注，推荐：核心注×1")
+    else:
+        lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
+    lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
+
+    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6+冷号注+预算策略+休市")
     lines.append("---\n")
     return '\n'.join(lines)
 
