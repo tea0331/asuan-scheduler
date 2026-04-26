@@ -720,23 +720,37 @@ class WeightedAnalyzer:
     5. 和值分析：统计和值范围
     """
 
-    def __init__(self, history, weight_freq=None, weight_miss=None, weight_trend=None, weight_zone=None):
+    def __init__(self, history, weight_freq=None, weight_miss=None, weight_trend=None, weight_zone=None, gamma=None):
         self.history = history
-        # 🟢 优先用参数传入的权重，否则从配置文件读，否则用默认值
+        # 🟢 v6.3: gamma可配置，默认0.88，可从配置文件读取
         config = _load_weight_config()
         self.w_freq = weight_freq if weight_freq is not None else config.get('freq', 0.30)
         self.w_miss = weight_miss if weight_miss is not None else config.get('miss', 0.25)
         self.w_trend = weight_trend if weight_trend is not None else config.get('trend', 0.25)
         self.w_zone = weight_zone if weight_zone is not None else config.get('zone', 0.20)
+        self.gamma = gamma if gamma is not None else config.get('gamma', 0.88)  # 🟢 v6.3
 
     def _calc_weights(self, number_range, extract_fn, total_periods):
         """通用加权计算
         extract_fn(history_item) -> list of numbers
+        🟢 v6.3: 频率改为指数衰减，近期数据权重提升2-3倍，解冻号码粘滞
         """
-        # 频率统计
-        freq = Counter()
+        # 🟢 v6.3: 指数衰减频率统计 — γ=0.88，近1期权重≈远期5倍
+        # 等权旧方式: freq = Counter(); freq.update(extract_fn(d)) — 15期前和1期前等权
+        # 新方式: freq[n] = Σ(γ^idx × 出现标记) / Σ(γ^idx)，idx=0为最近期
+        gamma = self.gamma  # 🟢 v6.3: 可配置衰减因子
+        decay_freq = Counter()
+        decay_total = 0.0
+        for idx, d in enumerate(self.history):
+            w = gamma ** idx  # idx=0最近期权重最大
+            decay_total += w
+            for n in extract_fn(d):
+                decay_freq[n] += w
+
+        # 等权频率也保留（供冷号注等需要原始频率的场景）
+        raw_freq = Counter()
         for d in self.history:
-            freq.update(extract_fn(d))
+            raw_freq.update(extract_fn(d))
 
         # 遗漏值：连续未出现期数
         miss = {}
@@ -789,7 +803,7 @@ class WeightedAnalyzer:
         # 计算综合权重
         weights = {}
         for n in number_range:
-            f = freq.get(n, 0) / max(total_periods, 1)
+            f = decay_freq.get(n, 0) / max(decay_total, 1)  # 🟢 v6.3: 指数衰减频率
             m = math.log1p(miss.get(n, 0)) / math.log1p(total_periods)
             t = (recent.get(n, 0) - older.get(n, 0)) / max(mid, 1)
             # 🔴 Bug4修复：趋势权重逻辑修正
@@ -821,7 +835,7 @@ class WeightedAnalyzer:
                 overdue_bonus  # 🟢 v6.2: 遗漏周期加分
             )
 
-        return weights, freq, miss, avg_miss_interval  # 🟢 v6.2: 返回平均遗漏间隔
+        return weights, raw_freq, miss, avg_miss_interval  # 🟢 v6.3: raw_freq替代decay_freq返回
 
     def analyze_ssq(self):
         """双色球加权分析"""
@@ -975,10 +989,178 @@ class WeightedAnalyzer:
             elif mode == 'mix':
                 scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
             elif mode == 'miss':
-                scores[n] = weight_score * 0.2 + freq_score * 0.2 + miss_score * 0.6
+                # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
+                blue_avg_interval = analysis.get('blue_avg_interval', {}).get(n, 10)
+                cycle_signal = min(miss_val / max(blue_avg_interval, 1), 2.0)  # >1=到期, <1=未到
+                scores[n] = miss_score * 0.35 + cycle_signal * 0.35 + freq_score * 0.30
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[0][0] if ranked else 1
+
+    def _select_blues_with_shape(self, analysis, n_blues=4):
+        """🟢 v6.3: 蓝球整体选号 — 强制奇偶2:2、大小2:2形态约束
+        先算每个蓝球综合得分，再在满足形态约束的组合中选总分最高的
+        """
+        blue_weight_dict = dict(analysis['blue_weights'])
+        blue_miss = analysis['blue_miss']
+        blue_freq = analysis['blue_freq']
+        blue_avg_interval = analysis.get('blue_avg_interval', {})
+
+        # 每个蓝球的综合得分
+        scores = {}
+        for n in range(1, 17):
+            w = blue_weight_dict.get(n, 0)
+            miss_val = blue_miss.get(n, 0)
+            if miss_val >= 10:
+                miss_score = 3.0
+            elif miss_val >= 6:
+                miss_score = 2.5
+            elif miss_val >= 3:
+                miss_score = 1.5
+            elif miss_val == 0:
+                miss_score = 1.0
+            else:
+                miss_score = 0.8
+            freq_score = min(blue_freq.get(n, 0), 4) / 2.0
+            scores[n] = w * 0.3 + freq_score * 0.3 + miss_score * 0.4  # 均衡评分
+
+        # 按得分排序
+        sorted_blues = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        # 🟢 v6.3: 形态约束 — 奇偶2:2 + 大小2:2
+        # 如果4个蓝球不能满足约束，放宽为3:1或2:2
+        best_combo = None
+        best_total = -1
+        # 从TOP8中选4个，搜索满足约束的最佳组合
+        candidates = sorted_blues[:8]
+        from itertools import combinations
+        for combo in combinations([n for n, s in candidates], n_blues):
+            odds = sum(1 for n in combo if n % 2 == 1)  # 奇数个数
+            bigs = sum(1 for n in combo if n >= 9)  # 大号个数(9-16)
+            # 理想: 奇偶2:2, 大小2:2; 可接受: 3:1
+            odd_ok = odds == 2 or odds == 3 or odds == 1
+            big_ok = bigs == 2 or bigs == 3 or bigs == 1
+            if odd_ok and big_ok:
+                total = sum(scores[n] for n in combo)
+                # 给接近2:2的组合加分
+                shape_bonus = 0
+                if odds == 2 and bigs == 2:
+                    shape_bonus = 1.0  # 完美形态
+                elif odds == 2 or bigs == 2:
+                    shape_bonus = 0.5  # 一项完美
+                total += shape_bonus
+                if total > best_total:
+                    best_total = total
+                    best_combo = combo
+
+        if best_combo:
+            return list(best_combo)
+        # 回退：取TOP4
+        return [n for n, s in sorted_blues[:n_blues]]
+
+    def _select_backs_distributed(self, analysis, n_pairs=4):
+        """🟢 v6.3: 大乐透后区分散选号 — 4组后区8个号尽量不重复
+        每组2个后区号(1-12)，4组共8个号最大覆盖
+        """
+        back_weight_dict = dict(analysis['back_weights'])
+        back_miss = analysis['back_miss']
+        back_freq = analysis['back_freq']
+
+        # 每个后区号综合评分
+        scores = {}
+        for n in range(1, 13):
+            w = back_weight_dict.get(n, 0)
+            miss_val = back_miss.get(n, 0)
+            if miss_val >= 10:
+                miss_score = 3.0
+            elif miss_val >= 6:
+                miss_score = 2.5
+            elif miss_val >= 3:
+                miss_score = 1.5
+            elif miss_val == 0:
+                miss_score = 1.0
+            else:
+                miss_score = 0.8
+            freq_score = min(back_freq.get(n, 0), 4) / 2.0
+            scores[n] = w * 0.3 + freq_score * 0.3 + miss_score * 0.4
+
+        sorted_nums = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        # 贪心分配：每组选2个最高分但未用过的号
+        used = set()
+        result = []
+        for i in range(n_pairs):
+            pair = []
+            for n, s in sorted_nums:
+                if n not in used:
+                    pair.append(n)
+                    used.add(n)
+                if len(pair) == 2:
+                    break
+            # 奇偶约束：尽量一奇一偶
+            if len(pair) == 2:
+                odds = sum(1 for n in pair if n % 2 == 1)
+                if odds == 2 or odds == 0:
+                    # 全奇或全偶，尝试替换一个
+                    for n, s in sorted_nums:
+                        if n not in used and n not in pair and n % 2 != pair[0] % 2:
+                            # 找到异偶的替换pair中同偶的那个
+                            for j, p in enumerate(pair):
+                                if p % 2 == pair[0] % 2:
+                                    used.discard(pair[j])
+                                    pair[j] = n
+                                    used.add(n)
+                                    break
+                            break
+            result.append(sorted(pair))
+
+        # 补全不够的
+        while len(result) < n_pairs:
+            result.append([1, 2])
+
+        return result
+
+    def _shape_optimized_select(self, candidates, n_select, target_sum, target_odd, target_big, must_include=None):
+        """🟢 v6.3: 形态优化选号 — 从候选池中搜和值/奇偶/大小最优组合
+        candidates: 候选号码列表
+        n_select: 选几个号
+        target_sum: 目标和值
+        target_odd: 目标奇数个数
+        target_big: 目标大号个数
+        must_include: 必须包含的号码
+        """
+        from itertools import combinations
+        must_include = must_include or []
+        best_combo = None
+        best_score = -999
+
+        # 限制搜索范围，候选太多组合爆炸
+        if len(candidates) > 15:
+            candidates = candidates[:15]
+
+        for combo in combinations(candidates, n_select):
+            # 必须包含检查
+            if must_include and not all(n in combo for n in must_include):
+                continue
+            combo = tuple(combo)
+            s = sum(combo)
+            odd_count = sum(1 for n in combo if n % 2 == 1)
+            big_count = sum(1 for n in combo if n >= 17)  # 双色球大号>=17
+
+            # 评分：和值偏差 + 奇偶偏差 + 大小偏差
+            sum_penalty = -abs(s - target_sum) / max(target_sum, 1) * 2.0
+            odd_penalty = -abs(odd_count - target_odd) * 1.5
+            big_penalty = -abs(big_count - target_big) * 1.5
+
+            score = sum_penalty + odd_penalty + big_penalty
+            if score > best_score:
+                best_score = score
+                best_combo = combo
+
+        if best_combo:
+            return sorted(best_combo)
+        # 回退：取前n_select个
+        return sorted(candidates[:n_select])
 
     def generate_recs_ssq(self, analysis, kelly_bias=0.0):
         """根据加权分析生成双色球推荐（纯数学，不依赖AI）
@@ -1035,41 +1217,45 @@ class WeightedAnalyzer:
 
         core_reds_by_weight = [n for n, w, f, m in all_pool[:6]]
         core_reds = sorted(core_reds_by_weight)
-        # 🟢 v6.1: Kelly高偏热号蓝球，Kelly低偏遗漏蓝球
-        core_blue = self._smart_blue_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
+        # 🟢 v6.3: 蓝球整体选号 — 4个蓝球满足奇偶2:2+大小2:2形态约束
+        blues = self._select_blues_with_shape(analysis, n_blues=4)
+        core_blue = blues[0]
+        ext1_blue = blues[1]
+        ext2_blue = blues[2]
+        cold_blue = blues[3]
 
         # 🔴 Bug修复：扩展注保留的是权重最高的号，不是号码最小的号
         # 扩展1：保留权重最高的4号 + 替换权重最低的2号
         ext1_keep = sorted(core_reds_by_weight[:4])  # 权重TOP4
         ext1_new = sorted([n for n, w, f, m in all_pool[6:8] if n not in ext1_keep][:2])
         ext1_reds = sorted(ext1_keep + ext1_new)
-        ext1_blue = self._smart_blue_select(analysis, mode='mix')  # 🔴 v2: 均衡模式
-        # 扩展2：保留权重最高的3号 + 替换权重最低的3号
-        ext2_keep = sorted(core_reds_by_weight[:3])  # 权重TOP3
-        ext2_new = sorted([n for n, w, f, m in all_pool[8:11] if n not in ext2_keep][:3])
-        ext2_reds = sorted(ext2_keep + ext2_new)
-        # 🟢 v6.2: 蓝球强制分散 — 扩展2排除核心注和扩展1已选的蓝球
-        used_blues = {core_blue, ext1_blue}
-        ext2_blue = self._smart_blue_select(analysis, mode='miss', exclude=used_blues)
+        # 🟢 v6.3: 扩展2 — 形态模拟选号（从TOP15中搜和值/奇偶/大小最优组合）
+        # 动态目标：用近10期统计生成和值/奇偶/大小目标
+        target_sum = analysis.get('avg_sum', 100)
+        target_odd = 3  # 奇数个数，双色球最常见3奇3偶
+        target_big = 3  # 大号(>=17)个数
 
-        # 🟢 v6.2优化：冷号注前区 — 遗漏(60%) + 权重(20%) + 活跃度(20%)综合评分
-        # 不再纯遗漏排名，避免选出"死号"（长期不出但也没回补趋势的号）
-        # 🔴 v6.2修复：w_score从w/5.0改为w*4.0，因为w在[0,0.5]区间，w/5.0≈0.01形同虚设
+        # 从权重TOP15中搜索最优6号组合
+        top15 = [n for n, w, f, m in all_pool[:15]]
+        ext2_reds = self._shape_optimized_select(top15, 6, target_sum, target_odd, target_big,
+                                                  core_reds_by_weight[:3])  # 保留核心TOP3
+
+        # 🟢 v6.3: 冷号注红球 — 遗漏(35%) + 周期回补信号(35%) + 近期活跃度(30%)
+        # 不再纯遗漏排名，"到期号"比"万年冷号"更有回补价值
         cold_scores = []
+        red_avg_interval = analysis.get('red_avg_interval', {})
         for n in range(1, 34):
             miss_val = analysis['red_miss'].get(n, 0)
             miss_score = min(miss_val / 10.0, 3.0)
-            w = red_weight_dict.get(n, 0)
-            w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: w*4.0使权重分量实际有意义
+            # 周期回补信号：当前遗漏 / 平均遗漏间隔，>1说明到期
+            avg_interval = red_avg_interval.get(n, 15)
+            cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+            score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
-        # 🟢 v6.2修复：冷号蓝球排除已选蓝球，强制分散
-        used_blues_cold = {core_blue, ext1_blue, ext2_blue}
-        cold_blue = self._smart_blue_select(analysis, mode='miss', exclude=used_blues_cold)
 
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
@@ -1118,8 +1304,10 @@ class WeightedAnalyzer:
                 # 扩展1：均衡
                 scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
             elif mode == 'miss':
-                # 扩展2：遗漏回补优先
-                scores[n] = weight_score * 0.2 + freq_score * 0.2 + miss_score * 0.6
+                # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
+                back_avg_interval = analysis.get('back_avg_interval', {}).get(n, 10)
+                cycle_signal = min(miss_val / max(back_avg_interval, 1), 2.0)
+                scores[n] = miss_score * 0.35 + cycle_signal * 0.35 + freq_score * 0.30
 
         # 按评分排序
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -1188,36 +1376,38 @@ class WeightedAnalyzer:
 
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         core_front = sorted(core_front_by_weight)
-        core_back = self._smart_back_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
+
+        # 🟢 v6.3: 后区整体选号 — 4组后区尽量不重复，覆盖更多号码
+        backs = self._select_backs_distributed(analysis, n_pairs=4)
+        core_back = backs[0]
+        ext1_back = backs[1]
+        ext2_back = backs[2]
+        cold_back_nums = backs[3]
 
         # 扩展1：保留权重TOP3 + 替换权重最低的2个
         ext1_keep = sorted(core_front_by_weight[:3])
         ext1_new = sorted([n for n, w, f, m in all_pool[5:7] if n not in ext1_keep][:2])
         ext1_front = sorted(ext1_keep + ext1_new)
-        ext1_back = self._smart_back_select(analysis, mode='mix')  # 🔴 v2: 均衡模式
 
         # 扩展2：保留权重TOP2 + 替换权重最低的3个
         ext2_keep = sorted(core_front_by_weight[:2])
         ext2_new = sorted([n for n, w, f, m in all_pool[7:10] if n not in ext2_keep][:3])
         ext2_front = sorted(ext2_keep + ext2_new)
-        ext2_back = self._smart_back_select(analysis, mode='miss')  # 🔴 v2: 遗漏回补模式
 
-        # 🟢 v6.1优化：冷号注前区 — 遗漏(60%)+权重(20%)+活跃度(20%)综合评分
+        # 🟢 v6.3: 冷号注前区 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
         cold_front_scores = []
+        front_avg_interval = analysis.get('front_avg_interval', {})
         for n in range(1, 36):
             miss_val = analysis['front_miss'].get(n, 0)
             miss_score = min(miss_val / 10.0, 3.0)
-            w = front_weight_dict.get(n, 0)
-            w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: w*4.0使权重分量有意义
+            avg_interval = front_avg_interval.get(n, 15)
+            cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+            score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
             cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
-        # 🟢 v6.1修复：冷号注后区改用_smart_back_select(mode='miss')
-        # 之前直接取遗漏TOP2，没有奇偶/大小约束，命中率低
-        cold_back_nums = self._smart_back_select(analysis, mode='miss')
 
         return [
             {'front': core_front, 'back': core_back, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
@@ -1272,24 +1462,24 @@ class WeightedAnalyzer:
             top_miss = sorted(analysis['positions'][i]['miss'].items(), key=lambda x: x[1], reverse=True)
             ext2_digits[i] = top_miss[0][0] if top_miss else core_digits[i]
 
-        # 🟢 v6.2: 七星彩冷号注（每位遗漏最高的数字，多因子评分）
+        # 🟢 v6.3: 七星彩冷号注 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
         cold_digits = list(core_digits)
         for i in range(7):
             pd = analysis['positions'][i]
             miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
-            # 多因子：遗漏60% + 权重20% + 活跃度20%
+            freq_dict = pd.get('freq', {})
+            avg_interval_dict = pd.get('avg_interval', {})
             best = None
             best_score = -1
             max_miss = max(m for _, m in miss_sorted) if miss_sorted else 1
-            weight_dict = dict(pd['weights'])  # QXC weights是(n, w)对
-            freq_dict = pd.get('freq', {})  # 频率数据
             for n, m in miss_sorted[:5]:
-                w = weight_dict.get(n, 0)
                 f = freq_dict.get(n, 0)
                 miss_score = m / max_miss if max_miss > 0 else 0
-                w_score = min(w * 4.0, 2.0)  # 🔴 v6.2: 与SSQ/DLT冷号w_score对齐
+                # 周期回补信号
+                avg_interval = avg_interval_dict.get(n, 5)
+                cycle_signal = min(m / max(avg_interval, 1), 2.0)
                 f_score = min(f / 3.0, 1.5)
-                score = miss_score * 0.6 + w_score * 0.2 + f_score * 0.2
+                score = miss_score * 0.35 + cycle_signal * 0.35 + f_score * 0.30
                 if score > best_score:
                     best_score = score
                     best = n
