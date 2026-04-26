@@ -985,7 +985,12 @@ class WeightedAnalyzer:
             freq_score = min(blue_freq.get(n, 0), 4) / 2.0
 
             if mode == 'hot':
-                scores[n] = weight_score * 0.4 + freq_score * 0.4 + miss_score * 0.2
+                # 🟢 v6.5: hot模式加周期信号作负向 — 到期号反而不热
+                blue_avg_interval = analysis.get('blue_avg_interval', {}).get(n, 10)
+                cycle_signal = min(miss_val / max(blue_avg_interval, 1), 2.0)
+                # cycle_signal>1=到期(冷号特征), 热模式应减分
+                hot_penalty = max(0, (cycle_signal - 1.0)) * 1.5  # 到期号扣分
+                scores[n] = weight_score * 0.4 + freq_score * 0.4 + miss_score * 0.2 - hot_penalty
             elif mode == 'mix':
                 scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
             elif mode == 'miss':
@@ -1162,9 +1167,9 @@ class WeightedAnalyzer:
 
     def generate_recs_ssq(self, analysis, kelly_bias=0.0):
         """根据加权分析生成双色球推荐（纯数学，不依赖AI）
-        🟢 v6.1: Kelly驱动选号 — kelly_bias越高越偏热号(追命中率)，越低越偏冷号(搏大奖)
-        kelly_bias范围: -1.0(纯冷号) ~ +1.0(纯热号)，0.0=默认均衡
+        🟢 v6.5: SSQ gamma降到0.85，蓝球16选1也稀疏需更快衰减
         """
+        self.gamma = min(self.gamma, 0.85)
         # 追热：权重最高的6个红球 + 最高权重蓝球
         hot_reds = sorted([n for n, w in analysis['red_weights'][:10]][:6])
         hot_blue = analysis['blue_weights'][0][0]
@@ -1218,7 +1223,7 @@ class WeightedAnalyzer:
         # 🟢 v6.4: 蓝球按策略需求分配 — 核心注得热蓝，冷号注得周期回补蓝
         core_blue = self._smart_blue_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
         ext1_blue = self._smart_blue_select(analysis, mode='mix', exclude={core_blue})
-        ext2_blue = self._smart_blue_select(analysis, mode='miss', exclude={core_blue, ext1_blue})
+        ext2_blue = self._smart_blue_select(analysis, mode='mix', exclude={core_blue, ext1_blue})  # 🟢 v6.5: 扩展2红球偏热配均衡蓝
         cold_blue = self._smart_blue_select(analysis, mode='miss', exclude={core_blue, ext1_blue, ext2_blue})
 
         # 🔴 Bug修复：扩展注保留的是权重最高的号，不是号码最小的号
@@ -1233,7 +1238,7 @@ class WeightedAnalyzer:
 
         top20 = [n for n, w, f, m in all_pool[:20]]
         ext2_reds = self._shape_optimized_select(top20, 6, target_sum, target_odd, target_big,
-                                                  core_reds_by_weight[:3])
+                                                  core_reds_by_weight[:2])  # 🟢 v6.5: 只锁TOP2，留4号自由调形态
 
         # 🟢 v6.3: 冷号注红球 — 遗漏(35%) + 周期回补信号(35%) + 近期活跃度(30%)
         # 不再纯遗漏排名，"到期号"比"万年冷号"更有回补价值
@@ -1259,9 +1264,10 @@ class WeightedAnalyzer:
             {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': Strategy.COLD_MISS},  # 🟢 v6
         ]
 
-    def _smart_back_select(self, analysis, count=2, mode='hot'):
+    def _smart_back_select(self, analysis, count=2, mode='hot', exclude=None):
         """🔴 大乐透后区智能选号（v2优化版）
         综合考虑：权重+遗漏+奇偶+大小+振幅，而非仅靠权重排名
+        exclude: set of back numbers already used (for dispersion)
 
         mode:
           - 'hot': 热号为主（核心注）
@@ -1274,7 +1280,10 @@ class WeightedAnalyzer:
 
         # 综合评分：权重(40%) + 遗漏回补力(30%) + 近期活跃度(30%)
         scores = {}
+        exclude = exclude or set()
         for n in range(1, 13):
+            if n in exclude:
+                continue
             weight_score = back_weight_dict.get(n, 0)
             # 遗漏回补力：遗漏越大，回补概率越高（但超过10期可能偏冷）
             miss_val = back_miss.get(n, 0)
@@ -1375,12 +1384,14 @@ class WeightedAnalyzer:
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         core_front = sorted(core_front_by_weight)
 
-        # 🟢 v6.3: 后区整体选号 — 4组后区尽量不重复，覆盖更多号码
-        backs = self._select_backs_distributed(analysis, n_pairs=4)
-        core_back = backs[0]
-        ext1_back = backs[1]
-        ext2_back = backs[2]
-        cold_back_nums = backs[3]
+        # 🟢 v6.5: 后区按策略需求分配 + exclude分散
+        core_back = self._smart_back_select(analysis, mode='hot' if kelly_bias >= 0 else 'miss')
+        core_back_set = set(core_back)
+        ext1_back = self._smart_back_select(analysis, mode='mix', exclude=core_back_set)
+        ext1_back_set = core_back_set | set(ext1_back)
+        ext2_back = self._smart_back_select(analysis, mode='miss', exclude=ext1_back_set)
+        ext2_back_set = ext1_back_set | set(ext2_back)
+        cold_back_nums = self._smart_back_select(analysis, mode='miss', exclude=ext2_back_set)
 
         # 扩展1：保留权重TOP3 + 替换权重最低的2个
         ext1_keep = sorted(core_front_by_weight[:3])
@@ -1393,7 +1404,7 @@ class WeightedAnalyzer:
         target_big_dlt = 3
         top20_dlt = [n for n, w, f, m in all_pool[:20]]
         ext2_front = self._shape_optimized_select(top20_dlt, 5, target_sum_dlt, target_odd_dlt, target_big_dlt,
-                                                   core_front_by_weight[:2], big_threshold=18)
+                                                   core_front_by_weight[:1], big_threshold=18)  # 🟢 v6.5: 只锁TOP1
 
         # 🟢 v6.3: 冷号注前区 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
         cold_front_scores = []
