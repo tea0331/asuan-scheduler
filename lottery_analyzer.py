@@ -120,6 +120,7 @@ FALLBACK_SSQ = [
 ]
 
 FALLBACK_DLT = [
+    {'period': '26044', 'front': [3, 8, 22, 26, 29], 'back': [7, 10]},
     {'period': '26043', 'front': [8, 12, 14, 19, 22], 'back': [11, 12]},
     {'period': '26042', 'front': [2, 7, 13, 19, 24], 'back': [3, 8]},
     {'period': '26041', 'front': [6, 12, 13, 21, 34], 'back': [8, 9]},
@@ -200,21 +201,22 @@ def _get_expected_dlt_period():
 
 def fetch_ssq_history(periods=15):
     print(f"\n[双色球] 开始抓取，目标 {periods} 期...")
+    min_required = min(periods, 3)  # 🔴 修复：回测只请求1期时，不能要求>=3
     # 源1: datachart.500.com
     result = _fetch_ssq_500com(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[双色球] ✅ datachart.500.com 成功: {len(result)} 期")
         return result
     # 源2: cjcp.cn
     print("[双色球] 尝试备用源 cjcp.cn...")
     result = _fetch_ssq_cjcp(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[双色球] ✅ cjcp.cn 成功: {len(result)} 期")
         return result
     # 源3: kaijiang.500.com 单页
     print("[双色球] 尝试备用源 kaijiang.500.com...")
     result = _fetch_ssq_kaijiang500(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[双色球] ✅ kaijiang.500.com 成功: {len(result)} 期")
         return result
     print("[双色球] ⚠️ 所有网络源失败，使用硬编码数据")
@@ -222,32 +224,34 @@ def fetch_ssq_history(periods=15):
 
 def fetch_dlt_history(periods=15):
     print(f"\n[大乐透] 开始抓取，目标 {periods} 期...")
+    min_required = min(periods, 3)  # 🔴 修复：回测只请求1期时，不能要求>=3
     # 源1: datachart.500.com
     result = _fetch_dlt_500com(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[大乐透] ✅ datachart.500.com 成功: {len(result)} 期")
         return result
     # 源2: cjcp.cn
     print("[大乐透] 尝试备用源 cjcp.cn...")
     result = _fetch_dlt_cjcp(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[大乐透] ✅ cjcp.cn 成功: {len(result)} 期")
         return result
     # 源3: kaijiang.500.com 单页
     print("[大乐透] 尝试备用源 kaijiang.500.com...")
     result = _fetch_dlt_kaijiang500(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         print(f"[大乐透] ✅ kaijiang.500.com 成功: {len(result)} 期")
         return result
     print("[大乐透] ⚠️ 所有网络源失败，使用硬编码数据")
     return FALLBACK_DLT[:periods]
 
 def fetch_qxc_history(periods=15):
+    min_required = min(periods, 3)  # 🔴 修复：回测只请求1期时，不能要求>=3
     result = _fetch_qxc_500com(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         return result
     result = _fetch_qxc_cjcp(periods)
-    if result and len(result) >= 3:
+    if result and len(result) >= min_required:
         return result
     # 🔴 网络抓到少量数据也比硬编码好（硬编码会过时）
     if result and len(result) >= 1:
