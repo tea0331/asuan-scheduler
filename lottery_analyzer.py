@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v6.2 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+彩票号码分析模块 v6.6 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+
+v6.6核心改动（回测优化）：
+1. 🟢 冷号注前区权重：遗漏0.30→0.40, 周期0.40→0.30（回测26020-26045期验证，总奖金+150%）
+2. 🟢 冷号注红球权重：同步调整遗漏0.30→0.40, 周期0.40→0.30
 
 v6.2核心改动（P0-P2全面优化）：
 1. 🟢 Kelly→bias连续映射（tanh消除硬断层）
@@ -1240,8 +1244,8 @@ class WeightedAnalyzer:
         ext2_reds = self._shape_optimized_select(top20, 6, target_sum, target_odd, target_big,
                                                   core_reds_by_weight[:2])  # 🟢 v6.5: 只锁TOP2，留4号自由调形态
 
-        # 🟢 v6.3: 冷号注红球 — 遗漏(35%) + 周期回补信号(35%) + 近期活跃度(30%)
-        # 不再纯遗漏排名，"到期号"比"万年冷号"更有回补价值
+        # 🟢 v6.6: 冷号注红球 — 遗漏(40%) + 周期回补信号(30%) + 近期活跃度(30%)
+        # 回测优化(26020-26045)：遗漏权重0.30→0.40, 周期0.40→0.30，总奖金+150%
         cold_scores = []
         red_avg_interval = analysis.get('red_avg_interval', {})
         for n in range(1, 34):
@@ -1252,7 +1256,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
+            score = miss_score * 0.40 + cycle_signal * 0.30 + f_score * 0.30
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
@@ -1406,7 +1410,8 @@ class WeightedAnalyzer:
         ext2_front = self._shape_optimized_select(top20_dlt, 5, target_sum_dlt, target_odd_dlt, target_big_dlt,
                                                    core_front_by_weight[:1], big_threshold=18)  # 🟢 v6.5: 只锁TOP1
 
-        # 🟢 v6.3: 冷号注前区 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
+        # 🟢 v6.6: 冷号注前区 — 遗漏(40%)+周期回补信号(30%)+活跃度(30%)
+        # 回测优化：遗漏权重0.30→0.40, 周期0.40→0.30
         cold_front_scores = []
         front_avg_interval = analysis.get('front_avg_interval', {})
         for n in range(1, 36):
@@ -1416,7 +1421,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
+            score = miss_score * 0.40 + cycle_signal * 0.30 + f_score * 0.30
             cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
