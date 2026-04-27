@@ -34,7 +34,8 @@ jobs:
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       OFFICE_API_KEY: ${{ secrets.OFFICE_API_KEY }}
       OFFICE_API_BASE: ${{ secrets.OFFICE_API_BASE }}
-      OFFICE_ENABLED: ${{ secrets.OFFICE_ENABLED }}
+      # 🔴 办公室API暂停：服务器地址未就绪，关闭避免报错回退浪费时间
+      OFFICE_ENABLED: 'false'
       SMTP_USER: ${{ secrets.SMTP_USER }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       SMTP_TO: ${{ secrets.SMTP_TO }}
