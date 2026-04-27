@@ -1145,7 +1145,7 @@ class WeightedAnalyzer:
         return result
 
     def _shape_optimized_select(self, candidates, n_select, target_sum, target_odd, target_big, must_include=None, big_threshold=17):
-        """🟢 v6.7: 形态优化选号 — 贪心搜索，支持大候选池+分区平衡约束
+        """🟢 v6.4: 形态优化选号 — 贪心搜索，支持大候选池
         candidates: 候选号码列表（支持20+个）
         n_select: 选几个号
         target_sum: 目标和值
@@ -1153,17 +1153,10 @@ class WeightedAnalyzer:
         target_big: 目标大号个数
         must_include: 必须包含的号码
         big_threshold: 大号阈值（SSQ=17, DLT=18）
-        🟢 v6.7新增：分区平衡 — 每注至少覆盖2个区，避免全挤一个区
         """
         must_include = must_include or []
-        # 🟢 v6.7: 分区参数
-        if max(candidates) <= 33:  # 双色球 1-33
-            zone_size = 11  # 1-11/12-22/23-33
-        elif max(candidates) <= 35:  # 大乐透 1-35
-            zone_size = 12  # 1-12/13-24/25-35
-        else:
-            zone_size = max(candidates) // 3 + 1
-
+        # 🟢 v6.4: 贪心搜索替代暴力枚举，支持20+候选
+        # 策略：必须包含的号先加入，然后贪心添加最改善形态的号
         result = list(must_include)
         remaining = [n for n in candidates if n not in result]
         
@@ -1179,10 +1172,7 @@ class WeightedAnalyzer:
                 sum_penalty = -abs(s - target_sum) / max(target_sum, 1) * 2.0
                 odd_penalty = -abs(odd_count - target_odd) * 1.5
                 big_penalty = -abs(big_count - target_big) * 1.5
-                # 🟢 v6.7: 分区平衡评分 — 覆盖区越多越好
-                zones_covered = len(set(min(x // zone_size, 2) for x in trial))
-                zone_bonus = zones_covered * 0.5  # 每多覆盖一个区+0.5分
-                score = sum_penalty + odd_penalty + big_penalty + zone_bonus
+                score = sum_penalty + odd_penalty + big_penalty
                 if score > best_score:
                     best_score = score
                     best_n = n
@@ -1191,19 +1181,6 @@ class WeightedAnalyzer:
                 remaining.remove(best_n)
             else:
                 break
-        
-        # 🟢 v6.7: 分区平衡后验检查 — 如果只覆盖1个区，强制换一个号
-        zones_in_result = set(min(x // zone_size, 2) for x in result)
-        if len(zones_in_result) < 2 and len(result) == n_select:
-            # 找到权重最低的那个号，换成一个其他区的号
-            # 从remaining里找一个其他区的号替换
-            other_zone_nums = [n for n in candidates if n not in result and min(n // zone_size, 2) not in zones_in_result]
-            if other_zone_nums:
-                # 替换result中权重最低的号（最后一个加入的）
-                replace_target = result[-1]
-                result.remove(replace_target)
-                result.append(other_zone_nums[0])
-                result.sort()
         
         return sorted(result)
 
