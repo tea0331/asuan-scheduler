@@ -1,9 +1,9 @@
 {
-  "freq": 0.32,
-  "miss": 0.23,
+  "freq": 0.3,
+  "miss": 0.25,
   "trend": 0.25,
   "zone": 0.2,
-  "version": 2,
+  "version": 3,
   "adjustments": [
     {
       "date": "2026-04-21",
@@ -16,6 +16,33 @@
         "trend": 0.25,
         "zone": 0.2
       }
+    },
+    {
+      "date": "2026-04-28",
+      "direction": "freq+",
+      "hot_wins": 4,
+      "cold_wins": 1,
+      "mid_wins": 1,
+      "new_weights": {
+        "freq": 0.34,
+        "miss": 0.21,
+        "trend": 0.25,
+        "zone": 0.2
+      }
+    },
+    {
+      "date": "2026-04-28",
+      "direction": "reset",
+      "hot_wins": 0,
+      "cold_wins": 0,
+      "mid_wins": 0,
+      "new_weights": {
+        "freq": 0.3,
+        "miss": 0.25,
+        "trend": 0.25,
+        "zone": 0.2
+      }
     }
-  ]
+  ],
+  "last_reset_date": "2026-04-28"
 }
