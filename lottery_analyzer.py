@@ -2383,8 +2383,8 @@ def _parse_ssq_recs(ai_text):
             'blue': int(m3.group(7)),
             'strategy': Strategy.EXT2
         })
-    # 🟢 v6吸收：冷号注解析
-    pattern4 = r'双色球冷号注[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
+    # 🟢 v6.6: 冷号注解析容错（匹配"冷号"/"冷号注"/"搏冷"/"冷门"）
+    pattern4 = r'双色球(?:冷号注|冷号|搏冷|冷门)[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
     m4 = re.search(pattern4, ai_text)
     if m4:
         recs.append({
@@ -2396,12 +2396,15 @@ def _parse_ssq_recs(ai_text):
     if not recs:
         old_pattern = r'双色球推荐\d[：:]\s*红球\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*蓝球\s+(\d{2})'
         matches = re.findall(old_pattern, ai_text)
-        for i, m in enumerate(matches[:3]):
+        strategies_fallback = [Strategy.CORE, Strategy.EXT1, Strategy.EXT2, Strategy.COLD_FALLBACK]
+        for i, m in enumerate(matches[:4]):
             recs.append({
                 'reds': [int(m[j]) for j in range(6)],
                 'blue': int(m[6]),
-                'strategy': strategies[i] if i < len(strategies) else f'策略{i+1}'
+                'strategy': strategies_fallback[i] if i < len(strategies_fallback) else f'策略{i+1}'
             })
+    if len(recs) == 3:
+        print("[解析] 双色球AI输出缺少冷号注，只有3注")
     return recs
 
 def _parse_dlt_recs(ai_text):
@@ -2432,8 +2435,8 @@ def _parse_dlt_recs(ai_text):
             'back': [int(m3.group(j)) for j in range(6, 8)],
             'strategy': Strategy.EXT2
         })
-    # 🟢 v6吸收：冷号注解析
-    pattern4 = r'大乐透冷号注[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
+    # 🟢 v6吸收：冷号注解析（v6.6增加容错：匹配"冷号"/"冷号注"/"搏冷"/"冷门"）
+    pattern4 = r'大乐透(?:冷号注|冷号|搏冷|冷门)[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
     m4 = re.search(pattern4, ai_text)
     if m4:
         recs.append({
@@ -2441,16 +2444,22 @@ def _parse_dlt_recs(ai_text):
             'back': [int(m4.group(j)) for j in range(6, 8)],
             'strategy': Strategy.COLD
         })
-    # 兜底旧格式
+    # 🟢 v6.6: 兜底旧格式也补冷号注（第4注）
     if not recs:
         old_pattern = r'大乐透推荐\d[：:]\s*前区\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s+(\d{2})\s*\|\s*后区\s+(\d{2})\s+(\d{2})'
         matches = re.findall(old_pattern, ai_text)
-        for i, m in enumerate(matches[:3]):
+        strategies_fallback = [Strategy.CORE, Strategy.EXT1, Strategy.EXT2, Strategy.COLD_FALLBACK]
+        for i, m in enumerate(matches[:4]):
             recs.append({
                 'front': [int(m[j]) for j in range(5)],
                 'back': [int(m[j]) for j in range(5, 7)],
-                'strategy': strategies[i] if i < len(strategies) else f'策略{i+1}'
+                'strategy': strategies_fallback[i] if i < len(strategies_fallback) else f'策略{i+1}'
             })
+    # 🟢 v6.6: 如果AI只输出了3注没冷号，补一个冷号注标记
+    if len(recs) == 3:
+        recs[2]['strategy'] = Strategy.EXT2  # 确保第3注是扩展2
+        # 没有冷号注，回测时将缺少冷号注数据
+        print("[解析] 大乐透AI输出缺少冷号注，只有3注")
     return recs
 
 def _parse_qxc_recs(ai_text):
@@ -2478,8 +2487,8 @@ def _parse_qxc_recs(ai_text):
             'digits': [int(m3.group(j)) for j in range(1, 8)],
             'strategy': Strategy.EXT2
         })
-    # 🟢 v6吸收：冷号注解析
-    pattern4 = r'七星彩冷号注[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
+    # 🟢 v6.6: 冷号注解析容错
+    pattern4 = r'七星彩(?:冷号注|冷号|搏冷|冷门)[：:]\s*(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)\s+(\d)'
     m4 = re.search(pattern4, ai_text)
     if m4:
         recs.append({
@@ -2874,6 +2883,26 @@ def generate_lottery_recommendations():
             ssq_result = (ssq_history, ssq_recs if ssq_recs else fallback.analyze_ssq(ssq_history))
             dlt_result = (dlt_history, dlt_recs if dlt_recs else fallback.analyze_dlt(dlt_history))
             qxc_result = (qxc_history, qxc_recs if qxc_recs else fallback.analyze_qxc(qxc_history))
+
+            # 🟢 v6.6: 如果AI缺少冷号注，用WeightedAnalyzer自动补上
+            for game, recs, history in [
+                ('ssq', ssq_recs, ssq_history),
+                ('dlt', dlt_recs, dlt_history),
+                ('qxc', qxc_recs, qxc_history),
+            ]:
+                if recs and not any(r.get('strategy') in (Strategy.COLD, Strategy.COLD_MISS, Strategy.COLD_FALLBACK) for r in recs):
+                    print(f"[彩票] {game}缺少冷号注，自动补上")
+                    wa = WeightedAnalyzer(history)
+                    wa_method = 'analyze_' + game
+                    analysis = getattr(wa, wa_method)()
+                    gen_method = 'generate_recs_' + game
+                    cold_recs = getattr(wa, gen_method)(analysis, kelly_bias=0.0)
+                    # 找冷号注
+                    for cr in cold_recs:
+                        if cr.get('strategy') in (Strategy.COLD, Strategy.COLD_MISS, Strategy.COLD_FALLBACK):
+                            recs.append(cr)
+                            print(f"[彩票] {game}冷号注已补上: {cr}")
+                            break
 
             print(f"[彩票] ✅ 双色球: {len(ssq_recs) if ssq_recs else 0}组AI推荐")
             print(f"[彩票] ✅ 大乐透: {len(dlt_recs) if dlt_recs else 0}组AI推荐")
