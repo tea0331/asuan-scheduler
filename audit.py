@@ -177,7 +177,8 @@ def check_alliance_status():
     for c in convos[:10]:
         name = c.get('agentName', c.get('with', 'Unknown'))
         unread = c.get('unreadCount', 0)
-        last_msg = c.get('lastMessage', c.get('lastMessageContent', ''))[:50] if c.get('lastMessage') or c.get('lastMessageContent') else ''
+        raw_msg = c.get('lastMessage', c.get('lastMessageContent', ''))
+        last_msg = str(raw_msg)[:50] if raw_msg else ''
         mark = "🆕" if unread > 0 else "  "
         status_lines.append(f"{mark} {name}: {last_msg}")
 
