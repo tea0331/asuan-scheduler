@@ -1,0 +1,124 @@
+name: Daily Backup & Cleanup
+
+on:
+  schedule:
+    # 北京时间 06:00（UTC 22:00），日报发完后做备份清理
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup-cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Restore state from cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            state.db
+            lottery-backtest.json
+            lottery-predictions.json
+            weight-config.json
+          key: asuan-state-${{ github.run_id }}
+          restore-keys: |
+            asuan-state-
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ===== 清理过期数据 =====
+      - name: Cleanup expired data
+        run: |
+          echo "=== 计然自动清理 $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+          python3 -c "
+          import json, sqlite3
+          from datetime import datetime, timezone, timedelta
+          CST = timezone(timedelta(hours=8))
+          today = datetime.now(CST).strftime('%Y-%m-%d')
+          
+          # 1. 回测记录保留最近30条
+          try:
+              with open('lottery-backtest.json', 'r') as f:
+                  data = json.load(f)
+              before = len(data)
+              if before > 30:
+                  data = data[-30:]
+                  with open('lottery-backtest.json', 'w') as f:
+                      json.dump(data, f, ensure_ascii=False, indent=2)
+                  print(f'  回测记录: {before} → {len(data)}条')
+              else:
+                  print(f'  回测记录: {before}条，无需清理')
+          except Exception as e:
+              print(f'  回测记录清理跳过: {e}')
+          
+          # 2. 推荐记录保留最近7天
+          try:
+              with open('lottery-predictions.json', 'r') as f:
+                  data = json.load(f)
+              before = len(data)
+              cutoff = (datetime.now(CST) - timedelta(days=7)).strftime('%Y-%m-%d')
+              data = [p for p in data if p.get('date', '') >= cutoff]
+              with open('lottery-predictions.json', 'w') as f:
+                  json.dump(data, f, ensure_ascii=False, indent=2)
+              print(f'  推荐记录: {before} → {len(data)}条')
+          except Exception as e:
+              print(f'  推荐记录清理跳过: {e}')
+          
+          # 3. state.db保留最近7天
+          try:
+              conn = sqlite3.connect('state.db')
+              c = conn.cursor()
+              cutoff7 = (datetime.now(CST) - timedelta(days=7)).strftime('%Y-%m-%d')
+              c.execute('DELETE FROM executed_tasks WHERE date < ?', (cutoff7,))
+              d1 = c.rowcount
+              c.execute(\"DELETE FROM sent_log WHERE sent_at < ?\", (cutoff7 + '%',))
+              d2 = c.rowcount
+              # 清理心跳和启动日志（保留最近7天）
+              c.execute(\"DELETE FROM heartbeat WHERE last_tick < ?\", (cutoff7 + '%',))
+              c.execute(\"DELETE FROM startup_log WHERE started_at < ?\", (cutoff7 + '%',))
+              conn.commit()
+              conn.close()
+              print(f'  state.db: 删除{d1}条执行记录, {d2}条发送记录')
+          except Exception as e:
+              print(f'  state.db清理跳过: {e}')
+          
+          # 4. output目录保留最近14天
+          import glob, os
+          try:
+              cutoff14 = (datetime.now(CST) - timedelta(days=14)).strftime('%Y-%m-%d')
+              for f in glob.glob('output/*.md'):
+                  # 文件名格式: 2026-04-29.md
+                  basename = os.path.basename(f).replace('.md', '')
+                  if basename < cutoff14:
+                      os.remove(f)
+                      print(f'  删除过期日报: {f}')
+          except Exception as e:
+              print(f'  output清理跳过: {e}')
+          
+          print('清理完成!')
+          "
+
+      # ===== 备份 =====
+      - name: Commit and push backup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state.db lottery-backtest.json lottery-predictions.json weight-config.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: daily cleanup + backup $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase || true
+          git push || echo "Push failed"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== 备份清理完成 ==="
+          echo "时间: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
