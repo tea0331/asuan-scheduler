@@ -743,10 +743,14 @@ class WeightedAnalyzer:
         self.w_zone = weight_zone if weight_zone is not None else config.get('zone', 0.20)
         self.gamma = gamma if gamma is not None else config.get('gamma', 0.88)  # 🟢 v6.3
         # 🔴 v6.8: 邻号bonus和冷号注权重也从配置读取
+        # 🔴 分前后区：前区/红球miss主导，后区/蓝球/七星彩cycle主导
         self.neighbor_bonus = config.get('neighbor_bonus', 0.03)
-        self.cold_miss = config.get('cold_miss', 0.40)
-        self.cold_cycle = config.get('cold_cycle', 0.30)
-        self.cold_freq = config.get('cold_freq', 0.30)
+        self.cold_miss_front = config.get('cold_miss_front', 0.40)
+        self.cold_cycle_front = config.get('cold_cycle_front', 0.30)
+        self.cold_freq_front = config.get('cold_freq_front', 0.30)
+        self.cold_miss_back = config.get('cold_miss_back', 0.30)
+        self.cold_cycle_back = config.get('cold_cycle_back', 0.40)
+        self.cold_freq_back = config.get('cold_freq_back', 0.30)
 
     def _calc_weights(self, number_range, extract_fn, total_periods):
         """通用加权计算
@@ -1025,7 +1029,7 @@ class WeightedAnalyzer:
                 # 🟢 v6.8: 冷号评分 — 权重从配置读取
                 blue_avg_interval = analysis.get('blue_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(blue_avg_interval, 1), 2.0)  # >1=到期, <1=未到
-                scores[n] = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + freq_score * self.cold_freq
+                scores[n] = miss_score * self.cold_miss_back + cycle_signal * self.cold_cycle_back + freq_score * self.cold_freq_back
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[0][0] if ranked else 1
@@ -1279,8 +1283,8 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
-            cold_scores.append((n, score))
+            score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
+        cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
 
@@ -1338,7 +1342,7 @@ class WeightedAnalyzer:
                 # 🟢 v6.8: 冷号评分 — 权重从配置读取
                 back_avg_interval = analysis.get('back_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(back_avg_interval, 1), 2.0)
-                scores[n] = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + freq_score * self.cold_freq
+                scores[n] = miss_score * self.cold_miss_back + cycle_signal * self.cold_cycle_back + freq_score * self.cold_freq_back
 
         # 按评分排序
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -1443,8 +1447,8 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
-            cold_front_scores.append((n, score))
+            score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
+        cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
 
@@ -1513,12 +1517,13 @@ class WeightedAnalyzer:
             max_miss = max(m for _, m in miss_sorted) if miss_sorted else 1
             for n, m in miss_sorted[:5]:
                 f = freq_dict.get(n, 0)
-                miss_score = m / max_miss if max_miss > 0 else 0
+                # 🔴 v6.8: 统一miss_score尺度为[0,3.0]，与SSQ/DLT一致
+                miss_score = min(m / 10.0, 3.0)
                 # 周期回补信号
                 avg_interval = avg_interval_dict.get(n, 5)
                 cycle_signal = min(m / max(avg_interval, 1), 2.0)
                 f_score = min(f / 3.0, 1.5)
-                score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
+                score = miss_score * self.cold_miss_back + cycle_signal * self.cold_cycle_back + f_score * self.cold_freq_back
                 if score > best_score:
                     best_score = score
                     best = n
@@ -1676,10 +1681,14 @@ DEFAULT_WEIGHT_CONFIG = {
     'miss': 0.25,
     'trend': 0.25,
     'zone': 0.20,
-    # 🔴 冷号注权重（3维度归一化）
-    'cold_miss': 0.40,    # 遗漏权重
-    'cold_cycle': 0.30,   # 周期回补权重
-    'cold_freq': 0.30,    # 近期活跃度权重
+    # 🔴 冷号注权重 — 前区/红球（遗漏主导，回测26020-26045验证）
+    'cold_miss_front': 0.40,
+    'cold_cycle_front': 0.30,
+    'cold_freq_front': 0.30,
+    # 🔴 冷号注权重 — 后区/蓝球/七星彩（周期主导，回测验证cycle信号更重要）
+    'cold_miss_back': 0.30,
+    'cold_cycle_back': 0.40,
+    'cold_freq_back': 0.30,
     # 🔴 邻号加分
     'neighbor_bonus': 0.03,
     # 🔴 衰减因子
@@ -1687,7 +1696,6 @@ DEFAULT_WEIGHT_CONFIG = {
     # 🔴 版本与日志
     'version': 1,
     'algo_version': 'v6.8',
-    'adjustments': [],
     'evolution_log': [],   # 🔴 GEPA进化日志：重大逻辑变更
 }
 
@@ -1753,7 +1761,9 @@ def adjust_weights_from_backtest():
     # ===== 决策：计算各维度调整 =====
     changes = []
     old_config = {k: config.get(k, DEFAULT_WEIGHT_CONFIG.get(k)) for k in
-                  ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq',
+                  ['freq', 'miss', 'trend', 'zone',
+                   'cold_miss_front', 'cold_cycle_front', 'cold_freq_front',
+                   'cold_miss_back', 'cold_cycle_back', 'cold_freq_back',
                    'neighbor_bonus', 'gamma']}
 
     # 1️⃣ 核心注 vs 冷号注命中对比
@@ -1764,24 +1774,34 @@ def adjust_weights_from_backtest():
 
     if cold_avg > core_avg + 0.3:
         # 冷号注明显优于核心注 → 加大冷号遗漏权重
-        config['cold_miss'] = min(0.60, config.get('cold_miss', 0.40) + step)
-        config['cold_cycle'] = max(0.15, config.get('cold_cycle', 0.30) - step * 0.5)
-        changes.append(f"冷号注命中{cold_avg:.1f}>核心注{core_avg:.1f} → cold_miss +{step}")
+        config['cold_miss_front'] = min(0.60, config.get('cold_miss_front', 0.40) + step)
+        config['cold_miss_back'] = min(0.50, config.get('cold_miss_back', 0.30) + step * 0.5)
+        changes.append(f"冷号注命中{cold_avg:.1f}>核心注{core_avg:.1f} → cold_miss_front +{step}, cold_miss_back +{step*0.5}")
     elif core_avg > cold_avg + 0.5:
-        # 核心注明显优于冷号注 → 热号更准，略降冷号遗漏权重
-        config['cold_miss'] = max(0.20, config.get('cold_miss', 0.40) - step * 0.5)
-        config['cold_cycle'] = min(0.50, config.get('cold_cycle', 0.30) + step * 0.5)
+        # 核心注明显优于冷号注 → 加大周期权重（周期回补信号更有效）
+        config['cold_cycle_front'] = min(0.50, config.get('cold_cycle_front', 0.30) + step * 0.5)
+        config['cold_cycle_back'] = min(0.60, config.get('cold_cycle_back', 0.40) + step * 0.5)
         changes.append(f"核心注命中{core_avg:.1f}>冷号注{cold_avg:.1f} → cold_cycle +{step*0.5}")
 
-    # 2️⃣ 归一化冷号注权重
-    cm, cc, cf = config.get('cold_miss', 0.40), config.get('cold_cycle', 0.30), config.get('cold_freq', 0.30)
-    cold_total = cm + cc + cf
-    if cold_total > 0:
-        config['cold_miss'] = round(cm / cold_total, 4)
-        config['cold_cycle'] = round(cc / cold_total, 4)
-        config['cold_freq'] = max(0, round(1.0 - config['cold_miss'] - config['cold_cycle'], 4))
+    # 2️⃣ 归一化冷号注权重（🔴 下限保护0.05，防止趋零）
+    for suffix in ['front', 'back']:
+        cm = config.get(f'cold_miss_{suffix}', 0.40 if suffix == 'front' else 0.30)
+        cc = config.get(f'cold_cycle_{suffix}', 0.30 if suffix == 'front' else 0.40)
+        cf = config.get(f'cold_freq_{suffix}', 0.30)
+        cold_total = cm + cc + cf
+        if cold_total > 0:
+            config[f'cold_miss_{suffix}'] = round(cm / cold_total, 4)
+            config[f'cold_cycle_{suffix}'] = round(cc / cold_total, 4)
+            # 🔴 下限保护：cold_freq至少0.05
+            config[f'cold_freq_{suffix}'] = max(0.05, round(1.0 - config[f'cold_miss_{suffix}'] - config[f'cold_cycle_{suffix}'], 4))
+            # 归一化后重新校验
+            total2 = config[f'cold_miss_{suffix}'] + config[f'cold_cycle_{suffix}'] + config[f'cold_freq_{suffix}']
+            if total2 > 0:
+                config[f'cold_miss_{suffix}'] = round(config[f'cold_miss_{suffix}'] / total2, 4)
+                config[f'cold_cycle_{suffix}'] = round(config[f'cold_cycle_{suffix}'] / total2, 4)
+                config[f'cold_freq_{suffix}'] = max(0, round(1.0 - config[f'cold_miss_{suffix}'] - config[f'cold_cycle_{suffix}'], 4))
 
-    # 3️⃣ 核心注权重微调（保留原逻辑但用新阈值）
+    # 3️⃣ 核心注权重微调
     hot_wins = mapped_stats.get(Strategy.CORE, {}).get('games', 0)
     cold_wins = mapped_stats.get(Strategy.COLD_MISS, {}).get('games', 0)
     if hot_wins > cold_wins + 1 and core_avg >= cold_avg:
@@ -1793,14 +1813,37 @@ def adjust_weights_from_backtest():
         config['freq'] = max(0.10, config.get('freq', 0.30) - step)
         changes.append(f"冷号领先 → miss +{step}, freq -{step}")
 
-    # 归一化核心注权重
+    # 归一化核心注权重（🔴 下限保护zone≥0.05）
     f, m, t, z = config.get('freq', 0.30), config.get('miss', 0.25), config.get('trend', 0.25), config.get('zone', 0.20)
     total = f + m + t + z
     if total > 0:
         config['freq'] = round(f / total, 4)
         config['miss'] = round(m / total, 4)
         config['trend'] = round(t / total, 4)
-        config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
+        config['zone'] = max(0.05, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
+        # 归一化后重新校验
+        total2 = config['freq'] + config['miss'] + config['trend'] + config['zone']
+        if total2 > 0:
+            config['freq'] = round(config['freq'] / total2, 4)
+            config['miss'] = round(config['miss'] / total2, 4)
+            config['trend'] = round(config['trend'] / total2, 4)
+            config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
+
+    # 4️⃣ 邻号bonus调整 — 如果核心注命中率持续偏低，微增邻号bonus
+    if core_avg < 0.8 and config.get('neighbor_bonus', 0.03) < 0.06:
+        config['neighbor_bonus'] = min(0.06, config.get('neighbor_bonus', 0.03) + 0.005)
+        changes.append(f"核心注命中偏低({core_avg:.1f}) → neighbor_bonus +0.005 → {config['neighbor_bonus']:.3f}")
+    elif core_avg > 1.5 and config.get('neighbor_bonus', 0.03) > 0.01:
+        config['neighbor_bonus'] = max(0.01, config.get('neighbor_bonus', 0.03) - 0.005)
+        changes.append(f"核心注命中良好({core_avg:.1f}) → neighbor_bonus -0.005 → {config['neighbor_bonus']:.3f}")
+
+    # 5️⃣ gamma调整 — 如果近期数据预测力下降，减小gamma（更重视远期稳定模式）
+    if core_avg < 0.5 and config.get('gamma', 0.88) > 0.80:
+        config['gamma'] = max(0.80, config.get('gamma', 0.88) - 0.01)
+        changes.append(f"命中率极低 → gamma -0.01 → {config['gamma']:.2f}（更重视远期模式）")
+    elif core_avg > 2.0 and config.get('gamma', 0.88) < 0.95:
+        config['gamma'] = min(0.95, config.get('gamma', 0.88) + 0.01)
+        changes.append(f"命中率很高 → gamma +0.01 → {config['gamma']:.2f}（更重视近期趋势）")
 
     if not changes:
         return None
@@ -1810,7 +1853,11 @@ def adjust_weights_from_backtest():
 
     # 判断是否重大变更（任何参数变化≥0.04视为重大）
     is_major = False
-    for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq', 'neighbor_bonus', 'gamma']:
+    all_param_keys = ['freq', 'miss', 'trend', 'zone',
+                      'cold_miss_front', 'cold_cycle_front', 'cold_freq_front',
+                      'cold_miss_back', 'cold_cycle_back', 'cold_freq_back',
+                      'neighbor_bonus', 'gamma']
+    for key in all_param_keys:
         old_val = old_config.get(key, 0)
         new_val = config.get(key, 0)
         if abs(new_val - old_val) >= 0.04:
@@ -1818,9 +1865,12 @@ def adjust_weights_from_backtest():
             break
 
     if is_major:
-        parts = config.get('algo_version', 'v6.8').split('.')
-        if len(parts) == 2:
-            config['algo_version'] = f"{parts[0]}.{int(parts[1]) + 1}"
+        # 🔴 修复版本号解析：用正则匹配，防止3段式或非数字格式
+        import re
+        algo_version = config.get('algo_version', 'v6.8')
+        m = re.match(r'(v\d+)\.(\d+)', algo_version)
+        if m:
+            config['algo_version'] = f"{m.group(1)}.{int(m.group(2)) + 1}"
         else:
             config['algo_version'] = 'v6.9'
 
@@ -1829,10 +1879,8 @@ def adjust_weights_from_backtest():
         'date': today_str,
         'trigger': '回测驱动',
         'changes': changes,
-        'old_weights': {k: round(old_config.get(k, 0), 4) for k in
-                        ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq']},
-        'new_weights': {k: round(config.get(k, 0), 4) for k in
-                        ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq']},
+        'old_weights': {k: round(old_config.get(k, 0), 4) for k in all_param_keys},
+        'new_weights': {k: round(config.get(k, 0), 4) for k in all_param_keys},
         'is_major': is_major,
         'algo_version': config.get('algo_version', 'v6.8'),
     }
@@ -1851,7 +1899,8 @@ def adjust_weights_from_backtest():
     for c in changes:
         print(f"  {c}")
     print(f"  核心注权重: freq={config['freq']:.2f} miss={config['miss']:.2f} trend={config['trend']:.2f} zone={config['zone']:.2f}")
-    print(f"  冷号注权重: miss={config['cold_miss']:.2f} cycle={config['cold_cycle']:.2f} freq={config['cold_freq']:.2f}")
+    print(f"  冷号注(前区): miss={config['cold_miss_front']:.2f} cycle={config['cold_cycle_front']:.2f} freq={config['cold_freq_front']:.2f}")
+    print(f"  冷号注(后区): miss={config['cold_miss_back']:.2f} cycle={config['cold_cycle_back']:.2f} freq={config['cold_freq_back']:.2f}")
 
     return config
 
@@ -2875,7 +2924,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     algo_ver = config.get('algo_version', 'v6.8')
     evo_log = config.get('evolution_log', [])
     last_evo = evo_log[-1] if evo_log else None
-    lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号: 遗漏={config.get('cold_miss',0.4):.0%} 周期={config.get('cold_cycle',0.3):.0%} 活跃={config.get('cold_freq',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.2f} γ={config.get('gamma',0.88):.2f}")
+    lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号前区: 遗漏={config.get('cold_miss_front',0.4):.0%} 周期={config.get('cold_cycle_front',0.3):.0%} | 冷号后区: 周期={config.get('cold_cycle_back',0.4):.0%} 遗漏={config.get('cold_miss_back',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.3f} γ={config.get('gamma',0.88):.2f}")
     if last_evo:
         evo_date = last_evo.get('date', '')
         evo_changes = '; '.join(last_evo.get('changes', []))
@@ -2892,7 +2941,15 @@ def generate_lottery_recommendations():
     print("[彩票] 开始生成推荐（刘海蟾点金模式）...")
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-    # 🔴 v6.8: GEPA自动进化闭环 — 回测→诊断→调参→版本更新
+    # 🔴 v6.8: 执行顺序 = 回测→进化→推荐
+    # 第1步：先用当前权重回测昨日（测试的是"昨天推荐时的权重"）
+    print("[回测] 用当前版本代码回测昨日开奖...")
+    backtest_result = _run_backtest()
+    backtest_feedback = _format_backtest_for_ai(backtest_result)
+    if backtest_feedback:
+        print(f"[回测] 已生成回测反馈: {len(backtest_feedback)}字符")
+
+    # 第2步：基于回测结果GEPA进化（回测→诊断→调参→版本更新）
     evolved_config = adjust_weights_from_backtest()
     if evolved_config:
         version_tag = evolved_config.get('algo_version', 'v6.8')
@@ -2923,14 +2980,7 @@ def generate_lottery_recommendations():
     kelly_bias_map = {g: _kelly_to_bias(k) for g, k in kelly_map.items()}
     print(f"[Kelly] 双色球={kelly_map['ssq']:.2%}(bias={kelly_bias_map['ssq']:+.1f}) 大乐透={kelly_map['dlt']:.2%}(bias={kelly_bias_map['dlt']:+.1f}) 七星彩={kelly_map['qxc']:.2%}(bias={kelly_bias_map['qxc']:+.1f})")
 
-    # 0. 回测昨日推荐
-    print("[回测] 用当前版本代码回测昨日开奖...")
-    backtest_result = _run_backtest()
-    backtest_feedback = _format_backtest_for_ai(backtest_result)
-    if backtest_feedback:
-        print(f"[回测] 已生成回测反馈: {len(backtest_feedback)}字符")
-
-    # 1. 抓取所有数据（🟢 v6.2: 七星彩请求30期因为隔期开奖，15期只能拿到6-8期）
+    # 第3步：抓取数据并生成推荐（用进化后的权重）（🟢 v6.2: 七星彩请求30期因为隔期开奖，15期只能拿到6-8期）
     print("[彩票] 抓取双色球数据...")
     ssq_history = fetch_ssq_history(15)
     print("[彩票] 抓取大乐透数据...")
