@@ -2,10 +2,13 @@ name: Daily Digest
 
 on:
   schedule:
-    # 🔴 主时间：UTC 16:05（北京时间 00:05）
-    - cron: "5 16 * * *"
-    # 🔴 备用时间：UTC 16:35（北京时间 00:35），防止主时间被GitHub跳过
-    - cron: "35 16 * * *"
+    # 🔴 主窗口：北京时间 00:05-01:35，4个时间点覆盖（GitHub schedule经常延迟5-30分钟甚至跳过）
+    - cron: "5 16 * * *"     # 北京 00:05 主时间
+    - cron: "35 16 * * *"    # 北京 00:35 备用1
+    - cron: "5 17 * * *"     # 北京 01:05 备用2
+    - cron: "35 17 * * *"    # 北京 01:35 备用3
+    # 🔴 白天补检：北京时间 08:00，如果凌晨全部漏跑则补跑
+    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       force_rerun:
@@ -75,7 +78,31 @@ jobs:
           fi
           python scheduler.py --once $FORCE_FLAG
 
+      - name: Verify email was sent
+        run: |
+          # 🔴 验证步骤：检查今天是否真的生成了输出文件
+          python -c "
+          import os, sqlite3, glob
+          from datetime import datetime, timezone, timedelta
+          CST = timezone(timedelta(hours=8))
+          today = datetime.now(CST).strftime('%Y-%m-%d')
+          db = sqlite3.connect('state.db')
+          rows = db.execute('SELECT success FROM executed_tasks WHERE date=? AND task_name=?', (today, 'daily-digest')).fetchall()
+          if rows and rows[0][0]:
+              print(f'✅ {today} 日报已完成（内容+邮件）')
+          else:
+              print(f'⚠️ {today} 日报未完全完成')
+              # 检查是否有文件但没发邮件
+              files = glob.glob(f'output/{today}*.md')
+              if files:
+                  print(f'  文件已生成: {files[0]}，但邮件可能未发送')
+              else:
+                  print(f'  无输出文件')
+              exit(1)
+          "
+
       - name: Commit state to repo
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
