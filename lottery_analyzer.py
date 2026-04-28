@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v6.8 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+彩票号码分析模块 v7.0 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+
+v7.0核心改动（GEPA自动进化闭环）：
+1. 🔴 回测重构：不再读旧版推荐记录，用当前代码+开奖前数据实时生成推荐再对比开奖号
+2. 🔴 GEPA自动进化：回测→诊断→调参→版本更新，每日闭环
+3. 🔴 冷号注权重分前后区：前区miss主导(0.40/0.30)，后区cycle主导(0.30/0.40)
+4. 🔴 所有可调参数统一收归weight-config.json（冷号权重/邻号bonus/gamma）
+5. 🔴 执行顺序修正：回测→进化→推荐（避免正反馈环路）
+6. 🔴 归一化下限保护：zone≥0.05, cold_freq≥0.05
+7. 🔴 七星彩miss_score评分尺度统一
+8. 🔴 回测记录权重快照（weight_snapshot）
+9. 🔴 删除DLT gamma=0.85 clamp，由GEPA统一管理
 
 v6.8核心改动（回测重构）：
-1. 🔴 回测不再读旧版推荐记录，改为：抓开奖前历史数据→用当前代码重新生成推荐→对比开奖号
-2. 这样每次版本迭代后，回测验证的都是当前算法水平，而不是旧版本的
-
-v6.7核心改动（邻号+分区平衡）：
 1. 🟢 邻号加分：上期开出的号±1获得0.03权重bonus（球机机械偏差）
 2. 🟢 分区平衡约束：选号贪心搜索中加入分区覆盖评分，后验检查确保每注至少覆盖2个区
 
@@ -1693,7 +1700,7 @@ DEFAULT_WEIGHT_CONFIG = {
     'gamma': 0.88,
     # 🔴 版本与日志
     'version': 1,
-    'algo_version': 'v6.8',
+    'algo_version': 'v7.0',
     'evolution_log': [],   # 🔴 GEPA进化日志：重大逻辑变更
 }
 
@@ -1865,7 +1872,7 @@ def adjust_weights_from_backtest():
     if is_major:
         # 🔴 修复版本号解析：用正则匹配，防止3段式或非数字格式
         import re
-        algo_version = config.get('algo_version', 'v6.8')
+        algo_version = config.get('algo_version', 'v7.0')
         m = re.match(r'(v\d+)\.(\d+)', algo_version)
         if m:
             config['algo_version'] = f"{m.group(1)}.{int(m.group(2)) + 1}"
@@ -1880,7 +1887,7 @@ def adjust_weights_from_backtest():
         'old_weights': {k: round(old_config.get(k, 0), 4) for k in all_param_keys},
         'new_weights': {k: round(config.get(k, 0), 4) for k in all_param_keys},
         'is_major': is_major,
-        'algo_version': config.get('algo_version', 'v6.8'),
+        'algo_version': config.get('algo_version', 'v7.0'),
     }
     evo_log = config.get('evolution_log', [])
     evo_log.append(evo_entry)
@@ -1891,7 +1898,7 @@ def adjust_weights_from_backtest():
     _save_weight_config(config)
 
     # 打印进化结果
-    version_tag = config.get('algo_version', 'v6.8')
+    version_tag = config.get('algo_version', 'v7.0')
     major_tag = '🔴 重大更新' if is_major else '🟢 微调'
     print(f"[GEPA进化] {major_tag} → {version_tag}")
     for c in changes:
@@ -2123,7 +2130,7 @@ def _run_backtest():
     # 🔴 v6.8: 记录回测时使用的权重快照（方便追溯"这个结果基于什么参数"）
     config = _load_weight_config()
     backtest_result['weight_snapshot'] = {
-        'algo_version': config.get('algo_version', 'v6.8'),
+        'algo_version': config.get('algo_version', 'v7.0'),
         'freq': config.get('freq', 0.30), 'miss': config.get('miss', 0.25),
         'trend': config.get('trend', 0.25), 'zone': config.get('zone', 0.20),
         'cold_miss_front': config.get('cold_miss_front', 0.40),
@@ -2419,7 +2426,7 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 
 红球/前区从小到大排列，用两位数（如02 07 12）。"""
 
-    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v6升级：核心注+缩水扩展+冷号注策略。核心改进：历史回测显示追热和回补分别命中不同号，合并后单注命中更高！v6新增冷号注（遗漏值最高号码组合），与核心注（追热）互补覆盖。4注梯度：核心注(追热)→扩展1(微调)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注从加权池取综合权重TOP6；2.扩展1保留核心4号换2号，扩展2保留3号换3号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。休市期间仍可推荐，但标注仅供参考。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
+    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v7升级：GEPA自动进化+回测驱动权重调整+冷号注分前后区权重。核心注+缩水扩展+冷号注策略。v7改进：回测用当前代码实时生成（非读旧版推荐）、冷号注前区miss主导后区cycle主导、GEPA每日自动优化权重。4注梯度：核心注(追热)→扩展1(微调)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注从加权池取综合权重TOP6；2.扩展1保留核心4号换2号，扩展2保留3号换3号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。休市期间仍可推荐，但标注仅供参考。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
 
     # 🔴 优先办公室Qwen3.6-abliterated（彩票零隐私，免费不限量，不会拒绝预测）
     if OFFICE_ENABLED:
@@ -2933,7 +2940,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    algo_ver = config.get('algo_version', 'v6.8')
+    algo_ver = config.get('algo_version', 'v7.0')
     evo_log = config.get('evolution_log', [])
     last_evo = evo_log[-1] if evo_log else None
     lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号前区: 遗漏={config.get('cold_miss_front',0.4):.0%} 周期={config.get('cold_cycle_front',0.3):.0%} | 冷号后区: 周期={config.get('cold_cycle_back',0.4):.0%} 遗漏={config.get('cold_miss_back',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.3f} γ={config.get('gamma',0.88):.2f}")
@@ -2964,12 +2971,12 @@ def generate_lottery_recommendations():
     # 第2步：基于回测结果GEPA进化（回测→诊断→调参→版本更新）
     evolved_config = adjust_weights_from_backtest()
     if evolved_config:
-        version_tag = evolved_config.get('algo_version', 'v6.8')
+        version_tag = evolved_config.get('algo_version', 'v7.0')
         is_major = evolved_config.get('evolution_log', [{}])[-1].get('is_major', False) if evolved_config.get('evolution_log') else False
         print(f"[GEPA] 算法已进化至{version_tag}{'（重大更新！）' if is_major else ''}")
     else:
         evolved_config = _load_weight_config()
-        print(f"[GEPA] 算法无变化，当前{evolved_config.get('algo_version', 'v6.8')}")
+        print(f"[GEPA] 算法无变化，当前{evolved_config.get('algo_version', 'v7.0')}")
 
     fallback = SimpleAnalyzer()
     ssq_result = None
