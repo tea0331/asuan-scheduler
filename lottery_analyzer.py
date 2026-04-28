@@ -1284,7 +1284,7 @@ class WeightedAnalyzer:
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
             score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
-        cold_scores.append((n, score))
+            cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
 
@@ -1446,7 +1446,7 @@ class WeightedAnalyzer:
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
             score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
-        cold_front_scores.append((n, score))
+            cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
 
