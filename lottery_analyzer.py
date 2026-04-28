@@ -1387,10 +1387,8 @@ class WeightedAnalyzer:
     def generate_recs_dlt(self, analysis, kelly_bias=0.0):
         """根据加权分析生成大乐透推荐
         🟢 v6.1: Kelly驱动选号 — kelly_bias越高越偏热号，越低越偏冷号
-        🟢 v6.4: DLT用更小gamma(0.85)加速衰减，35选5比33选6更稀疏
+        🔴 v6.8: 删除gamma=0.85 clamp，由GEPA统一管理gamma
         """
-        # 🟢 v6.4: DLT前区衰减更快
-        self.gamma = min(self.gamma, 0.85)
         # 🟢 v6.1: Kelly驱动核心注
         front_weight_dict = dict(analysis['front_weights'])
         all_pool = []
@@ -2120,6 +2118,20 @@ def _run_backtest():
         'backtest_date': today_str,
         'backtest_method': 'current_version',  # 🔴 标记回测方法，区分旧版
         'draw_games': draw_games,
+    }
+
+    # 🔴 v6.8: 记录回测时使用的权重快照（方便追溯"这个结果基于什么参数"）
+    config = _load_weight_config()
+    backtest_result['weight_snapshot'] = {
+        'algo_version': config.get('algo_version', 'v6.8'),
+        'freq': config.get('freq', 0.30), 'miss': config.get('miss', 0.25),
+        'trend': config.get('trend', 0.25), 'zone': config.get('zone', 0.20),
+        'cold_miss_front': config.get('cold_miss_front', 0.40),
+        'cold_cycle_front': config.get('cold_cycle_front', 0.30),
+        'cold_miss_back': config.get('cold_miss_back', 0.30),
+        'cold_cycle_back': config.get('cold_cycle_back', 0.40),
+        'neighbor_bonus': config.get('neighbor_bonus', 0.03),
+        'gamma': config.get('gamma', 0.88),
     }
 
     # ===== 双色球回测 =====
