@@ -229,12 +229,30 @@ def db_exec(query, params=(), fetch=False):
 
 
 def is_task_executed(date_str, task_name):
-    """检查某日某任务是否已执行"""
+    """检查某日某任务是否已执行（含成功和部分成功）"""
     rows = db_exec(
         "SELECT success FROM executed_tasks WHERE date=? AND task_name=?",
         (date_str, task_name), fetch=True
     )
     return bool(rows and rows[0][0])
+
+
+def is_task_fully_completed(date_str, task_name):
+    """检查某日某任务是否完全完成（内容生成+邮件发送都成功）"""
+    rows = db_exec(
+        "SELECT success FROM executed_tasks WHERE date=? AND task_name=?",
+        (date_str, task_name), fetch=True
+    )
+    return bool(rows and rows[0][0])
+
+
+def was_task_attempted(date_str, task_name):
+    """检查某日某任务是否尝试过（不管成功失败）"""
+    rows = db_exec(
+        "SELECT 1 FROM executed_tasks WHERE date=? AND task_name=?",
+        (date_str, task_name), fetch=True
+    )
+    return bool(rows)
 
 
 def mark_task_executed(date_str, task_name, success=True):
@@ -498,10 +516,29 @@ def run_task_and_email(task_name, task, today_str):
     """生成内容 + 写文件 + 发邮件"""
     task['name'] = task_name
 
-    # 🟢 检查DB中是否已执行（防止沙箱恢复后重复生成，浪费token）
-    if is_task_executed(today_str, task_name):
-        logging.info(f"[{task_name}] DB记录显示今日已执行，跳过")
+    # 🟢 检查DB中是否已完全完成（内容+邮件都成功），防止重复生成浪费token
+    if is_task_fully_completed(today_str, task_name):
+        logging.info(f"[{task_name}] 今日已完全完成（内容+邮件），跳过")
         return True
+
+    # 🔴 如果尝试过但邮件没发成，只补发邮件，不重新生成内容
+    if was_task_attempted(today_str, task_name):
+        output_file = find_today_file(task.get('output_dir', ''), today_str)
+        if output_file and not is_already_sent(task_name, output_file):
+            logging.info(f"[{task_name}] 今日已生成内容但邮件未发送，补发邮件")
+            send_task_email(task, today_str, output_file)
+            # 重新检查是否发送成功，更新DB
+            if is_already_sent(task_name, output_file):
+                mark_task_executed(today_str, task_name, True)
+                return True
+            else:
+                logging.warning(f"[{task_name}] 补发邮件仍然失败")
+                return False
+        elif output_file and is_already_sent(task_name, output_file):
+            mark_task_executed(today_str, task_name, True)
+            return True
+        else:
+            logging.info(f"[{task_name}] 之前尝试过但无输出文件，重新执行")
 
     # 第一步：生成内容
     content = generate_with_deepseek(task_name, task, today_str)
@@ -570,7 +607,15 @@ def run_task_and_email(task_name, task, today_str):
             send_email(subject, body)
 
     # 🟢 记录执行状态到DB
-    success = output_file is not None
+    # 🔴 v6.8修复：只有邮件真的发成功才标记success=True，否则标记False让下次重试
+    email_sent = False
+    if should_send and output_file:
+        email_sent = is_already_sent(task_name, output_file)
+    elif not should_send:
+        email_sent = True  # 不需要发邮件的环境，文件生成就算成功
+    success = output_file is not None and email_sent
+    if output_file and not email_sent:
+        logging.warning(f"[{task_name}] ⚠️ 内容已生成但邮件未发送，标记success=False，下次会补发")
     mark_task_executed(today_str, task_name, success)
     return success
 
@@ -752,9 +797,23 @@ if __name__ == '__main__':
 
         for task_name, task in TASKS.items():
             task['name'] = task_name
+
             if not is_task_executed(today, task_name):
+                # 🔴 情况A：从未执行过，正常跑全流程
                 run_task_and_email(task_name, task, today)
             else:
-                logging.info(f"[{task_name}] 今日已执行，跳过")
+                # 🔴 情况B：标记已执行，但要验证邮件是否真的发了
+                output_file = find_today_file(task.get('output_dir', ''), today)
+                if output_file and is_already_sent(task_name, output_file):
+                    logging.info(f"[{task_name}] 今日已执行且邮件已发送，跳过")
+                elif output_file:
+                    # 生成了内容但邮件没发出去——补发邮件
+                    logging.info(f"[{task_name}] ⚠️ 今日已执行但邮件未发送，补发邮件")
+                    send_task_email(task, today, output_file)
+                else:
+                    # 标记执行了但连输出文件都没有——大概率API失败，清除记录重跑
+                    logging.info(f"[{task_name}] ⚠️ 标记已执行但无输出文件，清除记录重新执行")
+                    db_exec("DELETE FROM executed_tasks WHERE date=? AND task_name=?", (today, task_name))
+                    run_task_and_email(task_name, task, today)
     else:
         main()
