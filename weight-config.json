@@ -4,7 +4,6 @@
   "trend": 0.25,
   "zone": 0.2,
   "version": 6,
-  "algo_version": "v7.1",
   "cold_cycle_front": 0.3035,
   "cold_cycle_back": 0.403,
   "cold_miss_front": 0.398,
