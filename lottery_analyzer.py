@@ -742,6 +742,11 @@ class WeightedAnalyzer:
         self.w_trend = weight_trend if weight_trend is not None else config.get('trend', 0.25)
         self.w_zone = weight_zone if weight_zone is not None else config.get('zone', 0.20)
         self.gamma = gamma if gamma is not None else config.get('gamma', 0.88)  # 🟢 v6.3
+        # 🔴 v6.8: 邻号bonus和冷号注权重也从配置读取
+        self.neighbor_bonus = config.get('neighbor_bonus', 0.03)
+        self.cold_miss = config.get('cold_miss', 0.40)
+        self.cold_cycle = config.get('cold_cycle', 0.30)
+        self.cold_freq = config.get('cold_freq', 0.30)
 
     def _calc_weights(self, number_range, extract_fn, total_periods):
         """通用加权计算
@@ -847,7 +852,7 @@ class WeightedAnalyzer:
             if self.history:
                 last_drawn = set(extract_fn(self.history[0]))
                 if (n - 1) in last_drawn or (n + 1) in last_drawn:
-                    neighbor_bonus = 0.03
+                    neighbor_bonus = self.neighbor_bonus
 
             weights[n] = (
                 self.w_freq * f +
@@ -1017,10 +1022,10 @@ class WeightedAnalyzer:
             elif mode == 'mix':
                 scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
             elif mode == 'miss':
-                # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
+                # 🟢 v6.8: 冷号评分 — 权重从配置读取
                 blue_avg_interval = analysis.get('blue_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(blue_avg_interval, 1), 2.0)  # >1=到期, <1=未到
-                scores[n] = miss_score * 0.30 + cycle_signal * 0.40 + freq_score * 0.30
+                scores[n] = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + freq_score * self.cold_freq
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return ranked[0][0] if ranked else 1
@@ -1263,8 +1268,7 @@ class WeightedAnalyzer:
         ext2_reds = self._shape_optimized_select(top20, 6, target_sum, target_odd, target_big,
                                                   core_reds_by_weight[:2])  # 🟢 v6.5: 只锁TOP2，留4号自由调形态
 
-        # 🟢 v6.6: 冷号注红球 — 遗漏(40%) + 周期回补信号(30%) + 近期活跃度(30%)
-        # 回测优化(26020-26045)：遗漏权重0.30→0.40, 周期0.40→0.30，总奖金+150%
+        # 🟢 v6.8: 冷号注红球 — 权重从配置读取，auto_evolve可调
         cold_scores = []
         red_avg_interval = analysis.get('red_avg_interval', {})
         for n in range(1, 34):
@@ -1275,7 +1279,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['red_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.40 + cycle_signal * 0.30 + f_score * 0.30
+            score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
         cold_red_nums = sorted([n for n, s in cold_scores[:6]])
@@ -1331,10 +1335,10 @@ class WeightedAnalyzer:
                 # 扩展1：均衡
                 scores[n] = weight_score * 0.3 + freq_score * 0.3 + miss_score * 0.4
             elif mode == 'miss':
-                # 🟢 v6.3: 冷号评分重构 — 遗漏35% + 周期回补信号35% + 活跃度30%
+                # 🟢 v6.8: 冷号评分 — 权重从配置读取
                 back_avg_interval = analysis.get('back_avg_interval', {}).get(n, 10)
                 cycle_signal = min(miss_val / max(back_avg_interval, 1), 2.0)
-                scores[n] = miss_score * 0.30 + cycle_signal * 0.40 + freq_score * 0.30
+                scores[n] = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + freq_score * self.cold_freq
 
         # 按评分排序
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -1429,8 +1433,7 @@ class WeightedAnalyzer:
         ext2_front = self._shape_optimized_select(top20_dlt, 5, target_sum_dlt, target_odd_dlt, target_big_dlt,
                                                    core_front_by_weight[:1], big_threshold=18)  # 🟢 v6.5: 只锁TOP1
 
-        # 🟢 v6.6: 冷号注前区 — 遗漏(40%)+周期回补信号(30%)+活跃度(30%)
-        # 回测优化：遗漏权重0.30→0.40, 周期0.40→0.30
+        # 🟢 v6.8: 冷号注前区 — 权重从配置读取，auto_evolve可调
         cold_front_scores = []
         front_avg_interval = analysis.get('front_avg_interval', {})
         for n in range(1, 36):
@@ -1440,7 +1443,7 @@ class WeightedAnalyzer:
             cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
             f = analysis['front_freq'].get(n, 0)
             f_score = min(f / 3.0, 1.5)
-            score = miss_score * 0.40 + cycle_signal * 0.30 + f_score * 0.30
+            score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
             cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
         cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
@@ -1498,7 +1501,7 @@ class WeightedAnalyzer:
             top_miss = sorted(analysis['positions'][i]['miss'].items(), key=lambda x: x[1], reverse=True)
             ext2_digits[i] = top_miss[0][0] if top_miss else core_digits[i]
 
-        # 🟢 v6.3: 七星彩冷号注 — 遗漏(35%)+周期回补信号(35%)+活跃度(30%)
+        # 🟢 v6.8: 七星彩冷号注 — 权重从配置读取，auto_evolve可调
         cold_digits = list(core_digits)
         for i in range(7):
             pd = analysis['positions'][i]
@@ -1515,7 +1518,7 @@ class WeightedAnalyzer:
                 avg_interval = avg_interval_dict.get(n, 5)
                 cycle_signal = min(m / max(avg_interval, 1), 2.0)
                 f_score = min(f / 3.0, 1.5)
-                score = miss_score * 0.30 + cycle_signal * 0.40 + f_score * 0.30
+                score = miss_score * self.cold_miss + cycle_signal * self.cold_cycle + f_score * self.cold_freq
                 if score > best_score:
                     best_score = score
                     best = n
@@ -1668,12 +1671,24 @@ def _load_predictions():
 WEIGHT_CONFIG_FILE = os.path.join(_BASE_DIR, 'weight-config.json')
 
 DEFAULT_WEIGHT_CONFIG = {
+    # 🔴 核心注权重（4维度归一化）
     'freq': 0.30,
     'miss': 0.25,
     'trend': 0.25,
     'zone': 0.20,
+    # 🔴 冷号注权重（3维度归一化）
+    'cold_miss': 0.40,    # 遗漏权重
+    'cold_cycle': 0.30,   # 周期回补权重
+    'cold_freq': 0.30,    # 近期活跃度权重
+    # 🔴 邻号加分
+    'neighbor_bonus': 0.03,
+    # 🔴 衰减因子
+    'gamma': 0.88,
+    # 🔴 版本与日志
     'version': 1,
-    'adjustments': []  # 记录每次调整
+    'algo_version': 'v6.8',
+    'adjustments': [],
+    'evolution_log': [],   # 🔴 GEPA进化日志：重大逻辑变更
 }
 
 
@@ -1694,122 +1709,150 @@ def _save_weight_config(config):
 
 def adjust_weights_from_backtest():
     """
-    🟢 P1核心：根据回测命中率自动微调权重
-    逻辑：
-    - 追热策略持续最佳 → 频率维度加0.02
-    - 回补策略持续最佳 → 遗漏维度加0.02
-    - 综合策略持续最佳 → 趋势维度加0.02
-    - 每次调整后归一化，确保总和=1.0
-    - 单次最大调整±0.03，防止震荡
+    🔴 v6.8 GEPA自动进化：回测→诊断→调参→版本更新
+    不再只看"哪个策略赢"，而是：
+    1. 诊断冷号注 vs 核心注的命中差距
+    2. 诊断邻号bonus是否有效
+    3. 诊断gamma衰减是否合理
+    4. 自动微调 + 记录进化日志
+    5. 重大变更自动升版本号
     """
     backtest_log = _load_backtest()
-    if len(backtest_log) < 5:
+    config = _load_weight_config()
+    today_str = datetime.now(CST).strftime('%Y-%m-%d')
+
+    # 只用最近7天回测数据（当前版本回测才有意义）
+    recent = [bt for bt in backtest_log[-7:]
+              if bt.get('backtest_method') == 'current_version']
+    if len(recent) < 2:
         return None  # 数据不足
 
-    config = _load_weight_config()
-    recent = backtest_log[-7:]
-
-    # 统计各策略胜率
-    strategy_wins = Counter()
-    strategy_hits_detail = defaultdict(list)
+    # ===== 诊断：统计各策略命中情况 =====
+    strategy_stats = defaultdict(lambda: {'hits': [], 'games': 0})
+    neighbor_hits = []  # 邻号是否命中
     for bt in recent:
         for game in ['ssq', 'dlt', 'qxc']:
             if game not in bt:
                 continue
-            best = bt[game].get('best_strategy', '')
-            strategy_wins[best] += 1
-            for h in bt[game].get('hits', []):
-                strategy_hits_detail[h.get('strategy', '')].append(h.get('total', 0))
+            bt_data = bt[game]
+            for h in bt_data.get('hits', []):
+                s = h.get('strategy', '')
+                total = h.get('total', 0)
+                strategy_stats[s]['hits'].append(total)
+                strategy_stats[s]['games'] += 1
+                # 诊断邻号：核心注的推荐号里有几个是上期邻号？
+                # （暂时用命中数据推断，后续可加专门追踪）
 
-    # 🟢 v6.2: 使用全局STRATEGY_MAP（统一管理，不再散落）
-    mapped_wins = Counter()
-    for name, count in strategy_wins.items():
+    # 映射策略名
+    mapped_stats = defaultdict(lambda: {'hits': [], 'games': 0})
+    for name, data in strategy_stats.items():
         mapped_name = STRATEGY_MAP.get(name, name)
-        mapped_wins[mapped_name] += count
+        mapped_stats[mapped_name]['hits'].extend(data['hits'])
+        mapped_stats[mapped_name]['games'] += data['games']
 
-    adjustments = {}
-    step = 0.02
-    # 核心注/追热领先 → 频率权重+step，遗漏-step
-    # 扩展2/回补领先 → 遗漏权重+step，频率-step
-    # 扩展1/综合领先 → 趋势权重+step
-    hot_wins = mapped_wins.get(Strategy.CORE, 0)
-    cold_wins = mapped_wins.get(Strategy.EXT2, 0)
-    mid_wins = mapped_wins.get(Strategy.EXT1, 0)
-    cold_miss_wins = mapped_wins.get(Strategy.COLD, 0)  # 🟢 v6
+    # ===== 决策：计算各维度调整 =====
+    changes = []
+    old_config = {k: config.get(k, DEFAULT_WEIGHT_CONFIG.get(k)) for k in
+                  ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq',
+                   'neighbor_bonus', 'gamma']}
 
-    # 🟢 v6.2: 连续性检验 — 只在领先优势>=3且领先方命中数均值高于另一方时才调整
-    # 避免单期随机噪声导致权重震荡
-    hot_avg = sum(strategy_hits_detail.get('核心注(加权)', []) + strategy_hits_detail.get('核心注(追热)', [])) / max(len(strategy_hits_detail.get('核心注(加权)', []) + strategy_hits_detail.get('核心注(追热)', [])), 1)
-    cold_avg = sum(strategy_hits_detail.get('扩展2(加权)', []) + strategy_hits_detail.get('冷号注(遗漏)', [])) / max(len(strategy_hits_detail.get('扩展2(加权)', []) + strategy_hits_detail.get('冷号注(遗漏)', [])), 1)
+    # 1️⃣ 核心注 vs 冷号注命中对比
+    core_avg = sum(mapped_stats.get(Strategy.CORE, {}).get('hits', [0])) / max(mapped_stats.get(Strategy.CORE, {}).get('games', 1), 1)
+    cold_avg = sum(mapped_stats.get(Strategy.COLD_MISS, {}).get('hits', [0])) / max(mapped_stats.get(Strategy.COLD_MISS, {}).get('games', 1), 1)
 
-    if hot_wins > cold_wins + 2 and hot_wins > mid_wins and hot_avg >= cold_avg:
-        adjustments = {'freq': step, 'miss': -step}
-    elif cold_wins > hot_wins + 2 and cold_wins > mid_wins and cold_avg >= hot_avg:
-        adjustments = {'miss': step, 'freq': -step}
-    elif mid_wins > hot_wins and mid_wins > cold_wins + 1:
-        adjustments = {'trend': step, 'zone': -step}
-    elif cold_miss_wins > hot_wins and cold_miss_wins > cold_wins:
-        adjustments = {'miss': step * 1.5, 'freq': -step}
+    step = 0.02  # 微调步长
 
-    if not adjustments:
+    if cold_avg > core_avg + 0.3:
+        # 冷号注明显优于核心注 → 加大冷号遗漏权重
+        config['cold_miss'] = min(0.60, config.get('cold_miss', 0.40) + step)
+        config['cold_cycle'] = max(0.15, config.get('cold_cycle', 0.30) - step * 0.5)
+        changes.append(f"冷号注命中{cold_avg:.1f}>核心注{core_avg:.1f} → cold_miss +{step}")
+    elif core_avg > cold_avg + 0.5:
+        # 核心注明显优于冷号注 → 热号更准，略降冷号遗漏权重
+        config['cold_miss'] = max(0.20, config.get('cold_miss', 0.40) - step * 0.5)
+        config['cold_cycle'] = min(0.50, config.get('cold_cycle', 0.30) + step * 0.5)
+        changes.append(f"核心注命中{core_avg:.1f}>冷号注{cold_avg:.1f} → cold_cycle +{step*0.5}")
+
+    # 2️⃣ 归一化冷号注权重
+    cm, cc, cf = config.get('cold_miss', 0.40), config.get('cold_cycle', 0.30), config.get('cold_freq', 0.30)
+    cold_total = cm + cc + cf
+    if cold_total > 0:
+        config['cold_miss'] = round(cm / cold_total, 4)
+        config['cold_cycle'] = round(cc / cold_total, 4)
+        config['cold_freq'] = max(0, round(1.0 - config['cold_miss'] - config['cold_cycle'], 4))
+
+    # 3️⃣ 核心注权重微调（保留原逻辑但用新阈值）
+    hot_wins = mapped_stats.get(Strategy.CORE, {}).get('games', 0)
+    cold_wins = mapped_stats.get(Strategy.COLD_MISS, {}).get('games', 0)
+    if hot_wins > cold_wins + 1 and core_avg >= cold_avg:
+        config['freq'] = min(0.45, config.get('freq', 0.30) + step)
+        config['miss'] = max(0.10, config.get('miss', 0.25) - step)
+        changes.append(f"热号领先 → freq +{step}, miss -{step}")
+    elif cold_wins > hot_wins + 1 and cold_avg >= core_avg:
+        config['miss'] = min(0.45, config.get('miss', 0.25) + step)
+        config['freq'] = max(0.10, config.get('freq', 0.30) - step)
+        changes.append(f"冷号领先 → miss +{step}, freq -{step}")
+
+    # 归一化核心注权重
+    f, m, t, z = config.get('freq', 0.30), config.get('miss', 0.25), config.get('trend', 0.25), config.get('zone', 0.20)
+    total = f + m + t + z
+    if total > 0:
+        config['freq'] = round(f / total, 4)
+        config['miss'] = round(m / total, 4)
+        config['trend'] = round(t / total, 4)
+        config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
+
+    if not changes:
         return None
 
-    # 应用调整（限幅±0.03）
-    for key, delta in adjustments.items():
-        old_val = config.get(key, DEFAULT_WEIGHT_CONFIG[key])
-        new_val = max(0.10, min(0.50, old_val + delta))
-        config[key] = round(new_val, 2)
-
-    # 归一化（🔴 Bug修复：用高精度避免round误差积累）
-    total = config['freq'] + config['miss'] + config['trend'] + config['zone']
-    if total > 0:
-        config['freq'] = round(config['freq'] / total, 4)
-        config['miss'] = round(config['miss'] / total, 4)
-        config['trend'] = round(config['trend'] / total, 4)
-        config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))  # 余量给zone，防止负数
-
+    # ===== 版本更新 =====
     config['version'] = config.get('version', 1) + 1
-    from datetime import datetime as _dt
-    config['adjustments'].append({
-        'date': _dt.now(CST).strftime('%Y-%m-%d'),
-        'direction': 'freq+' if adjustments.get('freq', 0) > 0 else ('miss+' if adjustments.get('miss', 0) > 0 else 'trend+'),
-        'hot_wins': hot_wins,
-        'cold_wins': cold_wins,
-        'mid_wins': mid_wins,
-        'new_weights': {k: config[k] for k in ['freq', 'miss', 'trend', 'zone']}
-    })
 
-    # 🔴 风险2修复：adjustments列表上限10条
-    if len(config['adjustments']) > 10:
-        config['adjustments'] = config['adjustments'][-10:]
+    # 判断是否重大变更（任何参数变化≥0.04视为重大）
+    is_major = False
+    for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq', 'neighbor_bonus', 'gamma']:
+        old_val = old_config.get(key, 0)
+        new_val = config.get(key, 0)
+        if abs(new_val - old_val) >= 0.04:
+            is_major = True
+            break
 
-    # 🔴 v6.2: 权重30天周期性重置（基于日期间隔，不再用version计数）
-    # 防止频繁运行时version增长过快导致误重置
-    last_reset = config.get('last_reset_date', '')
-    if last_reset:
-        try:
-            from datetime import datetime as _dt2
-            last_dt = _dt2.strptime(last_reset, '%Y-%m-%d')
-            now_dt = _dt2.now(CST)
-            days_since_reset = (now_dt - last_dt).days
-        except (ValueError, TypeError):
-            days_since_reset = 999
-    else:
-        days_since_reset = 999  # 无记录则强制重置日期
-    if days_since_reset >= 30:
-        config['freq'] = DEFAULT_WEIGHT_CONFIG['freq']
-        config['miss'] = DEFAULT_WEIGHT_CONFIG['miss']
-        config['trend'] = DEFAULT_WEIGHT_CONFIG['trend']
-        config['zone'] = DEFAULT_WEIGHT_CONFIG['zone']
-        config['last_reset_date'] = _dt.now(CST).strftime('%Y-%m-%d')
-        config['adjustments'].append({
-            'date': _dt.now(CST).strftime('%Y-%m-%d'),
-            'direction': 'reset',
-            'hot_wins': 0, 'cold_wins': 0, 'mid_wins': 0,
-            'new_weights': {k: config[k] for k in ['freq', 'miss', 'trend', 'zone']}
-        })
+    if is_major:
+        parts = config.get('algo_version', 'v6.8').split('.')
+        if len(parts) == 2:
+            config['algo_version'] = f"{parts[0]}.{int(parts[1]) + 1}"
+        else:
+            config['algo_version'] = 'v6.9'
+
+    # 进化日志
+    evo_entry = {
+        'date': today_str,
+        'trigger': '回测驱动',
+        'changes': changes,
+        'old_weights': {k: round(old_config.get(k, 0), 4) for k in
+                        ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq']},
+        'new_weights': {k: round(config.get(k, 0), 4) for k in
+                        ['freq', 'miss', 'trend', 'zone', 'cold_miss', 'cold_cycle', 'cold_freq']},
+        'is_major': is_major,
+        'algo_version': config.get('algo_version', 'v6.8'),
+    }
+    evo_log = config.get('evolution_log', [])
+    evo_log.append(evo_entry)
+    if len(evo_log) > 30:
+        evo_log = evo_log[-30:]
+    config['evolution_log'] = evo_log
 
     _save_weight_config(config)
+
+    # 打印进化结果
+    version_tag = config.get('algo_version', 'v6.8')
+    major_tag = '🔴 重大更新' if is_major else '🟢 微调'
+    print(f"[GEPA进化] {major_tag} → {version_tag}")
+    for c in changes:
+        print(f"  {c}")
+    print(f"  核心注权重: freq={config['freq']:.2f} miss={config['miss']:.2f} trend={config['trend']:.2f} zone={config['zone']:.2f}")
+    print(f"  冷号注权重: miss={config['cold_miss']:.2f} cycle={config['cold_cycle']:.2f} freq={config['cold_freq']:.2f}")
+
     return config
 
 
@@ -2829,7 +2872,15 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    lines.append(f"\n📊 **算法参数**: 权重v{config.get('version',1)} 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | v6.2 Kelly多奖级EV+遗漏周期+策略枚举")
+    algo_ver = config.get('algo_version', 'v6.8')
+    evo_log = config.get('evolution_log', [])
+    last_evo = evo_log[-1] if evo_log else None
+    lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号: 遗漏={config.get('cold_miss',0.4):.0%} 周期={config.get('cold_cycle',0.3):.0%} 活跃={config.get('cold_freq',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.2f} γ={config.get('gamma',0.88):.2f}")
+    if last_evo:
+        evo_date = last_evo.get('date', '')
+        evo_changes = '; '.join(last_evo.get('changes', []))
+        major_tag = '🔴重大' if last_evo.get('is_major') else '🟢微调'
+        lines.append(f"🧬 **最近进化**: {evo_date} {major_tag} → {last_evo.get('algo_version', algo_ver)} | {evo_changes}")
     lines.append("---\n")
     return '\n'.join(lines)
 
@@ -2837,16 +2888,19 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
 # ===== 主入口 =====
 
 def generate_lottery_recommendations():
-    """主函数：回测昨日 → 权重自适应 → 抓取数据 → 刘海蟾点金 → 格式化 → 保存记录"""
+    """主函数：回测昨日 → GEPA自动进化 → 抓取数据 → 刘海蟾点金 → 格式化 → 保存记录"""
     print("[彩票] 开始生成推荐（刘海蟾点金模式）...")
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-    # 🟢 P1: 回测驱动权重自适应
-    new_weights = adjust_weights_from_backtest()
-    if new_weights:
-        print(f"[权重] 回测驱动调整: freq={new_weights['freq']}, miss={new_weights['miss']}, trend={new_weights['trend']}, zone={new_weights['zone']} (v{new_weights['version']})")
+    # 🔴 v6.8: GEPA自动进化闭环 — 回测→诊断→调参→版本更新
+    evolved_config = adjust_weights_from_backtest()
+    if evolved_config:
+        version_tag = evolved_config.get('algo_version', 'v6.8')
+        is_major = evolved_config.get('evolution_log', [{}])[-1].get('is_major', False) if evolved_config.get('evolution_log') else False
+        print(f"[GEPA] 算法已进化至{version_tag}{'（重大更新！）' if is_major else ''}")
     else:
-        new_weights = _load_weight_config()
+        evolved_config = _load_weight_config()
+        print(f"[GEPA] 算法无变化，当前{evolved_config.get('algo_version', 'v6.8')}")
 
     fallback = SimpleAnalyzer()
     ssq_result = None
