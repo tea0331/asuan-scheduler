@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v7.0 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+彩票号码分析模块 v7.1 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性）
+
+v7.1核心改动（GEPA修复+相关性+统计检验）：
+1. 🔴 修复GEPA从未生效bug：回测记录只有1条时GEPA需要2条，改为至少1条+6样本
+2. 🔴 GEPA加统计显著性检验：Welch t-test，差异不显著时保守微调
+3. 🔴 GEPA重大变更加样本门槛：20样本以下只允许微调±0.03，不允许大改
+4. 🔴 清理旧版adjustments/last_reset_date遗留字段
+5. 🔴 号码相关性分析：条件概率P(n|上期m)显著高于先验P(n)时加分
+6. 🔴 GEPA进化日志加入sample_size和t_test记录
 
 v7.0核心改动（GEPA自动进化闭环）：
 1. 🔴 回测重构：不再读旧版推荐记录，用当前代码+开奖前数据实时生成推荐再对比开奖号
@@ -865,13 +873,43 @@ class WeightedAnalyzer:
                 if (n - 1) in last_drawn or (n + 1) in last_drawn:
                     neighbor_bonus = self.neighbor_bonus
 
+            # 🟢 v7.1: 号码相关性bonus — 某号出现时，历史中与其同区/连号的号也出现概率更高
+            # 计算条件概率：P(n出现 | 上期某号出现) vs P(n出现)
+            correlation_bonus = 0
+            if self.history:
+                last_drawn_set = set(extract_fn(self.history[0]))
+                # 统计历史中条件概率
+                n_appear = raw_freq.get(n, 0)  # n出现次数
+                n_total = len(self.history)
+                if n_total >= 5 and n_appear > 0:
+                    p_n = n_appear / n_total  # P(n)
+                    # 计算 P(n | 上期出现m) 对上期每个m
+                    for m in last_drawn_set:
+                        if m == n:
+                            continue
+                        # 统计m出现后下一期n也出现的次数
+                        co_occur = 0
+                        m_occur = 0
+                        for i in range(len(self.history) - 1):
+                            if m in extract_fn(self.history[i + 1]):
+                                m_occur += 1
+                                if n in extract_fn(self.history[i]):
+                                    co_occur += 1
+                        if m_occur >= 3:  # 至少3次共现才有统计意义
+                            p_n_given_m = co_occur / m_occur
+                            # 条件概率显著高于先验概率时加分
+                            lift = p_n_given_m / max(p_n, 0.01)
+                            if lift > 1.2:  # 提升20%以上才算有信号
+                                correlation_bonus += min((lift - 1.0) * 0.02, 0.06)
+
             weights[n] = (
                 self.w_freq * f +
                 self.w_miss * m +
                 self.w_trend * t_weight +
                 self.w_zone * z_factor +  # 🟢 zone终于生效
                 overdue_bonus +  # 🟢 v6.2: 遗漏周期加分
-                neighbor_bonus  # 🟢 v6.7: 邻号加分
+                neighbor_bonus +  # 🟢 v6.7: 邻号加分
+                correlation_bonus  # 🟢 v7.1: 号码相关性加分
             )
 
         return weights, raw_freq, miss, avg_miss_interval  # 🟢 v6.3: raw_freq替代decay_freq返回
@@ -1700,7 +1738,7 @@ DEFAULT_WEIGHT_CONFIG = {
     'gamma': 0.88,
     # 🔴 版本与日志
     'version': 1,
-    'algo_version': 'v7.0',
+    'algo_version': 'v7.1',
     'evolution_log': [],   # 🔴 GEPA进化日志：重大逻辑变更
 }
 
@@ -1735,10 +1773,24 @@ def adjust_weights_from_backtest():
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
     # 只用最近7天回测数据（当前版本回测才有意义）
-    recent = [bt for bt in backtest_log[-7:]
+    # 🔴 v7.1: 扩大到最近15天回测数据（之前7天+至少2条，样本太小无统计意义）
+    recent = [bt for bt in backtest_log[-15:]
               if bt.get('backtest_method') == 'current_version']
-    if len(recent) < 2:
-        return None  # 数据不足
+    if len(recent) < 1:
+        return None  # 无回测数据
+
+    # 🔴 v7.1: 统计显著性检验 — 样本不足时不调参
+    total_strategy_games = 0
+    for bt in recent:
+        for game in ['ssq', 'dlt', 'qxc']:
+            if game not in bt:
+                continue
+            total_strategy_games += len(bt[game].get('hits', []))
+    MIN_GAMES_FOR_ADJUST = 6   # 至少6个策略-彩种样本才微调
+    MIN_GAMES_FOR_MAJOR = 20   # 至少20个样本才允许重大调参
+    if total_strategy_games < MIN_GAMES_FOR_ADJUST:
+        print(f"[GEPA] 样本不足({total_strategy_games}<{MIN_GAMES_FOR_ADJUST})，暂不进化")
+        return None
 
     # ===== 诊断：统计各策略命中情况 =====
     strategy_stats = defaultdict(lambda: {'hits': [], 'games': 0})
@@ -1771,11 +1823,35 @@ def adjust_weights_from_backtest():
                    'cold_miss_back', 'cold_cycle_back', 'cold_freq_back',
                    'neighbor_bonus', 'gamma']}
 
-    # 1️⃣ 核心注 vs 冷号注命中对比
-    core_avg = sum(mapped_stats.get(Strategy.CORE, {}).get('hits', [0])) / max(mapped_stats.get(Strategy.CORE, {}).get('games', 1), 1)
-    cold_avg = sum(mapped_stats.get(Strategy.COLD_MISS, {}).get('hits', [0])) / max(mapped_stats.get(Strategy.COLD_MISS, {}).get('games', 1), 1)
+    # 🔴 v7.1: 统计显著性检验 — Welch t-test
+    core_hits_list = mapped_stats.get(Strategy.CORE, {}).get('hits', [0])
+    cold_hits_list = mapped_stats.get(Strategy.COLD_MISS, {}).get('hits', [0])
+    core_avg = sum(core_hits_list) / max(len(core_hits_list), 1)
+    cold_avg = sum(cold_hits_list) / max(len(cold_hits_list), 1)
 
-    step = 0.02  # 微调步长
+    def _welch_ttest(a, b):
+        """Welch t-test，返回t值和是否显著(p<0.10)"""
+        import math
+        n1, n2 = len(a), len(b)
+        if n1 < 2 or n2 < 2:
+            return 0, False
+        m1, m2 = sum(a)/n1, sum(b)/n2
+        v1 = sum((x-m1)**2 for x in a)/(n1-1) if n1 > 1 else 0
+        v2 = sum((x-m2)**2 for x in b)/(n2-1) if n2 > 1 else 0
+        se = math.sqrt(v1/n1 + v2/n2) if (v1/n1 + v2/n2) > 0 else 1e-9
+        t = (m1 - m2) / se
+        # 简化：|t|>1.65 ≈ p<0.10（单侧），对样本量小的情况足够保守
+        return t, abs(t) > 1.65
+
+    t_val, is_significant = _welch_ttest(core_hits_list, cold_hits_list)
+    if not is_significant and len(core_hits_list) + len(cold_hits_list) < 15:
+        # 样本小且差异不显著：降低调参力度（步长减半）
+        step = 0.01  # 微调步长（保守）
+        print(f"[GEPA] 差异不显著(t={t_val:.2f})，保守微调")
+    else:
+        step = 0.02  # 微调步长（正常）
+        if is_significant:
+            print(f"[GEPA] 差异显著(t={t_val:.2f})，正常调参")
 
     if cold_avg > core_avg + 0.3:
         # 冷号注明显优于核心注 → 加大冷号遗漏权重
@@ -1857,6 +1933,7 @@ def adjust_weights_from_backtest():
     config['version'] = config.get('version', 1) + 1
 
     # 判断是否重大变更（任何参数变化≥0.04视为重大）
+    # 🔴 v7.1: 样本不足时不允许重大变更，只允许微调
     is_major = False
     all_param_keys = ['freq', 'miss', 'trend', 'zone',
                       'cold_miss_front', 'cold_cycle_front', 'cold_freq_front',
@@ -1866,13 +1943,19 @@ def adjust_weights_from_backtest():
         old_val = old_config.get(key, 0)
         new_val = config.get(key, 0)
         if abs(new_val - old_val) >= 0.04:
-            is_major = True
+            if total_strategy_games >= MIN_GAMES_FOR_MAJOR:
+                is_major = True
+            else:
+                # 🔴 v7.1: 样本不足时回退该参数变更到不超过0.03
+                config[key] = old_val + (0.03 if new_val > old_val else -0.03)
+                changes = [c for c in changes if key not in c]  # 移除相关变更说明
+                changes.append(f"样本不足({total_strategy_games}<{MIN_GAMES_FOR_MAJOR})，{key}变更被限制为微调±0.03")
             break
 
     if is_major:
         # 🔴 修复版本号解析：用正则匹配，防止3段式或非数字格式
         import re
-        algo_version = config.get('algo_version', 'v7.0')
+        algo_version = config.get('algo_version', 'v7.1')
         m = re.match(r'(v\d+)\.(\d+)', algo_version)
         if m:
             config['algo_version'] = f"{m.group(1)}.{int(m.group(2)) + 1}"
@@ -1880,14 +1963,19 @@ def adjust_weights_from_backtest():
             config['algo_version'] = 'v6.9'
 
     # 进化日志
+    # 🔴 v7.1: 清理旧版adjustments遗留字段
+    config.pop('adjustments', None)
+    config.pop('last_reset_date', None)
     evo_entry = {
         'date': today_str,
         'trigger': '回测驱动',
+        'sample_size': total_strategy_games,
+        't_test': {'t_value': round(t_val, 3), 'significant': is_significant},
         'changes': changes,
         'old_weights': {k: round(old_config.get(k, 0), 4) for k in all_param_keys},
         'new_weights': {k: round(config.get(k, 0), 4) for k in all_param_keys},
         'is_major': is_major,
-        'algo_version': config.get('algo_version', 'v7.0'),
+        'algo_version': config.get('algo_version', 'v7.1'),
     }
     evo_log = config.get('evolution_log', [])
     evo_log.append(evo_entry)
@@ -1898,7 +1986,7 @@ def adjust_weights_from_backtest():
     _save_weight_config(config)
 
     # 打印进化结果
-    version_tag = config.get('algo_version', 'v7.0')
+    version_tag = config.get('algo_version', 'v7.1')
     major_tag = '🔴 重大更新' if is_major else '🟢 微调'
     print(f"[GEPA进化] {major_tag} → {version_tag}")
     for c in changes:
@@ -2130,7 +2218,7 @@ def _run_backtest():
     # 🔴 v6.8: 记录回测时使用的权重快照（方便追溯"这个结果基于什么参数"）
     config = _load_weight_config()
     backtest_result['weight_snapshot'] = {
-        'algo_version': config.get('algo_version', 'v7.0'),
+        'algo_version': config.get('algo_version', 'v7.1'),
         'freq': config.get('freq', 0.30), 'miss': config.get('miss', 0.25),
         'trend': config.get('trend', 0.25), 'zone': config.get('zone', 0.20),
         'cold_miss_front': config.get('cold_miss_front', 0.40),
@@ -2940,7 +3028,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    algo_ver = config.get('algo_version', 'v7.0')
+    algo_ver = config.get('algo_version', 'v7.1')
     evo_log = config.get('evolution_log', [])
     last_evo = evo_log[-1] if evo_log else None
     lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号前区: 遗漏={config.get('cold_miss_front',0.4):.0%} 周期={config.get('cold_cycle_front',0.3):.0%} | 冷号后区: 周期={config.get('cold_cycle_back',0.4):.0%} 遗漏={config.get('cold_miss_back',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.3f} γ={config.get('gamma',0.88):.2f}")
@@ -2971,12 +3059,12 @@ def generate_lottery_recommendations():
     # 第2步：基于回测结果GEPA进化（回测→诊断→调参→版本更新）
     evolved_config = adjust_weights_from_backtest()
     if evolved_config:
-        version_tag = evolved_config.get('algo_version', 'v7.0')
+        version_tag = evolved_config.get('algo_version', 'v7.1')
         is_major = evolved_config.get('evolution_log', [{}])[-1].get('is_major', False) if evolved_config.get('evolution_log') else False
         print(f"[GEPA] 算法已进化至{version_tag}{'（重大更新！）' if is_major else ''}")
     else:
         evolved_config = _load_weight_config()
-        print(f"[GEPA] 算法无变化，当前{evolved_config.get('algo_version', 'v7.0')}")
+        print(f"[GEPA] 算法无变化，当前{evolved_config.get('algo_version', 'v7.1')}")
 
     fallback = SimpleAnalyzer()
     ssq_result = None
