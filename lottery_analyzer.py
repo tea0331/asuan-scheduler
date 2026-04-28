@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v6.7 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+彩票号码分析模块 v6.8 — 刘海蟾点金（加权统计+回测驱动+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV）
+
+v6.8核心改动（回测重构）：
+1. 🔴 回测不再读旧版推荐记录，改为：抓开奖前历史数据→用当前代码重新生成推荐→对比开奖号
+2. 这样每次版本迭代后，回测验证的都是当前算法水平，而不是旧版本的
 
 v6.7核心改动（邻号+分区平衡）：
 1. 🟢 邻号加分：上期开出的号±1获得0.03权重bonus（球机机械偏差）
@@ -1991,66 +1995,60 @@ def _calc_hit_rate(predictions, actual):
 
 
 def _run_backtest():
-    """回测前天推荐 vs 昨天开奖结果
-    🔴 修正：凌晨0:05运行时，昨天晚上的开奖数据可能还没更新到网站，
-    所以回测"前天推荐 vs 昨天开奖"更可靠（昨天的开奖数据已确认可抓取）
+    """回测当前版本 vs 昨天开奖结果
+    🔴 v6.8核心改进：用当前版本代码重新生成推荐，而非读旧版推荐记录
+    逻辑：
+    1. 抓取昨天开奖号码
+    2. 抓取历史数据，去掉最新一期（模拟"开奖前的信息"）
+    3. 用当前WeightedAnalyzer生成推荐
+    4. 对比推荐号 vs 实际开奖号
+    这样每次版本迭代后，回测验证的都是当前算法的水平
     """
-    predictions = _load_predictions()
     backtest_log = _load_backtest()
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
-    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
-    day_before = (datetime.now(CST) - timedelta(days=2)).strftime('%Y-%m-%d')
 
-    if not predictions:
-        print("[回测] 无推荐记录，跳过回测")
-        return None
-
-    # 🔴 修正：回测前天的推荐 vs 昨天的开奖
-    # 昨天开奖的彩种（昨天的开奖数据到凌晨已确认可抓取）
+    # 昨天开奖的彩种
     draw_games = get_draw_games_yesterday()
     if not draw_games:
         print("[回测] 昨天无彩种开奖，跳过回测")
         return None
 
     draw_names = [LOTTERY_NAMES.get(g, g) for g in draw_games]
-    print(f"[回测] 昨天开奖彩种: {', '.join(draw_names)}")
+    draw_names_str = ', '.join(draw_names)
+    print(f"[回测] 昨天开奖彩种: {draw_names_str}")
 
-    # 🔴 找到前天的推荐来回测（前天推荐的号码 vs 昨天开奖结果）
-    pred = None
-    for p in reversed(predictions):
-        if p.get('date') == day_before:
-            pred = p
-            break
-
-    if not pred:
-        print(f"[回测] 无前天({day_before})推荐记录，跳过回测")
-        return None
-
-    # 🔴 防止重复回测：检查今天是否已回测过前天的推荐
+    # 🔴 防止重复回测：检查今天是否已用当前版本回测过
     for bt in backtest_log:
-        if bt.get('date') == day_before and bt.get('backtest_date') == today_str:
-            print(f"[回测] 前天({day_before})推荐已回测过，跳过")
+        if bt.get('backtest_date') == today_str and bt.get('backtest_method') == 'current_version':
+            print(f"[回测] 今天已用当前版本回测过，跳过")
             return bt
 
     backtest_result = {
-        'date': pred.get('date', ''),
+        'date': (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d'),
         'backtest_date': today_str,
-        'draw_games': draw_games,  # 🔴 记录哪些彩种开奖了
+        'backtest_method': 'current_version',  # 🔴 标记回测方法，区分旧版
+        'draw_games': draw_games,
     }
 
-    # 双色球回测 — 只在昨天开奖时回测
-    if 'ssq' in draw_games and pred.get('ssq_recs'):
-        ssq_actual = fetch_ssq_history(1)
-        if ssq_actual:
-            actual = ssq_actual[0]
+    # ===== 双色球回测 =====
+    if 'ssq' in draw_games:
+        ssq_history = fetch_ssq_history(16)  # 多抓1期，去掉最新开奖
+        if ssq_history and len(ssq_history) >= 6:
+            actual = ssq_history[0]  # 最新一期 = 昨天开奖
+            ssq_pre_draw = ssq_history[1:]  # 去掉最新期，模拟开奖前的数据
+
+            wa = WeightedAnalyzer(ssq_pre_draw)
+            analysis = wa.analyze_ssq()
+            recs = wa.generate_recs_ssq(analysis, kelly_bias=0.0)
+
             hits = []
-            for rec in pred['ssq_recs']:
+            for rec in recs:
                 red_hit_nums = _get_hit_numbers(rec['reds'], actual['reds'])
                 blue_hit = 1 if rec['blue'] == actual['blue'] else 0
                 hits.append({
                     'strategy': rec['strategy'],
                     'red_hits': len(red_hit_nums),
-                    'red_hit_nums': red_hit_nums,  # 🔴 命中的具体号码
+                    'red_hit_nums': red_hit_nums,
                     'blue_hit': blue_hit,
                     'total': len(red_hit_nums) + blue_hit,
                     'predicted_reds': rec['reds'],
@@ -2063,26 +2061,34 @@ def _run_backtest():
                 'hits': hits,
                 'best_strategy': max(hits, key=lambda x: x['total'])['strategy'] if hits else None,
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
-                'actual_reds': actual['reds'],  # 🔴 开奖号码
+                'actual_reds': actual['reds'],
                 'actual_blue': actual['blue'],
             }
             print(f"[回测] 双色球 第{actual['period']}期: 最佳策略={backtest_result['ssq']['best_strategy']}, 命中={backtest_result['ssq']['best_total']}个")
+        else:
+            print("[回测] 双色球数据不足，跳过")
 
-    # 大乐透回测 — 只在昨天开奖时回测
-    if 'dlt' in draw_games and pred.get('dlt_recs'):
-        dlt_actual = fetch_dlt_history(1)
-        if dlt_actual:
-            actual = dlt_actual[0]
+    # ===== 大乐透回测 =====
+    if 'dlt' in draw_games:
+        dlt_history = fetch_dlt_history(16)
+        if dlt_history and len(dlt_history) >= 6:
+            actual = dlt_history[0]
+            dlt_pre_draw = dlt_history[1:]
+
+            wa = WeightedAnalyzer(dlt_pre_draw)
+            analysis = wa.analyze_dlt()
+            recs = wa.generate_recs_dlt(analysis, kelly_bias=0.0)
+
             hits = []
-            for rec in pred['dlt_recs']:
+            for rec in recs:
                 front_hit_nums = _get_hit_numbers(rec['front'], actual['front'])
                 back_hit_nums = _get_hit_numbers(rec['back'], actual['back'])
                 hits.append({
                     'strategy': rec['strategy'],
                     'front_hits': len(front_hit_nums),
-                    'front_hit_nums': front_hit_nums,  # 🔴 命中的具体号码
+                    'front_hit_nums': front_hit_nums,
                     'back_hits': len(back_hit_nums),
-                    'back_hit_nums': back_hit_nums,  # 🔴 命中的具体号码
+                    'back_hit_nums': back_hit_nums,
                     'total': len(front_hit_nums) + len(back_hit_nums),
                     'predicted_front': rec['front'],
                     'predicted_back': rec['back'],
@@ -2094,24 +2100,32 @@ def _run_backtest():
                 'hits': hits,
                 'best_strategy': max(hits, key=lambda x: x['total'])['strategy'] if hits else None,
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
-                'actual_front': actual['front'],  # 🔴 开奖号码
+                'actual_front': actual['front'],
                 'actual_back': actual['back'],
             }
             print(f"[回测] 大乐透 第{actual['period']}期: 最佳策略={backtest_result['dlt']['best_strategy']}, 命中={backtest_result['dlt']['best_total']}个")
+        else:
+            print("[回测] 大乐透数据不足，跳过")
 
-    # 七星彩回测 — 只在昨天开奖时回测
-    if 'qxc' in draw_games and pred.get('qxc_recs'):
-        qxc_actual = fetch_qxc_history(1)
-        if qxc_actual:
-            actual = qxc_actual[0]
+    # ===== 七星彩回测 =====
+    if 'qxc' in draw_games:
+        qxc_history = fetch_qxc_history(31)  # 七星彩隔期开奖，多抓一些
+        if qxc_history and len(qxc_history) >= 6:
+            actual = qxc_history[0]
+            qxc_pre_draw = qxc_history[1:]
+
+            wa = WeightedAnalyzer(qxc_pre_draw)
+            analysis = wa.analyze_qxc()
+            recs = wa.generate_recs_qxc(analysis, kelly_bias=0.0)
+
             hits = []
-            for rec in pred['qxc_recs']:
+            for rec in recs:
                 digit_hits_detail = [(i, rec['digits'][i], actual['digits'][i], rec['digits'][i] == actual['digits'][i]) for i in range(7)]
                 digit_hit_count = sum(1 for _, _, _, hit in digit_hits_detail if hit)
                 hits.append({
                     'strategy': rec['strategy'],
                     'digit_hits': digit_hit_count,
-                    'digit_hits_detail': digit_hits_detail,  # 🔴 逐位对比详情
+                    'digit_hits_detail': digit_hits_detail,
                     'total': digit_hit_count,
                     'predicted': rec['digits'],
                     'actual': actual['digits'],
@@ -2121,31 +2135,20 @@ def _run_backtest():
                 'hits': hits,
                 'best_strategy': max(hits, key=lambda x: x['total'])['strategy'] if hits else None,
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
-                'actual_digits': actual['digits'],  # 🔴 开奖号码
+                'actual_digits': actual['digits'],
             }
             print(f"[回测] 七星彩 第{actual['period']}期: 最佳策略={backtest_result['qxc']['best_strategy']}, 命中={backtest_result['qxc']['best_total']}个")
+        else:
+            print("[回测] 七星彩数据不足，跳过")
 
     # 保存回测结果
     if any(k in backtest_result for k in ['ssq', 'dlt', 'qxc']):
-        # 🔴 去重：检查是否已有相同日期+彩种的回测记录
-        existing_keys = set()
-        for bt in backtest_log:
-            bt_date = bt.get('date', '')
-            for g in ['ssq', 'dlt', 'qxc']:
-                if g in bt:
-                    existing_keys.add(f"{bt_date}_{g}")
-        new_date = backtest_result.get('date', '')
-        for g in ['ssq', 'dlt', 'qxc']:
-            if g in backtest_result:
-                key = f"{new_date}_{g}"
-                if key in existing_keys:
-                    del backtest_result[g]
-                    print(f"[回测] 去重：跳过已存在的{new_date}_{g}")
-
-        if any(k in backtest_result for k in ['ssq', 'dlt', 'qxc']):
-            backtest_log.append(backtest_result)
-            _save_backtest(backtest_log)
-            return backtest_result
+        backtest_log.append(backtest_result)
+        # 🔴 只保留最近30条回测记录
+        if len(backtest_log) > 30:
+            backtest_log = backtest_log[-30:]
+        _save_backtest(backtest_log)
+        return backtest_result
 
     return None
 
@@ -2156,7 +2159,9 @@ def _format_backtest_for_ai(backtest_result):
         return ''
 
     draw_names = [LOTTERY_NAMES.get(g, g) for g in backtest_result.get('draw_games', [])]
-    lines = [f'\n=== 昨日开奖回测（{", ".join(draw_names)}开奖，用于改进算法）===']
+    method = backtest_result.get('backtest_method', 'legacy')
+    method_label = '当前版本回测' if method == 'current_version' else '旧版推荐记录'
+    lines = [f'\n=== 昨日开奖回测（{", ".join(draw_names)}开奖，{method_label}）===']
 
     if 'ssq' in backtest_result:
         ssq = backtest_result['ssq']
@@ -2653,11 +2658,13 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     if not today_games and not tomorrow_games:
         lines.append("📅 今明两天无开奖\n")
 
-    # 🔴 增强版回测结果（逐号对比）
+    # 🔴 增强版回测结果（逐号对比）— v6.8: 用当前版本代码回测
     if backtest_result:
         draw_games = backtest_result.get('draw_games', [])
         draw_names_str = '、'.join(LOTTERY_NAMES.get(g, g) for g in draw_games)
-        lines.append("### 📊 开奖回测")
+        method = backtest_result.get('backtest_method', 'legacy')
+        method_note = '（当前版本算法回测）' if method == 'current_version' else '（旧版推荐记录）'
+        lines.append(f"### 📊 开奖回测{method_note}")
         lines.append(f"昨日开奖: {draw_names_str}\n")
 
         if 'ssq' in backtest_result:
@@ -2863,7 +2870,7 @@ def generate_lottery_recommendations():
     print(f"[Kelly] 双色球={kelly_map['ssq']:.2%}(bias={kelly_bias_map['ssq']:+.1f}) 大乐透={kelly_map['dlt']:.2%}(bias={kelly_bias_map['dlt']:+.1f}) 七星彩={kelly_map['qxc']:.2%}(bias={kelly_bias_map['qxc']:+.1f})")
 
     # 0. 回测昨日推荐
-    print("[回测] 对比前天推荐与昨日开奖...")
+    print("[回测] 用当前版本代码回测昨日开奖...")
     backtest_result = _run_backtest()
     backtest_feedback = _format_backtest_for_ai(backtest_result)
     if backtest_feedback:
