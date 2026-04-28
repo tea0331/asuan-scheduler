@@ -1,100 +1,61 @@
 {
-  "freq": 0.3,
-  "miss": 0.25,
+  "freq": 0.31,
+  "miss": 0.24,
   "trend": 0.25,
   "zone": 0.2,
-  "version": 5,
-  "adjustments": [
+  "version": 6,
+  "algo_version": "v7.1",
+  "cold_cycle_front": 0.3035,
+  "cold_cycle_back": 0.403,
+  "cold_miss_front": 0.398,
+  "cold_freq_front": 0.2985,
+  "cold_miss_back": 0.2985,
+  "cold_freq_back": 0.2985,
+  "gamma": 0.85,
+  "evolution_log": [
     {
-      "date": "2026-04-21",
-      "direction": "freq+",
-      "hot_wins": 5,
-      "cold_wins": 0,
-      "new_weights": {
-        "freq": 0.32,
-        "miss": 0.23,
-        "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-28",
-      "direction": "freq+",
-      "hot_wins": 4,
-      "cold_wins": 1,
-      "mid_wins": 1,
-      "new_weights": {
-        "freq": 0.34,
-        "miss": 0.21,
-        "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-28",
-      "direction": "reset",
-      "hot_wins": 0,
-      "cold_wins": 0,
-      "mid_wins": 0,
-      "new_weights": {
+      "date": "2026-04-29",
+      "trigger": "回测驱动",
+      "sample_size": 8,
+      "t_test": {
+        "t_value": 0,
+        "significant": false
+      },
+      "changes": [
+        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
+        "热号领先 → freq +0.01, miss -0.01",
+        "样本不足(8<20)，gamma变更被限制为微调±0.03"
+      ],
+      "old_weights": {
         "freq": 0.3,
         "miss": 0.25,
         "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-29",
-      "direction": "freq+",
-      "hot_wins": 4,
-      "cold_wins": 1,
-      "mid_wins": 2,
+        "zone": 0.2,
+        "cold_miss_front": 0.4,
+        "cold_cycle_front": 0.3,
+        "cold_freq_front": 0.3,
+        "cold_miss_back": 0.3,
+        "cold_cycle_back": 0.4,
+        "cold_freq_back": 0.3,
+        "neighbor_bonus": 0.03,
+        "gamma": 0.88
+      },
       "new_weights": {
-        "freq": 0.32,
-        "miss": 0.23,
+        "freq": 0.31,
+        "miss": 0.24,
         "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-29",
-      "direction": "reset",
-      "hot_wins": 0,
-      "cold_wins": 0,
-      "mid_wins": 0,
-      "new_weights": {
-        "freq": 0.3,
-        "miss": 0.25,
-        "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-29",
-      "direction": "freq+",
-      "hot_wins": 5,
-      "cold_wins": 1,
-      "mid_wins": 3,
-      "new_weights": {
-        "freq": 0.32,
-        "miss": 0.23,
-        "trend": 0.25,
-        "zone": 0.2
-      }
-    },
-    {
-      "date": "2026-04-29",
-      "direction": "reset",
-      "hot_wins": 0,
-      "cold_wins": 0,
-      "mid_wins": 0,
-      "new_weights": {
-        "freq": 0.3,
-        "miss": 0.25,
-        "trend": 0.25,
-        "zone": 0.2
-      }
+        "zone": 0.2,
+        "cold_miss_front": 0.398,
+        "cold_cycle_front": 0.3035,
+        "cold_freq_front": 0.2985,
+        "cold_miss_back": 0.2985,
+        "cold_cycle_back": 0.403,
+        "cold_freq_back": 0.2985,
+        "neighbor_bonus": 0,
+        "gamma": 0.85
+      },
+      "is_major": false,
+      "algo_version": "v7.1"
     }
-  ],
-  "last_reset_date": "2026-04-29"
+  ]
 }
