@@ -478,8 +478,10 @@ def send_task_email(task, today_str, file_path, subject_override=None):
         logging.error(f"[邮件] 文件内容为空或过短({len(content)}字符)，不发空邮件！")
         return False
 
-    if '详见Gitee仓库' in content and len(content) < 100:
-        logging.error(f"[邮件] 内容为占位文本，不发空邮件！")
+    # 🔴 占位文本检测（不限长度，任何占位文本都拦截）
+    placeholder_patterns = ['详见Gitee仓库', '已完成，详见', '详见仓库', '详见Gitee']
+    if any(p in content for p in placeholder_patterns):
+        logging.error(f"[邮件] 内容包含占位文本，不发空邮件！内容前200字: {content[:200]}")
         return False
 
     subject = subject_override or f"{task['email_subject_prefix']} | {today_str}"
@@ -543,12 +545,16 @@ def run_task_and_email(task_name, task, today_str):
     # 第一步：生成内容
     content = generate_with_deepseek(task_name, task, today_str)
 
-    # 🔴 防护：如果API返回占位文本，重试一次
-    if content and ('详见Gitee仓库' in content or '已完成，详见' in content or '详见仓库' in content):
-        logging.warning(f"[{task_name}] API返回了占位文本，5秒后重试...")
+    # 🔴 防护：如果API返回占位文本，重试一次（不限长度，任何占位模式都拦截）
+    placeholder_patterns = ['详见Gitee仓库', '已完成，详见', '详见仓库', '详见Gitee', '已完成']
+    def is_placeholder(text):
+        return text and any(p in text for p in placeholder_patterns)
+
+    if is_placeholder(content):
+        logging.warning(f"[{task_name}] API返回了占位文本，5秒后重试... 内容前200字: {content[:200]}")
         time.sleep(5)
         content = generate_with_deepseek(task_name, task, today_str)
-        if content and ('详见Gitee仓库' in content or '已完成，详见' in content or '详见仓库' in content):
+        if is_placeholder(content):
             logging.error(f"[{task_name}] 重试后仍返回占位文本，放弃")
             content = None
 
