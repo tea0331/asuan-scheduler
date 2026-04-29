@@ -2744,18 +2744,23 @@ class SimpleAnalyzer:
         ext1_keep = sorted(core_by_freq[:4])  # 🔴 Bug6修复：按频率TOP4保留，不是号码最小的4个
         ext1_new = sorted([n for n, _ in top8[6:10] if n not in ext1_keep][:2])
         ext1_blue = blue_counter.most_common(2)[-1][0] if len(blue_counter.most_common(2)) > 1 else core_blue
-        # 扩展2：遗漏号
-        cold = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1][:6])
-        cold_blues = [n for n in range(1, 17) if blue_counter.get(n, 0) == 0]
+        # 🔴 扩展2：保留核心2号 + 频率中等号(出现2-3次)，模拟"大换血但不是全冷"
+        ext2_keep = sorted(core_by_freq[:2])
+        mid_freq = sorted([n for n in range(1, 34) if 2 <= red_counter.get(n, 0) <= 3 and n not in core_by_freq][:4])
+        if len(mid_freq) < 4:
+            mid_freq = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1 and n not in core_by_freq][:4])
+        ext2_reds = sorted(ext2_keep + mid_freq[:4])
+        ext2_blue_candidates = [n for n in range(1, 17) if 1 <= blue_counter.get(n, 0) <= 2]
+        ext2_blue = ext2_blue_candidates[0] if ext2_blue_candidates else (blue_counter.most_common(2)[-1][0] if len(blue_counter.most_common(2)) > 1 else core_blue)
         # 🟢 v6吸收：冷号注（遗漏最高的号码）
-        miss_reds = sorted([n for n in range(1, 34) if n not in red_counter or red_counter.get(n, 0) <= 1][:6])
+        miss_reds = sorted([n for n in range(1, 34) if n not in red_counter or red_counter.get(n, 0) == 0][:6])
         miss_blues = sorted([n for n in range(1, 17) if n not in blue_counter or blue_counter.get(n, 0) == 0])
         if len(miss_reds) < 6:
-            miss_reds = cold
+            miss_reds = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1 and n not in core_by_freq][:6])
         return [
             {'reds': core, 'blue': core_blue, 'strategy': Strategy.CORE_FALLBACK},
             {'reds': sorted(ext1_keep + ext1_new), 'blue': ext1_blue, 'strategy': Strategy.EXT1_FALLBACK},
-            {'reds': cold, 'blue': cold_blues[0] if cold_blues else 1, 'strategy': Strategy.EXT2_FALLBACK},
+            {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': Strategy.EXT2_FALLBACK},
             {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': Strategy.COLD_FALLBACK},
         ]
 
@@ -2772,19 +2777,30 @@ class SimpleAnalyzer:
         ext1_keep = sorted(core_by_freq[:3])  # 🔴 Bug6修复：按频率TOP3保留
         ext1_new = sorted([n for n, _ in top7[5:10] if n not in ext1_keep][:2])
         ext1_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(3)[1][0]]) if len(back_counter.most_common(3)) > 1 else core_back
-        cold = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1][:5])
-        cold_back = [n for n in range(1, 13) if back_counter.get(n, 0) <= 1][:2]
+        # 🔴 扩展2：保留核心2号 + 频率中等号(出现2-3次)，模拟"大换血但不是全冷"
+        ext2_keep = sorted(core_by_freq[:2])
+        mid_freq_front = sorted([n for n in range(1, 36) if 2 <= front_counter.get(n, 0) <= 3 and n not in core_by_freq][:3])
+        if len(mid_freq_front) < 3:
+            mid_freq_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:3])
+        ext2_front = sorted(ext2_keep + mid_freq_front[:3])
+        ext2_back_candidates = sorted([n for n in range(1, 13) if 1 <= back_counter.get(n, 0) <= 2 and n not in core_back][:2])
+        if len(ext2_back_candidates) < 2:
+            ext2_back_candidates = sorted([n for n in range(1, 13) if back_counter.get(n, 0) >= 1 and n not in core_back][:2])
+        if len(ext2_back_candidates) < 2:
+            ext2_back_candidates = core_back
         # 🟢 v6吸收：冷号注（遗漏最高的号码）
-        miss_front = sorted([n for n in range(1, 36) if n not in front_counter or front_counter.get(n, 0) <= 1][:5])
+        miss_front = sorted([n for n in range(1, 36) if n not in front_counter or front_counter.get(n, 0) == 0][:5])
         miss_back = sorted([n for n in range(1, 13) if n not in back_counter or back_counter.get(n, 0) == 0][:2])
         if len(miss_front) < 5:
-            miss_front = cold
+            miss_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:5])
         if len(miss_back) < 2:
-            miss_back = sorted(cold_back) if len(cold_back) >= 2 else [1, 2]
+            miss_back = sorted([n for n in range(1, 13) if back_counter.get(n, 0) <= 1 and n not in core_back][:2])
+        if len(miss_back) < 2:
+            miss_back = [1, 2]
         return [
             {'front': core, 'back': core_back, 'strategy': Strategy.CORE_FALLBACK},
             {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': Strategy.EXT1_FALLBACK},
-            {'front': cold, 'back': sorted(cold_back) if len(cold_back) >= 2 else [1, 2], 'strategy': Strategy.EXT2_FALLBACK},
+            {'front': ext2_front, 'back': ext2_back_candidates, 'strategy': Strategy.EXT2_FALLBACK},
             {'front': miss_front, 'back': miss_back, 'strategy': Strategy.COLD_FALLBACK},
         ]
 
@@ -2800,12 +2816,12 @@ class SimpleAnalyzer:
         for pos in range(3, 7):
             counter = Counter(d['digits'][pos] for d in history)
             ext1[pos] = counter.most_common(2)[1][0] if len(counter.most_common(2)) > 1 else core[pos]
-        # 扩展2：前2位核心 + 后5位遗漏
+        # 🔴 扩展2：前2位核心 + 后5位中等频率(出现2-3次)，模拟"大换血但不是全冷"
         ext2 = list(core)
         for pos in range(2, 7):
             counter = Counter(d['digits'][pos] for d in history)
-            cold = [n for n in range(10) if counter.get(n, 0) <= 1]
-            ext2[pos] = cold[0] if cold else counter.most_common()[-1][0]
+            mid = [n for n in range(10) if 2 <= counter.get(n, 0) <= 3 and n != core[pos]]
+            ext2[pos] = mid[0] if mid else ([n for n in range(10) if counter.get(n, 0) <= 1 and n != core[pos]][0] if [n for n in range(10) if counter.get(n, 0) <= 1] else counter.most_common()[-1][0])
         # 🟢 v6吸收：冷号注（每位遗漏最高的数字）
         cold_digits = list(core)
         for pos in range(7):

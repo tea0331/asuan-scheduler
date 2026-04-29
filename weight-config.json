@@ -1,30 +1,30 @@
 {
-  "freq": 0.31,
-  "miss": 0.24,
+  "freq": 0.33,
+  "miss": 0.22,
   "trend": 0.25,
   "zone": 0.2,
-  "cold_miss_front": 0.398,
-  "cold_cycle_front": 0.3035,
-  "cold_freq_front": 0.2985,
-  "cold_miss_back": 0.2985,
-  "cold_cycle_back": 0.403,
-  "cold_freq_back": 0.2985,
-  "neighbor_bonus": 0.03,
-  "gamma": 0.88,
-  "version": 2,
+  "version": 8,
   "algo_version": "v7.1",
+  "cold_cycle_front": 0.3104,
+  "cold_cycle_back": 0.409,
+  "cold_miss_front": 0.394,
+  "cold_freq_front": 0.2956,
+  "cold_miss_back": 0.2955,
+  "cold_freq_back": 0.2955,
+  "gamma": 0.85,
   "evolution_log": [
     {
-      "date": "2026-04-30",
+      "date": "2026-04-29",
       "trigger": "回测驱动",
-      "sample_size": 12,
+      "sample_size": 8,
       "t_test": {
         "t_value": 0,
         "significant": false
       },
       "changes": [
         "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
+        "热号领先 → freq +0.01, miss -0.01",
+        "样本不足(8<20)，gamma变更被限制为微调±0.03"
       ],
       "old_weights": {
         "freq": 0.3,
@@ -51,8 +51,94 @@
         "cold_miss_back": 0.2985,
         "cold_cycle_back": 0.403,
         "cold_freq_back": 0.2985,
+        "neighbor_bonus": 0,
+        "gamma": 0.85
+      },
+      "is_major": false,
+      "algo_version": "v7.1"
+    },
+    {
+      "date": "2026-04-29",
+      "trigger": "回测驱动",
+      "sample_size": 8,
+      "t_test": {
+        "t_value": 0,
+        "significant": false
+      },
+      "changes": [
+        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
+        "热号领先 → freq +0.01, miss -0.01"
+      ],
+      "old_weights": {
+        "freq": 0.31,
+        "miss": 0.24,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.398,
+        "cold_cycle_front": 0.3035,
+        "cold_freq_front": 0.2985,
+        "cold_miss_back": 0.2985,
+        "cold_cycle_back": 0.403,
+        "cold_freq_back": 0.2985,
         "neighbor_bonus": 0.03,
-        "gamma": 0.88
+        "gamma": 0.85
+      },
+      "new_weights": {
+        "freq": 0.32,
+        "miss": 0.23,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.396,
+        "cold_cycle_front": 0.307,
+        "cold_freq_front": 0.297,
+        "cold_miss_back": 0.297,
+        "cold_cycle_back": 0.406,
+        "cold_freq_back": 0.297,
+        "neighbor_bonus": 0,
+        "gamma": 0.85
+      },
+      "is_major": false,
+      "algo_version": "v7.1"
+    },
+    {
+      "date": "2026-04-29",
+      "trigger": "回测驱动",
+      "sample_size": 8,
+      "t_test": {
+        "t_value": 0,
+        "significant": false
+      },
+      "changes": [
+        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
+        "热号领先 → freq +0.01, miss -0.01"
+      ],
+      "old_weights": {
+        "freq": 0.32,
+        "miss": 0.23,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.396,
+        "cold_cycle_front": 0.307,
+        "cold_freq_front": 0.297,
+        "cold_miss_back": 0.297,
+        "cold_cycle_back": 0.406,
+        "cold_freq_back": 0.297,
+        "neighbor_bonus": 0.03,
+        "gamma": 0.85
+      },
+      "new_weights": {
+        "freq": 0.33,
+        "miss": 0.22,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.394,
+        "cold_cycle_front": 0.3104,
+        "cold_freq_front": 0.2956,
+        "cold_miss_back": 0.2955,
+        "cold_cycle_back": 0.409,
+        "cold_freq_back": 0.2955,
+        "neighbor_bonus": 0,
+        "gamma": 0.85
       },
       "is_major": false,
       "algo_version": "v7.1"
