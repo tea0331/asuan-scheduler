@@ -482,7 +482,7 @@ def send_task_email(task, today_str, file_path, subject_override=None):
         logging.error(f"[邮件] 内容为占位文本，不发空邮件！")
         return False
 
-    subject = subject_override or f"{task['email_subject_prefix']} | {today_str} | {task['desc']}"
+    subject = subject_override or f"{task['email_subject_prefix']} | {today_str}"
 
     # 🔴 将markdown转成HTML，确保邮件正常渲染（163邮箱对pre-wrap+长文本渲染差）
     html_content = markdown.markdown(content, extensions=['tables', 'fenced_code', 'nl2br'])
@@ -598,10 +598,10 @@ def run_task_and_email(task_name, task, today_str):
         if files:
             recent = max(files, key=os.path.getmtime)
             if not is_already_sent(task_name, recent):
-                subject = f"{task['email_subject_prefix']} | {today_str} | {task['desc']}（使用近期数据）"
+                subject = f"{task['email_subject_prefix']} | {today_str}（使用近期数据）"
                 send_task_email(task, today_str, recent, subject_override=subject)
         else:
-            subject = f"{task['email_subject_prefix']} | {today_str} | {task['desc']}（生成异常）"
+            subject = f"{task['email_subject_prefix']} | {today_str}（生成异常）"
             body = f"""<p>{task['desc']}生成异常，请手动检查。</p>
             <p>时间: {datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S')}</p>"""
             send_email(subject, body)
