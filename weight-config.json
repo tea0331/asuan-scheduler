@@ -1,23 +1,23 @@
 {
-  "freq": 0.36,
-  "miss": 0.19,
+  "freq": 0.31,
+  "miss": 0.24,
   "trend": 0.25,
   "zone": 0.2,
-  "cold_miss_front": 0.3881,
-  "cold_cycle_front": 0.3206,
-  "cold_freq_front": 0.2913,
-  "cold_miss_back": 0.291,
-  "cold_cycle_back": 0.4177,
-  "cold_freq_back": 0.2913,
+  "cold_miss_front": 0.398,
+  "cold_cycle_front": 0.3035,
+  "cold_freq_front": 0.2985,
+  "cold_miss_back": 0.2985,
+  "cold_cycle_back": 0.403,
+  "cold_freq_back": 0.2985,
   "neighbor_bonus": 0.03,
   "gamma": 0.88,
-  "version": 7,
+  "version": 2,
   "algo_version": "v7.1",
   "evolution_log": [
     {
-      "date": "2026-04-29",
+      "date": "2026-04-30",
       "trigger": "回测驱动",
-      "sample_size": 8,
+      "sample_size": 12,
       "t_test": {
         "t_value": 0,
         "significant": false
@@ -51,221 +51,6 @@
         "cold_miss_back": 0.2985,
         "cold_cycle_back": 0.403,
         "cold_freq_back": 0.2985,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "is_major": false,
-      "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-04-29",
-      "trigger": "回测驱动",
-      "sample_size": 8,
-      "t_test": {
-        "t_value": 0,
-        "significant": false
-      },
-      "changes": [
-        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
-      ],
-      "old_weights": {
-        "freq": 0.31,
-        "miss": 0.24,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.398,
-        "cold_cycle_front": 0.3035,
-        "cold_freq_front": 0.2985,
-        "cold_miss_back": 0.2985,
-        "cold_cycle_back": 0.403,
-        "cold_freq_back": 0.2985,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "new_weights": {
-        "freq": 0.32,
-        "miss": 0.23,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.396,
-        "cold_cycle_front": 0.307,
-        "cold_freq_front": 0.297,
-        "cold_miss_back": 0.297,
-        "cold_cycle_back": 0.406,
-        "cold_freq_back": 0.297,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "is_major": false,
-      "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-04-29",
-      "trigger": "回测驱动",
-      "sample_size": 8,
-      "t_test": {
-        "t_value": 0,
-        "significant": false
-      },
-      "changes": [
-        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
-      ],
-      "old_weights": {
-        "freq": 0.32,
-        "miss": 0.23,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.396,
-        "cold_cycle_front": 0.307,
-        "cold_freq_front": 0.297,
-        "cold_miss_back": 0.297,
-        "cold_cycle_back": 0.406,
-        "cold_freq_back": 0.297,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "new_weights": {
-        "freq": 0.33,
-        "miss": 0.22,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.394,
-        "cold_cycle_front": 0.3104,
-        "cold_freq_front": 0.2956,
-        "cold_miss_back": 0.2955,
-        "cold_cycle_back": 0.409,
-        "cold_freq_back": 0.2955,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "is_major": false,
-      "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-04-30",
-      "trigger": "回测驱动",
-      "sample_size": 12,
-      "t_test": {
-        "t_value": 0,
-        "significant": false
-      },
-      "changes": [
-        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
-      ],
-      "old_weights": {
-        "freq": 0.33,
-        "miss": 0.22,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.394,
-        "cold_cycle_front": 0.3104,
-        "cold_freq_front": 0.2956,
-        "cold_miss_back": 0.2955,
-        "cold_cycle_back": 0.409,
-        "cold_freq_back": 0.2955,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "new_weights": {
-        "freq": 0.34,
-        "miss": 0.21,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.392,
-        "cold_cycle_front": 0.3138,
-        "cold_freq_front": 0.2942,
-        "cold_miss_back": 0.294,
-        "cold_cycle_back": 0.4119,
-        "cold_freq_back": 0.2941,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "is_major": false,
-      "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-04-30",
-      "trigger": "回测驱动",
-      "sample_size": 12,
-      "t_test": {
-        "t_value": 0,
-        "significant": false
-      },
-      "changes": [
-        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
-      ],
-      "old_weights": {
-        "freq": 0.34,
-        "miss": 0.21,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.392,
-        "cold_cycle_front": 0.3138,
-        "cold_freq_front": 0.2942,
-        "cold_miss_back": 0.294,
-        "cold_cycle_back": 0.4119,
-        "cold_freq_back": 0.2941,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "new_weights": {
-        "freq": 0.35,
-        "miss": 0.2,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.39,
-        "cold_cycle_front": 0.3172,
-        "cold_freq_front": 0.2928,
-        "cold_miss_back": 0.2925,
-        "cold_cycle_back": 0.4148,
-        "cold_freq_back": 0.2927,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "is_major": false,
-      "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-04-30",
-      "trigger": "回测驱动",
-      "sample_size": 12,
-      "t_test": {
-        "t_value": 0,
-        "significant": false
-      },
-      "changes": [
-        "核心注命中1.0>冷号注0.0 → cold_cycle +0.005",
-        "热号领先 → freq +0.01, miss -0.01"
-      ],
-      "old_weights": {
-        "freq": 0.35,
-        "miss": 0.2,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.39,
-        "cold_cycle_front": 0.3172,
-        "cold_freq_front": 0.2928,
-        "cold_miss_back": 0.2925,
-        "cold_cycle_back": 0.4148,
-        "cold_freq_back": 0.2927,
-        "neighbor_bonus": 0.03,
-        "gamma": 0.88
-      },
-      "new_weights": {
-        "freq": 0.36,
-        "miss": 0.19,
-        "trend": 0.25,
-        "zone": 0.2,
-        "cold_miss_front": 0.3881,
-        "cold_cycle_front": 0.3206,
-        "cold_freq_front": 0.2913,
-        "cold_miss_back": 0.291,
-        "cold_cycle_back": 0.4177,
-        "cold_freq_back": 0.2913,
         "neighbor_bonus": 0.03,
         "gamma": 0.88
       },
