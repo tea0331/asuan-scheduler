@@ -63,6 +63,13 @@ import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
 
+# 🟢 v7.2: scrapling降级引擎（requests被封时自动启用）
+try:
+    from scrapling import Fetcher as _ScraplingFetcher, DynamicFetcher as _ScraplingDynamic
+    _SCRAPLING_AVAILABLE = True
+except ImportError:
+    _SCRAPLING_AVAILABLE = False
+
 CST = timezone(timedelta(hours=8))
 
 # 百炼API配置 — 🔴 优先环境变量，回退硬编码
@@ -402,6 +409,30 @@ def fetch_qxc_history(periods=15):
     return FALLBACK_QXC[:periods]
 
 
+def _scrapling_fallback_get(url, referer='', timeout=15):
+    """🟢 v7.2: scrapling降级请求 — 当requests被封/超时时自动启用
+    优先用Fetcher（curl_cffi+反指纹），失败则用DynamicFetcher（Playwright）
+    """
+    if not _SCRAPLING_AVAILABLE:
+        return None
+    try:
+        # 方案1: Fetcher（快，反指纹）
+        fetcher = _ScraplingFetcher(auto_match=False)
+        page = fetcher.get(url, headers={'Referer': referer} if referer else {})
+        if page and page.status == 200:
+            return page.body.decode('gb2312', errors='replace') if isinstance(page.body, bytes) else page.body
+    except Exception as e:
+        print(f"[scrapling-Fetcher] 失败: {type(e).__name__}: {str(e)[:80]}")
+    try:
+        # 方案2: DynamicFetcher（Playwright驱动，能跑JS）
+        fetcher2 = _ScraplingDynamic()
+        page2 = fetcher2.fetch(url, referer=referer if referer else None)
+        if page2 and page2.status == 200:
+            return page2.body.decode('gb2312', errors='replace') if isinstance(page2.body, bytes) else page2.body
+    except Exception as e:
+        print(f"[scrapling-DynamicFetcher] 失败: {type(e).__name__}: {str(e)[:80]}")
+    return None
+
 def _fetch_ssq_500com(periods, retries=3):
     """双色球历史数据 - datachart 页面（带重试）"""
     for attempt in range(retries):
@@ -444,6 +475,15 @@ def _fetch_ssq_500com(periods, retries=3):
                 continue
             print(f"[双色球-500] 堆栈: {traceback.format_exc()[:200]}")
             return None
+    # 🟢 v7.2: scrapling降级 — requests全部失败后自动启用
+    print("[双色球-500] requests失败，尝试scrapling降级...")
+    html = _scrapling_fallback_get(url, referer='https://datachart.500.com/ssq/history/')
+    if html:
+        result = _parse_ssq_html(html, periods)
+        if result and len(result) > 0:
+            print(f"[双色球-500] ✅ scrapling降级成功: {len(result)} 期")
+            return result
+    print("[双色球-500] scrapling降级也失败")
     return None
 
 def _fetch_dlt_500com(periods, retries=3):
@@ -488,6 +528,15 @@ def _fetch_dlt_500com(periods, retries=3):
                 continue
             print(f"[大乐透-500] 堆栈: {traceback.format_exc()[:200]}")
             return None
+    # 🟢 v7.2: scrapling降级
+    print("[大乐透-500] requests失败，尝试scrapling降级...")
+    html = _scrapling_fallback_get(url, referer='https://datachart.500.com/dlt/history/')
+    if html:
+        result = _parse_dlt_html(html, periods)
+        if result and len(result) > 0:
+            print(f"[大乐透-500] ✅ scrapling降级成功: {len(result)} 期")
+            return result
+    print("[大乐透-500] scrapling降级也失败")
     return None
 
 def _fetch_qxc_500com(periods):
