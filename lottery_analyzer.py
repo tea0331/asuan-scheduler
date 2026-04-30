@@ -1319,6 +1319,8 @@ class WeightedAnalyzer:
                                                   core_reds_by_weight[:2])  # 🟢 v6.5: 只锁TOP2，留4号自由调形态
 
         # 🟢 v6.8: 冷号注红球 — 权重从配置读取，auto_evolve可调
+        # 🔴 v7.2: 冷号注排除核心注+扩展1+扩展2已选号码，避免重复
+        used_reds = set(core_reds) | set(ext1_reds) | set(ext2_reds)
         cold_scores = []
         red_avg_interval = analysis.get('red_avg_interval', {})
         for n in range(1, 34):
@@ -1332,7 +1334,7 @@ class WeightedAnalyzer:
             score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
             cold_scores.append((n, score))
         cold_scores.sort(key=lambda x: x[1], reverse=True)
-        cold_red_nums = sorted([n for n, s in cold_scores[:6]])
+        cold_red_nums = sorted([n for n, s in cold_scores if n not in used_reds][:6])
 
         return [
             {'reds': core_reds, 'blue': core_blue, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
@@ -1482,6 +1484,8 @@ class WeightedAnalyzer:
                                                    core_front_by_weight[:1], big_threshold=18)  # 🟢 v6.5: 只锁TOP1
 
         # 🟢 v6.8: 冷号注前区 — 权重从配置读取，auto_evolve可调
+        # 🔴 v7.2: 冷号注排除核心注+扩展1+扩展2已选号码，避免重复
+        used_front = set(core_front) | set(ext1_front) | set(ext2_front)
         cold_front_scores = []
         front_avg_interval = analysis.get('front_avg_interval', {})
         for n in range(1, 36):
@@ -1494,7 +1498,7 @@ class WeightedAnalyzer:
             score = miss_score * self.cold_miss_front + cycle_signal * self.cold_cycle_front + f_score * self.cold_freq_front
             cold_front_scores.append((n, score))
         cold_front_scores.sort(key=lambda x: x[1], reverse=True)
-        cold_front_nums = sorted([n for n, s in cold_front_scores[:5]])
+        cold_front_nums = sorted([n for n, s in cold_front_scores if n not in used_front][:5])
 
         return [
             {'front': core_front, 'back': core_back, 'strategy': strategy_tag},  # 🟢 v6.1: Kelly驱动
