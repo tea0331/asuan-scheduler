@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v7.2 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎）
+彩票号码分析模块 v7.3 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导）
 
 v7.1核心改动（GEPA修复+相关性+统计检验）：
 1. 🔴 修复GEPA从未生效bug：回测记录只有1条时GEPA需要2条，改为至少1条+6样本
@@ -962,6 +962,7 @@ class WeightedAnalyzer:
                 correlation_bonus  # 🟢 v7.1: 号码相关性加分
             )
 
+
         return weights, raw_freq, miss, avg_miss_interval  # 🟢 v6.3: raw_freq替代decay_freq返回
 
     def analyze_ssq(self):
@@ -1004,6 +1005,10 @@ class WeightedAnalyzer:
         miss_reds = sorted(red_weights.items(), key=lambda x: red_miss.get(x[0], 0), reverse=True)
         hot_blues = sorted(blue_weights.items(), key=lambda x: x[1], reverse=True)
 
+        # 🔴 v7.3: 和值约束检查 — 选中的6个红球的和值是否接近历史均值
+        # 注意：实际选号在调用处完成，此处仅提供avg_sum供参考
+        # 调用处应使用：abs(sum(selected_6_reds) - avg_sum) < avg_sum * 0.15 来判断是否接近
+
         return {
             'red_weights': hot_reds,
             'red_freq': red_freq,
@@ -1014,7 +1019,8 @@ class WeightedAnalyzer:
             'blue_miss': blue_miss,
             'blue_avg_interval': blue_avg_interval,  # 🟢 v6.2
             'zone_balance': zone_balance,
-            'avg_sum': avg_sum,
+            'avg_sum': avg_sum,  # 历史平均和值
+            'sum_value_guidance': f"选中6个红球的和值应接近{avg_sum:.1f}（偏差<15%）",
             'consec_rate': consec_rate,
             'total_periods': total,
         }
@@ -1061,7 +1067,9 @@ class WeightedAnalyzer:
             'back_miss': back_miss,
             'back_avg_interval': back_avg_interval,  # 🟢 v6.2
             'zone_balance': zone_balance,
-            'avg_sum': avg_sum,
+            'avg_sum': avg_sum,  # 历史平均和值
+            # 🔴 v7.3: 和值约束引导 — 前区5个号+后区2个号的和值应接近历史均值
+            'sum_value_guidance': f"前区5个号的和值应接近{avg_sum:.1f}（偏差<15%），后区2个号的和值应接近{avg_sum*2/36:.1f}",
             'consec_rate': consec_rate,
             'total_periods': total,
         }

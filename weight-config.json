@@ -12,7 +12,7 @@
   "neighbor_bonus": 0.03,
   "gamma": 0.88,
   "version": 5,
-  "algo_version": "v7.2",
+  "algo_version": "v7.3",
   "fix_log": [
     {
       "version": "v7.2",
