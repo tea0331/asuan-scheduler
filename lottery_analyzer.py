@@ -897,11 +897,11 @@ class WeightedAnalyzer:
                                 if n in extract_fn(self.history[i + 1]):
                                     co_occur += 1
                         # 🔴 v7.2 修复：检查必须放在循环外，否则会对同一对(n,m)重复计算
-                        if m_occur >= 3:  # 至少3次共现才有统计意义
-                            p_n_given_m = co_occur / m_occur
-                            lift = p_n_given_m / max(p_n, 0.01)
-                            if lift > 1.2:  # 提升20%以上才算有信号
-                                correlation_bonus += min((lift - 1.0) * 0.02, 0.06)
+                    if m_occur >= 3:  # 至少3次共现才有统计意义
+                        p_n_given_m = co_occur / m_occur
+                        lift = p_n_given_m / max(p_n, 0.01)
+                        if lift > 1.2:  # 提升20%以上才算有信号
+                            correlation_bonus += min((lift - 1.0) * 0.02, 0.06)
 
             weights[n] = (
                 self.w_freq * f +
