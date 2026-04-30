@@ -155,6 +155,32 @@
       },
       "is_major": false,
       "algo_version": "v7.1"
+    },
+    {
+      "date": "2026-05-02",
+      "trigger": "观察期结束",
+      "sample_size": 16,
+      "t_test": {
+        "t_value": 0,
+        "significant": false
+      },
+      "observation_conclusion": "GEPA持续微调3次，全部不显著（t=0）。权重振荡（freq: 0.30→0.33, miss: 0.25→0.22），说明已接近局部最优。观察期（5-7天）已结束，建议锁定权重。",
+      "action": "锁定当前权重，暂停GEPA自动进化",
+      "locked_weights": {
+        "freq": 0.33,
+        "miss": 0.22,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.394,
+        "cold_cycle_front": 0.3104,
+        "cold_freq_front": 0.2956,
+        "cold_miss_back": 0.2955,
+        "cold_cycle_back": 0.409,
+        "cold_freq_back": 0.2955,
+        "neighbor_bonus": 0.03,
+        "gamma": 0.88
+      },
+      "gepa_locked": true
     }
   ]
 }
