@@ -887,14 +887,20 @@ class WeightedAnalyzer:
                     for m in last_drawn_set:
                         if m == n:
                             continue
-                        # 统计m出现后下一期n也出现的次数
-                        co_occur = 0
-                        m_occur = 0
-                        for i in range(len(self.history) - 1):
-                            if m in extract_fn(self.history[i + 1]):
-                                m_occur += 1
-                                if n in extract_fn(self.history[i]):
-                                    co_occur += 1
+                        # 🔴 v7.2 修复：条件概率 P(n | 上期m) 正确计算
+                    # 逻辑：若第i期出现m，统计第i+1期是否出现n
+                    co_occur = 0
+                    m_occur = 0
+                    for i in range(len(self.history) - 1):
+                        if m in extract_fn(self.history[i]):
+                            m_occur += 1
+                            if n in extract_fn(self.history[i + 1]):
+                                co_occur += 1
+                    if m_occur >= 3:  # 至少3次共现才有统计意义
+                        p_n_given_m = co_occur / m_occur
+                        lift = p_n_given_m / max(p_n, 0.01)
+                        if lift > 1.2:
+                            correlation_bonus += min((lift - 1.0) * 0.02, 0.06)
                         if m_occur >= 3:  # 至少3次共现才有统计意义
                             p_n_given_m = co_occur / m_occur
                             # 条件概率显著高于先验概率时加分
