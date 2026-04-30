@@ -1,8 +1,11 @@
 name: Daily Digest
 
 on:
-  # 由外部定时服务（cron-job.org）通过 workflow_dispatch API 精准触发
-  # 不再用 GitHub schedule——其触发时间不可靠，经常延迟或跳过
+  # 简化定时：主窗口+补检，接受偶尔延迟
+  schedule:
+    - cron: "10 16 * * *"   # 北京 00:10 主时间
+    - cron: "0 8 * * *"     # 北京 16:00 补检
+  # 手动触发
   workflow_dispatch:
     inputs:
       force_rerun:
