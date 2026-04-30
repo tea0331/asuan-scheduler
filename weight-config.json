@@ -12,6 +12,7 @@
   "cold_miss_back": 0.2955,
   "cold_freq_back": 0.2955,
   "gamma": 0.85,
+  "neighbor_bonus": 0.03,
   "evolution_log": [
     {
       "date": "2026-04-29",
