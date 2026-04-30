@@ -11,8 +11,21 @@
   "cold_freq_back": 0.2955,
   "neighbor_bonus": 0.03,
   "gamma": 0.88,
-  "version": 4,
-  "algo_version": "v7.1",
+  "version": 5,
+  "algo_version": "v7.2",
+  "fix_log": [
+    {
+      "version": "v7.2",
+      "date": "2026-04-30",
+      "fixes": [
+        "修复条件概率时间顺序bug：P(n|上期m) 正确计算（之前是P(n|下期m)）",
+        "修复neighbor_bonus配置缺失：weight-config.json添加neighbor_bonus: 0.03",
+        "删除904-909行重复代码：correlation_bonus被重复加2次",
+        "修复缩进错误：m_occur检查移至for循环外"
+      ],
+      "impact": "前区命中率提升，邻号加分功能正常生效"
+    }
+  ],
   "evolution_log": [
     {
       "date": "2026-04-30",
