@@ -61,7 +61,7 @@ _BASE_DIR = os.environ.get('BASE_DIR', os.path.dirname(os.path.abspath(__file__)
 
 TASKS = {
     'daily-digest': {
-        'hour': 0, 'minute': 0,
+        'hour': 7, 'minute': 0,
         'output_dir': os.environ.get('OUTPUT_DIR', os.path.join(_BASE_DIR, 'output')),
         'desc': '阿算日报',
         'email_subject_prefix': '阿算日报',
@@ -514,6 +514,58 @@ hr {{ border: none; border-top: 1px solid #ddd; margin: 20px 0; }}
     return success
 
 
+def _format_liuhai_digest(digest):
+    """将刘海蟾凌晨摘要格式化为markdown彩票板块"""
+    lines = []
+    lines.append('\n---\n')
+    lines.append('## 🎰 刘海蟾点金 — 今日推荐')
+    lines.append(f'> 数据运行时间: {digest.get("generated_at", "?")} | GEPA状态: {digest.get("steps", {}).get("gepa", "?")}')
+
+    weights = digest.get('weights_used', {})
+    if weights:
+        w_str = ' '.join(f'{k}={v}' for k, v in weights.items() if v is not None)
+        lines.append(f'> 全局权重: {w_str}')
+
+    recs = digest.get('recommendations', {})
+    game_names = {'qxc': '七星彩', 'ssq': '双色球', 'dlt': '大乐透'}
+
+    for game_key in ['qxc', 'ssq', 'dlt']:
+        game_recs = recs.get(game_key, [])
+        if not game_recs:
+            continue
+        lines.append(f'\n### {game_names.get(game_key, game_key)}')
+        for i, rec in enumerate(game_recs, 1):
+            strategy = rec.get('strategy', '?')
+            if game_key == 'qxc':
+                digits = rec.get('digits', [])
+                num_str = ' '.join(str(d) for d in digits)
+                lines.append(f'  注{i}: **{num_str}**  [{strategy}]')
+            elif game_key == 'ssq':
+                reds = rec.get('reds', [])
+                blue = rec.get('blue', '?')
+                num_str = ' '.join(str(r).zfill(2) for r in reds)
+                lines.append(f'  注{i}: **{num_str}** + 蓝**{str(blue).zfill(2)}**  [{strategy}]')
+            elif game_key == 'dlt':
+                front = rec.get('front', [])
+                back = rec.get('back', [])
+                front_str = ' '.join(str(f).zfill(2) for f in front)
+                back_str = ' '.join(str(b).zfill(2) for b in back)
+                lines.append(f'  注{i}: **{front_str}** + **{back_str}**  [{strategy}]')
+
+    # GEPA变更说明
+    changes = digest.get('gepa_changes', [])
+    if changes:
+        lines.append(f'\n**GEPA调整**: {"; ".join(changes[:5])}')
+
+    steps = digest.get('steps', {})
+    pred = steps.get('predict', '?')
+    settle = steps.get('settle', '?')
+    lines.append(f'\n> 虚拟用户: 预测{pred}条 / 结算{settle}条 / 演化模板+{steps.get("evolver", 0)}个')
+    lines.append('\n---\n')
+
+    return '\n'.join(lines)
+
+
 def run_task_and_email(task_name, task, today_str):
     """生成内容 + 写文件 + 发邮件"""
     task['name'] = task_name
@@ -558,15 +610,32 @@ def run_task_and_email(task_name, task, today_str):
             logging.error(f"[{task_name}] 重试后仍返回占位文本，放弃")
             content = None
 
-    # 🔴 第二步：生成彩票推荐（刘海蟾点金）
+    # 🔴 第二步：彩票推荐（优先读凌晨刘海蟾摘要，fallback到lottery_analyzer）
     lottery_section = ''
-    try:
-        logging.info("[彩票] 开始生成推荐...")
-        lottery_section = generate_lottery_recommendations()
-        logging.info(f"[彩票] 推荐生成完成: {len(lottery_section)}字符")
-    except Exception as e:
-        logging.error(f"[彩票] 推荐生成失败: {e}")
-        lottery_section = '\n---\n🎰 彩票推荐生成异常，请手动运行lottery_analyzer.py\n---\n'
+    LIUHAI_DIGEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
+    if os.path.exists(LIUHAI_DIGEST):
+        try:
+            with open(LIUHAI_DIGEST, 'r', encoding='utf-8') as f:
+                digest = json.load(f)
+            if digest.get('date') == today_str:
+                logging.info(f"[彩票] 读取刘海蟾凌晨摘要: {digest.get('generated_at')}")
+                lottery_section = _format_liuhai_digest(digest)
+                logging.info(f"[彩票] 摘要格式化完成: {len(lottery_section)}字符")
+            else:
+                logging.warning(f"[彩票] 摘要日期不匹配（{digest.get('date')} vs {today_str}），走旧版")
+                lottery_section = ''
+        except Exception as e:
+            logging.error(f"[彩票] 读取摘要失败: {e}")
+            lottery_section = ''
+
+    if not lottery_section:
+        try:
+            logging.info("[彩票] 走旧版lottery_analyzer生成推荐...")
+            lottery_section = generate_lottery_recommendations()
+            logging.info(f"[彩票] 推荐生成完成: {len(lottery_section)}字符")
+        except Exception as e:
+            logging.error(f"[彩票] 推荐生成失败: {e}")
+            lottery_section = '\n---\n🎰 彩票推荐生成异常，请手动运行lottery_analyzer.py\n---\n'
 
     # 第三步：写入文件（🔴 含彩票内容，保证文件和邮件一致）
     output_file = None
