@@ -1827,62 +1827,112 @@ def _save_weight_config(config):
 
 def adjust_weights_from_backtest():
     """
-    🔴 v6.8 GEPA自动进化：回测→诊断→调参→版本更新
-    不再只看"哪个策略赢"，而是：
-    1. 诊断冷号注 vs 核心注的命中差距
-    2. 诊断邻号bonus是否有效
-    3. 诊断gamma衰减是否合理
-    4. 自动微调 + 记录进化日志
-    5. 重大变更自动升版本号
+    🔴 v7.4 GEPA自动进化：以AI推荐命中为优化目标
+    核心改变：GEPA看的是"AI推荐命中好不好"，不再是"规则推荐命中好不好"
+    因为老板看到的是AI推荐，GEPA必须优化AI的表现才有意义。
+
+    因果链：权重→WeightedAnalyzer分析→分析结果喂给AI→AI推荐→命中→GEPA
+    闭环：AI命中好→保持权重方向，AI命中差→调整权重→改变AI看到的分析→改善AI推荐
+
+    规则推荐命中仍然作为辅助信号（判断分析质量），但不再是决策依据。
     """
     backtest_log = _load_backtest()
     config = _load_weight_config()
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-    # 只用最近7天回测数据（当前版本回测才有意义）
-    # 🔴 v7.1: 扩大到最近15天回测数据（之前7天+至少2条，样本太小无统计意义）
+    # 🔴 v7.4: gepa_locked检查 — 锁定时不进化
+    if config.get('gepa_locked', False):
+        print("[GEPA] 权重已锁定，跳过进化")
+        return None
+
     recent = [bt for bt in backtest_log[-15:]
               if bt.get('backtest_method') == 'current_version']
     if len(recent) < 1:
-        return None  # 无回测数据
+        return None
 
-    # 🔴 v7.1: 统计显著性检验 — 样本不足时不调参
+    # ===== 🔴 v7.4: 核心改变 — 收集AI推荐命中数据 =====
+    ai_hits_list = []  # AI推荐的总命中数列表
+    ai_prize_list = []  # AI推荐的中奖金额列表
+    ai_by_game = defaultdict(list)  # 按彩种分的AI命中
+
+    predictions = _load_predictions()
+    for bt in recent:
+        bt_date = bt.get('date', '')
+        # 找同一天的AI预测
+        day_pred = None
+        for p in predictions:
+            if p.get('date') == bt_date:
+                day_pred = p
+                break
+        if not day_pred:
+            continue
+
+        for game in ['ssq', 'dlt', 'qxc']:
+            if game not in bt:
+                continue
+            actual_data = bt[game]
+            ai_recs = day_pred.get(f'{game}_recs', [])
+            if not ai_recs:
+                continue
+
+            for rec in ai_recs:
+                if game == 'ssq':
+                    if 'reds' in rec and 'actual_reds' in actual_data:
+                        red_hits = len(_get_hit_numbers(rec.get('reds', []), actual_data.get('actual_reds', [])))
+                        blue_hit = 1 if rec.get('blue') == actual_data.get('actual_blue') else 0
+                        total = red_hits + blue_hit
+                        prize = judge_prize_ssq(red_hits, blue_hit)
+                    else:
+                        continue
+                elif game == 'dlt':
+                    if 'front' in rec and 'actual_front' in actual_data:
+                        front_hits = len(_get_hit_numbers(rec.get('front', []), actual_data.get('actual_front', [])))
+                        back_hits = len(_get_hit_numbers(rec.get('back', []), actual_data.get('actual_back', [])))
+                        total = front_hits + back_hits
+                        prize = judge_prize_dlt(front_hits, back_hits)
+                    else:
+                        continue
+                elif game == 'qxc':
+                    if 'digits' in rec and 'actual_digits' in actual_data:
+                        digit_hits = sum(1 for i in range(7) if rec.get('digits', [0]*7)[i] == actual_data.get('actual_digits', [0]*7)[i])
+                        total = digit_hits
+                        prize = judge_prize_qxc(digit_hits)
+                    else:
+                        continue
+
+                ai_hits_list.append(total)
+                ai_prize_list.append(prize['prize'])
+                ai_by_game[game].append(total)
+
+    # 同时收集规则推荐命中（辅助信号）
+    rule_strategy_stats = defaultdict(lambda: {'hits': [], 'games': 0})
     total_strategy_games = 0
     for bt in recent:
         for game in ['ssq', 'dlt', 'qxc']:
             if game not in bt:
                 continue
-            total_strategy_games += len(bt[game].get('hits', []))
-    MIN_GAMES_FOR_ADJUST = 6   # 至少6个策略-彩种样本才微调
-    MIN_GAMES_FOR_MAJOR = 20   # 至少20个样本才允许重大调参
-    if total_strategy_games < MIN_GAMES_FOR_ADJUST:
-        print(f"[GEPA] 样本不足({total_strategy_games}<{MIN_GAMES_FOR_ADJUST})，暂不进化")
-        return None
-
-    # ===== 诊断：统计各策略命中情况 =====
-    strategy_stats = defaultdict(lambda: {'hits': [], 'games': 0})
-    neighbor_hits = []  # 邻号是否命中
-    for bt in recent:
-        for game in ['ssq', 'dlt', 'qxc']:
-            if game not in bt:
-                continue
-            bt_data = bt[game]
-            for h in bt_data.get('hits', []):
+            for h in bt[game].get('hits', []):
                 s = h.get('strategy', '')
                 total = h.get('total', 0)
-                strategy_stats[s]['hits'].append(total)
-                strategy_stats[s]['games'] += 1
-                # 诊断邻号：核心注的推荐号里有几个是上期邻号？
-                # （暂时用命中数据推断，后续可加专门追踪）
+                rule_strategy_stats[s]['hits'].append(total)
+                rule_strategy_stats[s]['games'] += 1
+                total_strategy_games += 1
 
-    # 映射策略名
     mapped_stats = defaultdict(lambda: {'hits': [], 'games': 0})
-    for name, data in strategy_stats.items():
+    for name, data in rule_strategy_stats.items():
         mapped_name = STRATEGY_MAP.get(name, name)
         mapped_stats[mapped_name]['hits'].extend(data['hits'])
         mapped_stats[mapped_name]['games'] += data['games']
 
-    # ===== 决策：计算各维度调整 =====
+    # ===== 样本检查 =====
+    # 🔴 v7.4: AI推荐样本和规则推荐样本都看
+    ai_sample = len(ai_hits_list)
+    MIN_AI_SAMPLE = 3  # AI至少3个样本才进化（比规则门槛低，因为AI是核心指标）
+    if ai_sample < MIN_AI_SAMPLE and total_strategy_games < 6:
+        print(f"[GEPA] 样本不足(AI={ai_sample}, 规则={total_strategy_games})，暂不进化")
+        return None
+
+    # ===== 决策：基于AI推荐表现调参 =====
     changes = []
     old_config = {k: config.get(k, DEFAULT_WEIGHT_CONFIG.get(k)) for k in
                   ['freq', 'miss', 'trend', 'zone',
@@ -1890,48 +1940,88 @@ def adjust_weights_from_backtest():
                    'cold_miss_back', 'cold_cycle_back', 'cold_freq_back',
                    'neighbor_bonus', 'gamma']}
 
-    # 🔴 v7.1: 统计显著性检验 — Welch t-test
+    # 🔴 v7.4: 核心指标 = AI推荐平均命中
+    ai_avg = sum(ai_hits_list) / max(len(ai_hits_list), 1) if ai_hits_list else 0
+    ai_avg_prize = sum(ai_prize_list) / max(len(ai_prize_list), 1) if ai_prize_list else 0
+    ai_total_prize = sum(ai_prize_list)
+
+    # 规则推荐辅助指标
     core_hits_list = mapped_stats.get(Strategy.CORE, {}).get('hits', [0])
     cold_hits_list = mapped_stats.get(Strategy.COLD_MISS, {}).get('hits', [0])
     core_avg = sum(core_hits_list) / max(len(core_hits_list), 1)
     cold_avg = sum(cold_hits_list) / max(len(cold_hits_list), 1)
 
-    def _welch_ttest(a, b):
-        """Welch t-test，返回t值和是否显著(p<0.10)"""
-        import math
-        n1, n2 = len(a), len(b)
-        if n1 < 2 or n2 < 2:
-            return 0, False
-        m1, m2 = sum(a)/n1, sum(b)/n2
-        v1 = sum((x-m1)**2 for x in a)/(n1-1) if n1 > 1 else 0
-        v2 = sum((x-m2)**2 for x in b)/(n2-1) if n2 > 1 else 0
-        se = math.sqrt(v1/n1 + v2/n2) if (v1/n1 + v2/n2) > 0 else 1e-9
-        t = (m1 - m2) / se
-        # 简化：|t|>1.65 ≈ p<0.10（单侧），对样本量小的情况足够保守
-        return t, abs(t) > 1.65
+    print(f"[GEPA] AI推荐均值命中={ai_avg:.2f}(n={ai_sample}), 规则核心注={core_avg:.2f}, 规则冷号注={cold_avg:.2f}")
 
-    t_val, is_significant = _welch_ttest(core_hits_list, cold_hits_list)
-    if not is_significant and len(core_hits_list) + len(cold_hits_list) < 15:
-        # 样本小且差异不显著：降低调参力度（步长减半）
-        step = 0.01  # 微调步长（保守）
-        print(f"[GEPA] 差异不显著(t={t_val:.2f})，保守微调")
+    # 🔴 v7.4: 步长决策 — AI命中越差，步长越大（急需改善）
+    if ai_avg < 1.0:
+        step = 0.03  # AI命中很差，加大步长
+        print(f"[GEPA] AI命中偏低({ai_avg:.2f})，加大步长{step}")
+    elif ai_avg < 2.0:
+        step = 0.02  # AI命中一般
     else:
-        step = 0.02  # 微调步长（正常）
-        if is_significant:
-            print(f"[GEPA] 差异显著(t={t_val:.2f})，正常调参")
+        step = 0.01  # AI命中还行，保守微调
+        print(f"[GEPA] AI命中尚可({ai_avg:.2f})，保守微调")
 
-    if cold_avg > core_avg + 0.3:
-        # 冷号注明显优于核心注 → 加大冷号遗漏权重
-        config['cold_miss_front'] = min(0.60, config.get('cold_miss_front', 0.40) + step)
-        config['cold_miss_back'] = min(0.50, config.get('cold_miss_back', 0.30) + step * 0.5)
-        changes.append(f"冷号注命中{cold_avg:.1f}>核心注{core_avg:.1f} → cold_miss_front +{step}, cold_miss_back +{step*0.5}")
-    elif core_avg > cold_avg + 0.5:
-        # 核心注明显优于冷号注 → 加大周期权重（周期回补信号更有效）
-        config['cold_cycle_front'] = min(0.50, config.get('cold_cycle_front', 0.30) + step * 0.5)
-        config['cold_cycle_back'] = min(0.60, config.get('cold_cycle_back', 0.40) + step * 0.5)
-        changes.append(f"核心注命中{core_avg:.1f}>冷号注{cold_avg:.1f} → cold_cycle +{step*0.5}")
+    # ===== v7.4: 策略调整逻辑 — 以AI表现为锚 =====
 
-    # 2️⃣ 归一化冷号注权重（🔴 下限保护0.05，防止趋零）
+    # 1️⃣ AI命中差 → 分析原因并针对性调整
+    if ai_avg < 1.5 and ai_sample >= MIN_AI_SAMPLE:
+        # AI命中差，可能是分析信号不够清晰
+        # 检查规则推荐的信号方向：如果规则也不行，说明权重本身有问题
+        if core_avg < cold_avg:
+            # 冷号注优于核心注但AI也没用上 → 加大遗漏权重让冷号信号更突出
+            config['cold_miss_front'] = min(0.60, config.get('cold_miss_front', 0.40) + step)
+            config['cold_miss_back'] = min(0.50, config.get('cold_miss_back', 0.30) + step * 0.5)
+            changes.append(f"AI命中差({ai_avg:.1f})+冷号信号更强 → cold_miss +{step}")
+        else:
+            # 核心注信号方向对但AI没用好 → 加大趋势权重让信号更明确
+            config['trend'] = min(0.40, config.get('trend', 0.25) + step)
+            config['zone'] = max(0.10, config.get('zone', 0.20) - step * 0.5)
+            changes.append(f"AI命中差({ai_avg:.1f})+核心信号方向对 → trend +{step}, zone -{step*0.5}")
+
+        # 同时微增neighbor_bonus（邻号信号可能帮助AI）
+        if config.get('neighbor_bonus', 0.03) < 0.06:
+            config['neighbor_bonus'] = min(0.06, config.get('neighbor_bonus', 0.03) + 0.005)
+            changes.append(f"AI命中差 → neighbor_bonus +0.005 → {config['neighbor_bonus']:.3f}")
+
+    # 2️⃣ AI命中好 → 保持方向，微调巩固
+    elif ai_avg >= 2.0 and ai_sample >= MIN_AI_SAMPLE:
+        # AI命中好，检查哪个规则信号贡献最大，加大该维度
+        if core_avg > cold_avg + 0.3:
+            # 核心注信号在推动AI命中 → 加大频率权重
+            config['freq'] = min(0.45, config.get('freq', 0.30) + step * 0.5)
+            config['miss'] = max(0.10, config.get('miss', 0.25) - step * 0.5)
+            changes.append(f"AI命中好+核心注驱动 → freq +{step*0.5}, miss -{step*0.5}")
+        elif cold_avg > core_avg + 0.3:
+            # 冷号注信号在推动AI命中 → 加大cycle权重
+            config['cold_cycle_front'] = min(0.50, config.get('cold_cycle_front', 0.30) + step * 0.5)
+            config['cold_cycle_back'] = min(0.60, config.get('cold_cycle_back', 0.40) + step * 0.5)
+            changes.append(f"AI命中好+冷号驱动 → cold_cycle +{step*0.5}")
+
+        # neighbor_bonus如果命中好则微减（避免过拟合）
+        if config.get('neighbor_bonus', 0.03) > 0.01:
+            config['neighbor_bonus'] = max(0.01, config.get('neighbor_bonus', 0.03) - 0.005)
+            changes.append(f"AI命中好 → neighbor_bonus -0.005 → {config['neighbor_bonus']:.3f}")
+
+    # 3️⃣ 按彩种细化 — 如果某彩种AI命中特别差/好
+    for game, game_name in [('ssq', '双色球'), ('dlt', '大乐透'), ('qxc', '七星彩')]:
+        game_hits = ai_by_game.get(game, [])
+        if len(game_hits) >= 2:
+            game_avg = sum(game_hits) / len(game_hits)
+            game_baseline = {'ssq': 2.2, 'dlt': 1.8, 'qxc': 0.7}.get(game, 1.5)
+            if game_avg < game_baseline * 0.5:
+                # 该彩种AI命中远低于基线 → gamma微减（更重视远期模式）
+                if config.get('gamma', 0.88) > 0.80:
+                    config['gamma'] = max(0.80, config.get('gamma', 0.88) - 0.01)
+                    changes.append(f"{game_name}AI命中差({game_avg:.1f}) → gamma -0.01 → {config['gamma']:.2f}")
+            elif game_avg > game_baseline * 1.5:
+                # 该彩种AI命中好 → gamma微增（重视近期趋势）
+                if config.get('gamma', 0.88) < 0.95:
+                    config['gamma'] = min(0.95, config.get('gamma', 0.88) + 0.01)
+                    changes.append(f"{game_name}AI命中好({game_avg:.1f}) → gamma +0.01 → {config['gamma']:.2f}")
+
+    # 4️⃣ 归一化冷号注权重（下限保护0.05）
     for suffix in ['front', 'back']:
         cm = config.get(f'cold_miss_{suffix}', 0.40 if suffix == 'front' else 0.30)
         cc = config.get(f'cold_cycle_{suffix}', 0.30 if suffix == 'front' else 0.40)
@@ -1940,28 +2030,14 @@ def adjust_weights_from_backtest():
         if cold_total > 0:
             config[f'cold_miss_{suffix}'] = round(cm / cold_total, 4)
             config[f'cold_cycle_{suffix}'] = round(cc / cold_total, 4)
-            # 🔴 下限保护：cold_freq至少0.05
             config[f'cold_freq_{suffix}'] = max(0.05, round(1.0 - config[f'cold_miss_{suffix}'] - config[f'cold_cycle_{suffix}'], 4))
-            # 归一化后重新校验
             total2 = config[f'cold_miss_{suffix}'] + config[f'cold_cycle_{suffix}'] + config[f'cold_freq_{suffix}']
             if total2 > 0:
                 config[f'cold_miss_{suffix}'] = round(config[f'cold_miss_{suffix}'] / total2, 4)
                 config[f'cold_cycle_{suffix}'] = round(config[f'cold_cycle_{suffix}'] / total2, 4)
                 config[f'cold_freq_{suffix}'] = max(0, round(1.0 - config[f'cold_miss_{suffix}'] - config[f'cold_cycle_{suffix}'], 4))
 
-    # 3️⃣ 核心注权重微调
-    hot_wins = mapped_stats.get(Strategy.CORE, {}).get('games', 0)
-    cold_wins = mapped_stats.get(Strategy.COLD_MISS, {}).get('games', 0)
-    if hot_wins > cold_wins + 1 and core_avg >= cold_avg:
-        config['freq'] = min(0.45, config.get('freq', 0.30) + step)
-        config['miss'] = max(0.10, config.get('miss', 0.25) - step)
-        changes.append(f"热号领先 → freq +{step}, miss -{step}")
-    elif cold_wins > hot_wins + 1 and cold_avg >= core_avg:
-        config['miss'] = min(0.45, config.get('miss', 0.25) + step)
-        config['freq'] = max(0.10, config.get('freq', 0.30) - step)
-        changes.append(f"冷号领先 → miss +{step}, freq -{step}")
-
-    # 归一化核心注权重（🔴 下限保护zone≥0.05）
+    # 5️⃣ 归一化核心注权重（下限保护zone≥0.05）
     f, m, t, z = config.get('freq', 0.30), config.get('miss', 0.25), config.get('trend', 0.25), config.get('zone', 0.20)
     total = f + m + t + z
     if total > 0:
@@ -1969,7 +2045,6 @@ def adjust_weights_from_backtest():
         config['miss'] = round(m / total, 4)
         config['trend'] = round(t / total, 4)
         config['zone'] = max(0.05, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
-        # 归一化后重新校验
         total2 = config['freq'] + config['miss'] + config['trend'] + config['zone']
         if total2 > 0:
             config['freq'] = round(config['freq'] / total2, 4)
@@ -1977,43 +2052,26 @@ def adjust_weights_from_backtest():
             config['trend'] = round(config['trend'] / total2, 4)
             config['zone'] = max(0, round(1.0 - config['freq'] - config['miss'] - config['trend'], 4))
 
-    # 4️⃣ 邻号bonus调整 — 如果核心注命中率持续偏低，微增邻号bonus
-    if core_avg < 0.8 and config.get('neighbor_bonus', 0.03) < 0.06:
-        config['neighbor_bonus'] = min(0.06, config.get('neighbor_bonus', 0.03) + 0.005)
-        changes.append(f"核心注命中偏低({core_avg:.1f}) → neighbor_bonus +0.005 → {config['neighbor_bonus']:.3f}")
-    elif core_avg > 1.5 and config.get('neighbor_bonus', 0.03) > 0.01:
-        config['neighbor_bonus'] = max(0.01, config.get('neighbor_bonus', 0.03) - 0.005)
-        changes.append(f"核心注命中良好({core_avg:.1f}) → neighbor_bonus -0.005 → {config['neighbor_bonus']:.3f}")
-
-    # 5️⃣ gamma调整 — 如果近期数据预测力下降，减小gamma（更重视远期稳定模式）
-    if core_avg < 0.5 and config.get('gamma', 0.88) > 0.80:
-        config['gamma'] = max(0.80, config.get('gamma', 0.88) - 0.01)
-        changes.append(f"命中率极低 → gamma -0.01 → {config['gamma']:.2f}（更重视远期模式）")
-    elif core_avg > 2.0 and config.get('gamma', 0.88) < 0.95:
-        config['gamma'] = min(0.95, config.get('gamma', 0.88) + 0.01)
-        changes.append(f"命中率很高 → gamma +0.01 → {config['gamma']:.2f}（更重视近期趋势）")
-
     if not changes:
         return None
 
     # ===== 版本更新 =====
     config['version'] = config.get('version', 1) + 1
 
-    # 判断是否重大变更（任何参数变化≥0.04视为重大）
-    # 🔴 v7.1: 样本不足时不允许重大变更，只允许微调
     is_major = False
     all_param_keys = ['freq', 'miss', 'trend', 'zone',
                       'cold_miss_front', 'cold_cycle_front', 'cold_freq_front',
                       'cold_miss_back', 'cold_cycle_back', 'cold_freq_back',
                       'neighbor_bonus', 'gamma']
+    total_samples = max(ai_sample, total_strategy_games)
+    MIN_GAMES_FOR_MAJOR = 20
     for key in all_param_keys:
         old_val = old_config.get(key, 0)
         new_val = config.get(key, 0)
         if abs(new_val - old_val) >= 0.04:
-            if total_strategy_games >= MIN_GAMES_FOR_MAJOR:
+            if total_samples >= MIN_GAMES_FOR_MAJOR:
                 is_major = True
             else:
-                # 🔴 v7.1: 样本不足时回退该参数变更到不超过0.03
                 config[key] = old_val + (0.03 if new_val > old_val else -0.03)
                 changes = [c for c in changes if key not in c]  # 移除相关变更说明
                 changes.append(f"样本不足({total_strategy_games}<{MIN_GAMES_FOR_MAJOR})，{key}变更被限制为微调±0.03")
@@ -2030,19 +2088,20 @@ def adjust_weights_from_backtest():
             config['algo_version'] = 'v6.9'
 
     # 进化日志
-    # 🔴 v7.1: 清理旧版adjustments遗留字段
     config.pop('adjustments', None)
     config.pop('last_reset_date', None)
     evo_entry = {
         'date': today_str,
-        'trigger': '回测驱动',
-        'sample_size': total_strategy_games,
-        't_test': {'t_value': round(t_val, 3), 'significant': is_significant},
+        'trigger': 'AI推荐命中驱动',  # 🔴 v7.4: 改为AI驱动
+        'ai_sample_size': ai_sample,
+        'ai_avg_hit': round(ai_avg, 2),
+        'ai_total_prize': ai_total_prize,
+        'rule_sample_size': total_strategy_games,
         'changes': changes,
         'old_weights': {k: round(old_config.get(k, 0), 4) for k in all_param_keys},
         'new_weights': {k: round(config.get(k, 0), 4) for k in all_param_keys},
         'is_major': is_major,
-        'algo_version': config.get('algo_version', 'v7.1'),
+        'algo_version': config.get('algo_version', 'v7.4'),
     }
     evo_log = config.get('evolution_log', [])
     evo_log.append(evo_entry)
@@ -2053,9 +2112,9 @@ def adjust_weights_from_backtest():
     _save_weight_config(config)
 
     # 打印进化结果
-    version_tag = config.get('algo_version', 'v7.1')
+    version_tag = config.get('algo_version', 'v7.4')
     major_tag = '🔴 重大更新' if is_major else '🟢 微调'
-    print(f"[GEPA进化] {major_tag} → {version_tag}")
+    print(f"[GEPA进化] {major_tag} → {version_tag} (AI命中均值={ai_avg:.2f})")
     for c in changes:
         print(f"  {c}")
     print(f"  核心注权重: freq={config['freq']:.2f} miss={config['miss']:.2f} trend={config['trend']:.2f} zone={config['zone']:.2f}")
