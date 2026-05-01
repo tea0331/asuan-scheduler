@@ -2168,5 +2168,366 @@
       ],
       "actual_blue": 1
     }
+  },
+  {
+    "date": "2026-05-01",
+    "backtest_date": "2026-05-02",
+    "backtest_method": "current_version",
+    "draw_games": [
+      "qxc"
+    ],
+    "weight_snapshot": {
+      "algo_version": "v7.1",
+      "freq": 0.3156,
+      "miss": 0.2103,
+      "trend": 0.3265,
+      "zone": 0.1476,
+      "cold_miss_front": 0.394,
+      "cold_cycle_front": 0.3104,
+      "cold_miss_back": 0.2955,
+      "cold_cycle_back": 0.409,
+      "neighbor_bonus": 0.04499999999999999,
+      "gamma": 0.82
+    },
+    "qxc": {
+      "period": "26048",
+      "hits": [
+        {
+          "strategy": "核心注(加权)",
+          "digit_hits": 3,
+          "digit_hits_detail": [
+            [
+              0,
+              0,
+              4,
+              false
+            ],
+            [
+              1,
+              5,
+              5,
+              true
+            ],
+            [
+              2,
+              3,
+              2,
+              false
+            ],
+            [
+              3,
+              9,
+              9,
+              true
+            ],
+            [
+              4,
+              6,
+              6,
+              true
+            ],
+            [
+              5,
+              4,
+              1,
+              false
+            ],
+            [
+              6,
+              1,
+              5,
+              false
+            ]
+          ],
+          "total": 3,
+          "predicted": [
+            0,
+            5,
+            3,
+            9,
+            6,
+            4,
+            1
+          ],
+          "actual": [
+            4,
+            5,
+            2,
+            9,
+            6,
+            1,
+            5
+          ],
+          "prize_tier": 5,
+          "prize_name": "五等奖",
+          "prize_amount": 30
+        },
+        {
+          "strategy": "扩展1(加权)",
+          "digit_hits": 1,
+          "digit_hits_detail": [
+            [
+              0,
+              0,
+              4,
+              false
+            ],
+            [
+              1,
+              5,
+              5,
+              true
+            ],
+            [
+              2,
+              3,
+              2,
+              false
+            ],
+            [
+              3,
+              5,
+              9,
+              false
+            ],
+            [
+              4,
+              1,
+              6,
+              false
+            ],
+            [
+              5,
+              5,
+              1,
+              false
+            ],
+            [
+              6,
+              4,
+              5,
+              false
+            ]
+          ],
+          "total": 1,
+          "predicted": [
+            0,
+            5,
+            3,
+            5,
+            1,
+            5,
+            4
+          ],
+          "actual": [
+            4,
+            5,
+            2,
+            9,
+            6,
+            1,
+            5
+          ],
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
+        },
+        {
+          "strategy": "扩展2(加权)",
+          "digit_hits": 1,
+          "digit_hits_detail": [
+            [
+              0,
+              0,
+              4,
+              false
+            ],
+            [
+              1,
+              5,
+              5,
+              true
+            ],
+            [
+              2,
+              0,
+              2,
+              false
+            ],
+            [
+              3,
+              4,
+              9,
+              false
+            ],
+            [
+              4,
+              3,
+              6,
+              false
+            ],
+            [
+              5,
+              4,
+              1,
+              false
+            ],
+            [
+              6,
+              0,
+              5,
+              false
+            ]
+          ],
+          "total": 1,
+          "predicted": [
+            0,
+            5,
+            0,
+            4,
+            3,
+            4,
+            0
+          ],
+          "actual": [
+            4,
+            5,
+            2,
+            9,
+            6,
+            1,
+            5
+          ],
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
+        },
+        {
+          "strategy": "冷号注(遗漏)",
+          "digit_hits": 1,
+          "digit_hits_detail": [
+            [
+              0,
+              1,
+              4,
+              false
+            ],
+            [
+              1,
+              4,
+              5,
+              false
+            ],
+            [
+              2,
+              3,
+              2,
+              false
+            ],
+            [
+              3,
+              6,
+              9,
+              false
+            ],
+            [
+              4,
+              6,
+              6,
+              true
+            ],
+            [
+              5,
+              4,
+              1,
+              false
+            ],
+            [
+              6,
+              0,
+              5,
+              false
+            ]
+          ],
+          "total": 1,
+          "predicted": [
+            1,
+            4,
+            3,
+            6,
+            6,
+            4,
+            0
+          ],
+          "actual": [
+            4,
+            5,
+            2,
+            9,
+            6,
+            1,
+            5
+          ],
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
+        }
+      ],
+      "best_strategy": "核心注(加权)",
+      "best_total": 3,
+      "actual_digits": [
+        4,
+        5,
+        2,
+        9,
+        6,
+        1,
+        5
+      ],
+      "total_prize": 30,
+      "total_cost": 8,
+      "baseline": {
+        "avg": 0.85,
+        "max": 3,
+        "trials": 100
+      },
+      "ai_hit": {
+        "source": "AI推荐（刘海蟾）",
+        "best_strategy": "核心注",
+        "best_total": 1,
+        "total_prize": 0,
+        "total_cost": 8,
+        "hits": [
+          {
+            "strategy": "核心注",
+            "digit_hits": 1,
+            "total": 1,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "扩展1",
+            "digit_hits": 1,
+            "total": 1,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "扩展2",
+            "digit_hits": 1,
+            "total": 1,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "冷号注",
+            "digit_hits": 0,
+            "total": 0,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          }
+        ]
+      }
+    }
   }
 ]
