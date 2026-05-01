@@ -610,24 +610,51 @@ def run_task_and_email(task_name, task, today_str):
             logging.error(f"[{task_name}] 重试后仍返回占位文本，放弃")
             content = None
 
-    # 🔴 第二步：彩票推荐（优先读凌晨刘海蟾摘要，fallback到lottery_analyzer）
+    # 🔴 第二步：彩票推荐（优先读刘海蟾摘要，摘要不新鲜就先跑daily_run，最后fallback旧版）
     lottery_section = ''
     LIUHAI_DIGEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
+    LIUHAI_DAILY_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'daily_run.py')
+
+    # 检查摘要是否新鲜（日期匹配）
+    digest_fresh = False
     if os.path.exists(LIUHAI_DIGEST):
         try:
             with open(LIUHAI_DIGEST, 'r', encoding='utf-8') as f:
                 digest = json.load(f)
             if digest.get('date') == today_str:
-                logging.info(f"[彩票] 读取刘海蟾凌晨摘要: {digest.get('generated_at')}")
+                digest_fresh = True
+                logging.info(f"[彩票] 读取刘海蟾摘要: {digest.get('generated_at')}")
                 lottery_section = _format_liuhai_digest(digest)
                 logging.info(f"[彩票] 摘要格式化完成: {len(lottery_section)}字符")
             else:
-                logging.warning(f"[彩票] 摘要日期不匹配（{digest.get('date')} vs {today_str}），走旧版")
-                lottery_section = ''
+                logging.warning(f"[彩票] 摘要日期不匹配（{digest.get('date')} vs {today_str}）")
         except Exception as e:
             logging.error(f"[彩票] 读取摘要失败: {e}")
-            lottery_section = ''
 
+    # 摘要不新鲜 → 先跑刘海蟾daily_run生成一份
+    if not digest_fresh and os.path.exists(LIUHAI_DAILY_RUN):
+        try:
+            import subprocess
+            logging.info("[彩票] 摘要不新鲜，先跑刘海蟾daily_run...")
+            result = subprocess.run(
+                [sys.executable, LIUHAI_DAILY_RUN],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                logging.info(f"[彩票] daily_run跑完，重新读摘要")
+                # 重新读摘要
+                if os.path.exists(LIUHAI_DIGEST):
+                    with open(LIUHAI_DIGEST, 'r', encoding='utf-8') as f:
+                        digest = json.load(f)
+                    if digest.get('date') == today_str:
+                        lottery_section = _format_liuhai_digest(digest)
+                        logging.info(f"[彩票] 新摘要格式化完成: {len(lottery_section)}字符")
+            else:
+                logging.error(f"[彩票] daily_run失败: {result.stderr[:200]}")
+        except Exception as e:
+            logging.error(f"[彩票] 调用daily_run异常: {e}")
+
+    # 最后兜底：旧版lottery_analyzer
     if not lottery_section:
         try:
             logging.info("[彩票] 走旧版lottery_analyzer生成推荐...")
