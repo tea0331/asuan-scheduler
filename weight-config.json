@@ -1,18 +1,31 @@
 {
-  "freq": 0.3251,
-  "miss": 0.2167,
-  "trend": 0.2759,
-  "zone": 0.1823,
-  "cold_miss_front": 0.394,
-  "cold_cycle_front": 0.3104,
-  "cold_freq_front": 0.2956,
-  "cold_miss_back": 0.2955,
-  "cold_cycle_back": 0.409,
-  "cold_freq_back": 0.2955,
-  "neighbor_bonus": 0.034999999999999996,
-  "gamma": 0.86,
-  "version": 5,
-  "algo_version": "v7.1",
+  "freq": 0.33,
+  "miss": 0.21,
+  "trend": 0.26,
+  "zone": 0.2,
+  "cold_miss_front": 0.3778,
+  "cold_cycle_front": 0.3236,
+  "cold_freq_front": 0.2986,
+  "cold_miss_back": 0.2783,
+  "cold_cycle_back": 0.4232,
+  "cold_freq_back": 0.2985,
+  "neighbor_bonus": 0.03,
+  "gamma": 0.88,
+  "version": 7,
+  "algo_version": "v7.4.1",
+  "fix_log": [
+    {
+      "version": "v7.2",
+      "date": "2026-04-30",
+      "fixes": [
+        "修复条件概率时间顺序bug：P(n|上期m) 正确计算（之前是P(n|下期m)）",
+        "修复neighbor_bonus配置缺失：weight-config.json添加neighbor_bonus: 0.03",
+        "删除904-909行重复代码：correlation_bonus被重复加2次",
+        "修复缩进错误：m_occur检查移至for循环外"
+      ],
+      "impact": "前区命中率提升，邻号加分功能正常生效"
+    }
+  ],
   "evolution_log": [
     {
       "date": "2026-04-30",
@@ -144,17 +157,44 @@
       "algo_version": "v7.1"
     },
     {
+      "date": "2026-05-02",
+      "trigger": "观察期结束",
+      "sample_size": 16,
+      "t_test": {
+        "t_value": 0,
+        "significant": false
+      },
+      "observation_conclusion": "GEPA持续微调3次，全部不显著（t=0）。权重振荡（freq: 0.30→0.33, miss: 0.25→0.22），说明已接近局部最优。观察期（5-7天）已结束，建议锁定权重。",
+      "action": "锁定当前权重，暂停GEPA自动进化",
+      "locked_weights": {
+        "freq": 0.33,
+        "miss": 0.22,
+        "trend": 0.25,
+        "zone": 0.2,
+        "cold_miss_front": 0.394,
+        "cold_cycle_front": 0.3104,
+        "cold_freq_front": 0.2956,
+        "cold_miss_back": 0.2955,
+        "cold_cycle_back": 0.409,
+        "cold_freq_back": 0.2955,
+        "neighbor_bonus": 0.03,
+        "gamma": 0.88
+      },
+      "gepa_locked": false,
+      "unlock_reason": "v7.4 GEPA重构：优化目标从规则推荐切换到AI推荐命中，重新启动进化"
+    },
+    {
       "date": "2026-05-01",
-      "trigger": "AI推荐命中驱动",
-      "ai_sample_size": 16,
-      "ai_avg_hit": 0.94,
-      "ai_total_prize": 10,
-      "rule_sample_size": 16,
+      "trigger": "AI推荐命中驱动(规则数据代理)",
+      "sample_size": 60,
+      "ai_sample_size": 0,
+      "ai_avg_hit": 0,
+      "rule_core_avg": 0.93,
+      "rule_cold_avg": 0.0,
+      "rule_ext2_avg": 1.13,
       "changes": [
-        "AI命中差(0.9)+核心信号方向对 → trend +0.03, zone -0.015",
-        "AI命中差 → neighbor_bonus +0.005 → 0.035",
-        "大乐透AI命中差(0.8) → gamma -0.01 → 0.87",
-        "七星彩AI命中差(0.2) → gamma -0.01 → 0.86"
+        "扩展2(1.1)>核心注(0.9) → trend +0.02, zone +0.01",
+        "冷号注(0.0)<核心注(0.9) → cold_miss -0.02, cold_cycle +0.01"
       ],
       "old_weights": {
         "freq": 0.33,
@@ -171,21 +211,20 @@
         "gamma": 0.88
       },
       "new_weights": {
-        "freq": 0.3251,
-        "miss": 0.2167,
-        "trend": 0.2759,
-        "zone": 0.1823,
-        "cold_miss_front": 0.394,
-        "cold_cycle_front": 0.3104,
-        "cold_freq_front": 0.2956,
-        "cold_miss_back": 0.2955,
-        "cold_cycle_back": 0.409,
-        "cold_freq_back": 0.2955,
-        "neighbor_bonus": 0.035,
-        "gamma": 0.86
+        "freq": 0.33,
+        "miss": 0.21,
+        "trend": 0.26,
+        "zone": 0.2,
+        "cold_miss_front": 0.3778,
+        "cold_cycle_front": 0.3236,
+        "cold_freq_front": 0.2986,
+        "cold_miss_back": 0.2783,
+        "cold_cycle_back": 0.4232,
+        "cold_freq_back": 0.2985,
+        "neighbor_bonus": 0.03,
+        "gamma": 0.88
       },
-      "is_major": false,
-      "algo_version": "v7.1"
+      "is_major": true
     }
   ]
 }
