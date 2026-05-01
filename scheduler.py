@@ -434,7 +434,7 @@ def _call_api(task_name, base_url, api_key, model, system_prompt, user_prompt, m
 
         content = data['choices'][0]['message']['content']
         usage = data.get('usage', {})
-        reasoning = data.get('completion_tokens_details', {}).get('reasoning_tokens', 0)
+        reasoning = usage.get('completion_tokens_details', {}).get('reasoning_tokens', 0)
 
         # 🔴 过滤R1的think标签（避免推理过程混入邮件内容）
         content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
