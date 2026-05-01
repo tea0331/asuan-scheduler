@@ -180,7 +180,8 @@
         "neighbor_bonus": 0.03,
         "gamma": 0.88
       },
-      "gepa_locked": true
+      "gepa_locked": false,
+      "unlock_reason": "v7.4 GEPA重构：优化目标从规则推荐切换到AI推荐命中，重新启动进化"
     }
   ]
 }
