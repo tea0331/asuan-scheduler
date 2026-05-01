@@ -25,7 +25,7 @@ from email.mime.text import MIMEText
 
 # 彩票分析模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lottery_analyzer import generate_lottery_recommendations
+from lottery_analyzer import generate_lottery_recommendations, load_lottery_alerts
 
 CST = timezone(timedelta(hours=8))
 
@@ -623,6 +623,43 @@ def run_task_and_email(task_name, task, today_str):
     if output_file and not email_sent:
         logging.warning(f"[{task_name}] ⚠️ 内容已生成但邮件未发送，标记success=False，下次会补发")
     mark_task_executed(today_str, task_name, success)
+
+    # 🔴 v7.4: 重大事件告警邮件（独立于日报，确保老板第一时间看到）
+    if should_send:
+        try:
+            alert_data = load_lottery_alerts()
+            if alert_data and alert_data.get('count', 0) > 0 and alert_data.get('date') == today_str:
+                alerts = alert_data.get('alerts', [])
+                # 构建告警邮件
+                alert_lines = []
+                for a in alerts:
+                    alert_lines.append(
+                        f"<div style='margin:12px 0;padding:10px;border-left:4px solid #e74c3c;background:#fff5f5;'>"
+                        f"<p style='margin:0;font-size:16px;'><strong>{a.get('level','')} {a.get('title','')}</strong></p>"
+                        f"<p style='margin:4px 0;color:#555;'>{a.get('detail','')}</p>"
+                        f"<p style='margin:4px 0;color:#2980b9;'>💡 {a.get('action','')}</p>"
+                        f"</div>"
+                    )
+                alert_html = ''.join(alert_lines)
+                alert_body = f"""<html><head><meta charset="utf-8"></head><body>
+                <h2 style="color:#c0392b;">🎰 刘海蟾点金 — 重大事件告警</h2>
+                <p>时间: {datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p>检测到 <strong>{len(alerts)}</strong> 个重大事件：</p>
+                {alert_html}
+                <hr>
+                <p style="color:#999;font-size:12px;">— 端木赐 | 刘海蟾点金 v7.4 告警系统</p>
+                </body></html>"""
+                # 如果有🔴级告警，标题加🔴
+                has_critical = any(a.get('level') == '🔴' for a in alerts)
+                prefix = '🔴 ' if has_critical else '⚠️ '
+                alert_subject = f"{prefix}刘海蟾点金告警 | {today_str} | {len(alerts)}个重大事件"
+                send_email(alert_subject, alert_body)
+                logging.info(f"[告警] 已发送{len(alerts)}个重大事件告警邮件")
+            else:
+                logging.info("[告警] 无重大事件，不发送告警邮件")
+        except Exception as e:
+            logging.error(f"[告警] 告警邮件发送失败: {e}")
+
     return success
 
 

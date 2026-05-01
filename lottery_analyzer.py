@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v7.3 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导）
+彩票号码分析模块 v7.4 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导+重大事件告警）
 
-v7.1核心改动（GEPA修复+相关性+统计检验）：
+v7.4核心改动（重大事件告警）：
+1. 🔴 新增detect_lottery_alerts()：检测7类重大事件并生成告警
+2. 🔴 告警写入lottery-alerts.json，供scheduler发送单独告警邮件
+3. 🔴 GEPA重大更新、回测命中、规律发现、Kelly偏高、策略调整等均可触发告警
+
+v7.3核心改动（和值约束引导）：
 1. 🔴 修复GEPA从未生效bug：回测记录只有1条时GEPA需要2条，改为至少1条+6样本
 2. 🔴 GEPA加统计显著性检验：Welch t-test，差异不显著时保守微调
 3. 🔴 GEPA重大变更加样本门槛：20样本以下只允许微调±0.03，不允许大改
@@ -3253,10 +3258,260 @@ def generate_lottery_recommendations():
     _save_predictions(predictions)
     print(f"[彩票] 今日推荐已保存（供明天回测）")
 
+    # 🔴 v7.4: 重大事件告警检测
+    alerts = detect_lottery_alerts(
+        evolved_config=evolved_config,
+        backtest_result=backtest_result,
+        kelly_map=kelly_map,
+        ssq_result=ssq_result,
+        dlt_result=dlt_result,
+        qxc_result=qxc_result,
+        ssq_history=ssq_history,
+        dlt_history=dlt_history,
+        qxc_history=qxc_history,
+    )
+    if alerts:
+        _save_alerts(alerts, today_str)
+        print(f"[告警] 检测到{len(alerts)}个重大事件！已写入lottery-alerts.json")
+    else:
+        _save_alerts([], today_str)  # 清空旧告警
+        print("[告警] 无重大事件")
+
     # 4. 在输出中附加回测结果
     result = format_lottery_section(ssq_result, dlt_result, qxc_result, backtest_result)
 
     return result
+
+
+# ===== 🔴 v7.4: 重大事件告警机制 =====
+
+ALERT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-alerts.json')
+
+def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=None,
+                          ssq_result=None, dlt_result=None, qxc_result=None,
+                          ssq_history=None, dlt_history=None, qxc_history=None):
+    """
+    🔴 v7.4: 重大事件告警检测
+    检测7类重大事件，返回告警列表：
+    1. GEPA重大更新（is_major=True）
+    2. GEPA空转（连续t=0）
+    3. 回测命中爆发（单注≥4个号）
+    4. 冷号注首次命中
+    5. Kelly值偏高（>3%）
+    6. 重大策略调整（GEPA参数变化≥0.04）
+    7. 规律发现（相关性/趋势/周期异常信号）
+    """
+    alerts = []
+    today_str = datetime.now(CST).strftime('%Y-%m-%d')
+
+    # === 1. GEPA重大更新 ===
+    if evolved_config:
+        evo_log = evolved_config.get('evolution_log', [])
+        if evo_log:
+            latest = evo_log[-1]
+            if latest.get('is_major'):
+                alerts.append({
+                    'level': '🔴',
+                    'type': 'gepa_major',
+                    'title': 'GEPA重大更新',
+                    'detail': f"算法进化至{evolved_config.get('algo_version', '?')}，"
+                              f"变更: {'; '.join(latest.get('changes', []))}",
+                    'action': '检查新版权重是否合理，必要时手动回退',
+                })
+
+    # === 2. GEPA空转检测 ===
+    if evolved_config:
+        evo_log = evolved_config.get('evolution_log', [])
+        if len(evo_log) >= 2:
+            recent_2 = evo_log[-2:]
+            if all(e.get('t_test', {}).get('t_value', 1) == 0 for e in recent_2):
+                alerts.append({
+                    'level': '⚠️',
+                    'type': 'gepa_stall',
+                    'title': 'GEPA连续空转',
+                    'detail': f"最近{len(recent_2)}次进化t=0（不显著），权重可能已到局部最优",
+                    'action': '建议锁定GEPA或重构进化机制（增大步长/扩大回测窗口）',
+                })
+
+    # === 3. 回测命中爆发 ===
+    if backtest_result:
+        for game in ['ssq', 'dlt', 'qxc']:
+            if game not in backtest_result:
+                continue
+            game_name = LOTTERY_NAMES.get(game, game)
+            hits = backtest_result[game].get('hits', [])
+            for h in hits:
+                total = h.get('total', 0)
+                strategy = str(h.get('strategy', ''))
+                if total >= 4:
+                    alerts.append({
+                        'level': '🎯',
+                        'type': 'backtest_hit',
+                        'title': f'{game_name}回测命中{total}个号！',
+                        'detail': f"策略: {strategy}, 红球命中{h.get('red_hits', 0)}个"
+                                  f"{(', 蓝球命中' if game == 'ssq' else ', 后区命中') if h.get('blue_hit' if game == 'ssq' else 'back_hits', 0) else ''}",
+                        'action': '验证该策略是否可持续，注意是否为随机波动',
+                    })
+                    break  # 同彩种只报一次
+
+    # === 4. 冷号注首次命中 ===
+    if backtest_result:
+        for game in ['ssq', 'dlt', 'qxc']:
+            if game not in backtest_result:
+                continue
+            game_name = LOTTERY_NAMES.get(game, game)
+            hits = backtest_result[game].get('hits', [])
+            for h in hits:
+                strategy = str(h.get('strategy', ''))
+                if 'cold' in strategy.lower() and h.get('total', 0) >= 2:
+                    # 检查历史冷号注命中率
+                    bt_log = _load_backtest()
+                    cold_hits_count = 0
+                    for bt in bt_log[-10:]:
+                        if game in bt:
+                            for bh in bt[game].get('hits', []):
+                                if 'cold' in str(bh.get('strategy', '')).lower() and bh.get('total', 0) >= 2:
+                                    cold_hits_count += 1
+                    if cold_hits_count <= 1:  # 首次或极罕见
+                        alerts.append({
+                            'level': '❄️',
+                            'type': 'cold_first_hit',
+                            'title': f'{game_name}冷号注命中！',
+                            'detail': f"策略: {strategy}, 命中{h.get('total', 0)}个号（近10期冷号注仅命中{cold_hits_count}次）",
+                            'action': '冷号注信号出现，关注后续是否形成趋势',
+                        })
+                        break
+
+    # === 5. Kelly值偏高 ===
+    if kelly_map:
+        KELLY_HIGH_THRESHOLD = 0.03  # 3%以上视为偏高
+        for game_key, kelly_val in kelly_map.items():
+            game_name = LOTTERY_NAMES.get(game_key, game_key)
+            if kelly_val > KELLY_HIGH_THRESHOLD:
+                alerts.append({
+                    'level': '💰',
+                    'type': 'kelly_high',
+                    'title': f'{game_name}Kelly值偏高！',
+                    'detail': f"Kelly={kelly_val:.2%}（阈值{KELLY_HIGH_THRESHOLD:.0%}），"
+                              f"数学期望为正，值得加注",
+                    'action': f'考虑增加{game_name}投注额（Kelly建议比例的1/4~1/2）',
+                })
+
+    # === 6. 重大策略调整 ===
+    if evolved_config:
+        evo_log = evolved_config.get('evolution_log', [])
+        if evo_log:
+            latest = evo_log[-1]
+            old_w = latest.get('old_weights', {})
+            new_w = latest.get('new_weights', {})
+            big_changes = []
+            for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss_front', 'cold_cycle_front',
+                        'cold_miss_back', 'cold_cycle_back', 'neighbor_bonus', 'gamma']:
+                old_v = old_w.get(key, 0)
+                new_v = new_w.get(key, 0)
+                diff = abs(new_v - old_v)
+                if diff >= 0.03 and not latest.get('is_major'):  # 重大更新已在#1报过
+                    big_changes.append(f"{key}: {old_v:.3f}→{new_v:.3f}(Δ{diff:.3f})")
+            if big_changes:
+                alerts.append({
+                    'level': '🔧',
+                    'type': 'strategy_shift',
+                    'title': '策略参数显著调整',
+                    'detail': '; '.join(big_changes),
+                    'action': '关注调整后效果，如连续走差考虑回退',
+                })
+
+    # === 7. 规律发现 ===
+    # 7a. 号码相关性异常（某对号码条件概率远高于先验）
+    for game, history, game_name in [
+        ('ssq', ssq_history, '双色球'),
+        ('dlt', dlt_history, '大乐透'),
+        ('qxc', qxc_history, '七星彩'),
+    ]:
+        if not history or len(history) < 8:
+            continue
+        try:
+            wa = WeightedAnalyzer(history)
+            analysis = getattr(wa, f'analyze_{game}')()
+            corr = analysis.get('correlations', {})
+            # 找条件概率最高的一对
+            best_corr = None
+            best_ratio = 0
+            for (n, m), info in corr.items():
+                if isinstance(info, dict):
+                    ratio = info.get('ratio', 1.0)
+                    cond_p = info.get('conditional', 0)
+                    if ratio > best_ratio and cond_p > 0.15:
+                        best_ratio = ratio
+                        best_corr = (n, m, info)
+            if best_corr and best_ratio >= 2.0:  # 条件概率是先验的2倍以上
+                n, m, info = best_corr
+                alerts.append({
+                    'level': '🔍',
+                    'type': 'pattern_correlation',
+                    'title': f'{game_name}发现强关联规律',
+                    'detail': f"上期出{m}→下期出{n}的条件概率={info.get('conditional', 0):.1%}，"
+                              f"是先验{info.get('prior', 0):.1%}的{best_ratio:.1f}倍",
+                    'action': '关联规律值得关注，但需更多样本验证是否为随机波动',
+                })
+        except Exception:
+            pass  # 规律发现是锦上添花，不能影响主流程
+
+    # 7b. 趋势异常（某号码遗漏值远超历史均值）
+    for game, history, game_name, num_field in [
+        ('ssq', ssq_history, '双色球', 'reds'),
+        ('dlt', dlt_history, '大乐透', 'front'),
+        ('qxc', qxc_history, '七星彩', 'digits'),
+    ]:
+        if not history or len(history) < 10:
+            continue
+        try:
+            wa = WeightedAnalyzer(history)
+            analysis = getattr(wa, f'analyze_{game}')()
+            miss_info = analysis.get('miss_scores', {})
+            # 找遗漏值最高的号码
+            if isinstance(miss_info, dict):
+                max_miss_num = None
+                max_miss_val = 0
+                for num, score in miss_info.items():
+                    if isinstance(score, (int, float)) and score > max_miss_val:
+                        max_miss_val = score
+                        max_miss_num = num
+                if max_miss_val >= 8:  # 遗漏8期以上
+                    alerts.append({
+                        'level': '📊',
+                        'type': 'pattern_overdue',
+                        'title': f'{game_name}号码{max_miss_num}严重遗漏',
+                        'detail': f"遗漏得分={max_miss_val:.1f}，远超均值，回补概率升高",
+                        'action': '可在冷号注中关注该号，但冷号命中率低需控制仓位',
+                    })
+        except Exception:
+            pass
+
+    return alerts
+
+
+def _save_alerts(alerts, today_str):
+    """保存告警到JSON文件，供scheduler读取发送"""
+    data = {
+        'date': today_str,
+        'generated_at': datetime.now(CST).strftime('%Y-%m-%d %H:%M:%S'),
+        'count': len(alerts),
+        'alerts': alerts,
+    }
+    with open(ALERT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_lottery_alerts():
+    """读取最新的告警（供scheduler调用）"""
+    if not os.path.exists(ALERT_FILE):
+        return None
+    try:
+        with open(ALERT_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
 if __name__ == '__main__':
