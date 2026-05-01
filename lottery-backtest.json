@@ -2030,17 +2030,17 @@
       "ssq"
     ],
     "weight_snapshot": {
-      "algo_version": "v7.1",
-      "freq": 0.32,
-      "miss": 0.23,
-      "trend": 0.25,
-      "zone": 0.2,
-      "cold_miss_front": 0.396,
-      "cold_cycle_front": 0.307,
-      "cold_miss_back": 0.297,
-      "cold_cycle_back": 0.406,
-      "neighbor_bonus": 0.03,
-      "gamma": 0.88
+      "algo_version": "v7.4.1",
+      "freq": 0.3203,
+      "miss": 0.2135,
+      "trend": 0.3014,
+      "zone": 0.1648,
+      "cold_miss_front": 0.394,
+      "cold_cycle_front": 0.3104,
+      "cold_miss_back": 0.2955,
+      "cold_cycle_back": 0.409,
+      "neighbor_bonus": 0.039999999999999994,
+      "gamma": 0.84
     },
     "ssq": {
       "period": "26048",
@@ -2071,7 +2071,10 @@
             28,
             33
           ],
-          "actual_blue": 1
+          "actual_blue": 1,
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
         },
         {
           "strategy": "扩展1(加权)",
@@ -2086,10 +2089,10 @@
           "predicted_reds": [
             8,
             9,
-            14,
             24,
             28,
-            29
+            29,
+            30
           ],
           "predicted_blue": 5,
           "actual_reds": [
@@ -2100,7 +2103,10 @@
             28,
             33
           ],
-          "actual_blue": 1
+          "actual_blue": 1,
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
         },
         {
           "strategy": "扩展2(加权)",
@@ -2113,7 +2119,7 @@
           "total": 2,
           "predicted_reds": [
             2,
-            8,
+            6,
             9,
             28,
             29,
@@ -2128,7 +2134,10 @@
             28,
             33
           ],
-          "actual_blue": 1
+          "actual_blue": 1,
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
         },
         {
           "strategy": "冷号注(遗漏)",
@@ -2153,7 +2162,10 @@
             28,
             33
           ],
-          "actual_blue": 1
+          "actual_blue": 1,
+          "prize_tier": 0,
+          "prize_name": "未中奖",
+          "prize_amount": 0
         }
       ],
       "best_strategy": "扩展1(加权)",
@@ -2166,7 +2178,55 @@
         28,
         33
       ],
-      "actual_blue": 1
+      "actual_blue": 1,
+      "total_prize": 0,
+      "total_cost": 8,
+      "baseline": {
+        "avg": 1.19,
+        "max": 3,
+        "trials": 100
+      },
+      "ai_hit": {
+        "source": "AI推荐（刘海蟾）",
+        "best_strategy": "扩展1",
+        "best_total": 3,
+        "total_prize": 0,
+        "total_cost": 8,
+        "hits": [
+          {
+            "strategy": "核心注",
+            "red_hits": 2,
+            "blue_hit": 0,
+            "total": 2,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "扩展1",
+            "red_hits": 3,
+            "blue_hit": 0,
+            "total": 3,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "扩展2",
+            "red_hits": 2,
+            "blue_hit": 0,
+            "total": 2,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          },
+          {
+            "strategy": "冷号注",
+            "red_hits": 0,
+            "blue_hit": 0,
+            "total": 0,
+            "prize_name": "未中奖",
+            "prize_amount": 0
+          }
+        ]
+      }
     }
   }
 ]
