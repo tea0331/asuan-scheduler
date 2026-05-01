@@ -514,12 +514,12 @@ hr {{ border: none; border-top: 1px solid #ddd; margin: 20px 0; }}
     return success
 
 
-def _format_liuhai_digest(digest):
+def _format_liuhai_digest(digest, source='⏰ 凌晨摘要'):
     """将刘海蟾凌晨摘要格式化为markdown彩票板块"""
     lines = []
     lines.append('\n---\n')
     lines.append('## 🎰 刘海蟾点金 — 今日推荐')
-    lines.append(f'> 数据运行时间: {digest.get("generated_at", "?")} | GEPA状态: {digest.get("steps", {}).get("gepa", "?")}')
+    lines.append(f'> 数据来源: {source} | 运行时间: {digest.get("generated_at", "?")} | GEPA: {digest.get("steps", {}).get("gepa", "?")}')
 
     weights = digest.get('weights_used', {})
     if weights:
@@ -612,6 +612,7 @@ def run_task_and_email(task_name, task, today_str):
 
     # 🔴 第二步：彩票推荐（优先读刘海蟾摘要，摘要不新鲜就先跑daily_run，最后fallback旧版）
     lottery_section = ''
+    lottery_source = '❓'  # 来源标记，邮件里能看到
     LIUHAI_DIGEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
     LIUHAI_DAILY_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'daily_run.py')
 
@@ -623,8 +624,9 @@ def run_task_and_email(task_name, task, today_str):
                 digest = json.load(f)
             if digest.get('date') == today_str:
                 digest_fresh = True
+                lottery_source = '⏰ 凌晨摘要'
                 logging.info(f"[彩票] 读取刘海蟾摘要: {digest.get('generated_at')}")
-                lottery_section = _format_liuhai_digest(digest)
+                lottery_section = _format_liuhai_digest(digest, source=lottery_source)
                 logging.info(f"[彩票] 摘要格式化完成: {len(lottery_section)}字符")
             else:
                 logging.warning(f"[彩票] 摘要日期不匹配（{digest.get('date')} vs {today_str}）")
@@ -635,6 +637,7 @@ def run_task_and_email(task_name, task, today_str):
     if not digest_fresh and os.path.exists(LIUHAI_DAILY_RUN):
         try:
             import subprocess
+            lottery_source = '🔄 即时运行'
             logging.info("[彩票] 摘要不新鲜，先跑刘海蟾daily_run...")
             result = subprocess.run(
                 [sys.executable, LIUHAI_DAILY_RUN],
@@ -647,7 +650,7 @@ def run_task_and_email(task_name, task, today_str):
                     with open(LIUHAI_DIGEST, 'r', encoding='utf-8') as f:
                         digest = json.load(f)
                     if digest.get('date') == today_str:
-                        lottery_section = _format_liuhai_digest(digest)
+                        lottery_section = _format_liuhai_digest(digest, source=lottery_source)
                         logging.info(f"[彩票] 新摘要格式化完成: {len(lottery_section)}字符")
             else:
                 logging.error(f"[彩票] daily_run失败: {result.stderr[:200]}")
@@ -656,9 +659,14 @@ def run_task_and_email(task_name, task, today_str):
 
     # 最后兜底：旧版lottery_analyzer
     if not lottery_section:
+        lottery_source = '⚠️ 旧版兜底'
         try:
             logging.info("[彩票] 走旧版lottery_analyzer生成推荐...")
             lottery_section = generate_lottery_recommendations()
+            # 给旧版输出加上来源标记
+            lottery_section = lottery_section.replace(
+                '## 🎰', f'## 🎰 刘海蟾点金\n> 数据来源: {lottery_source}\n\n## 🎰', 1
+            ) if '## 🎰' in lottery_section else f'\n---\n## 🎰 刘海蟾点金\n> 数据来源: {lottery_source}\n{lottery_section}\n---\n'
             logging.info(f"[彩票] 推荐生成完成: {len(lottery_section)}字符")
         except Exception as e:
             logging.error(f"[彩票] 推荐生成失败: {e}")
