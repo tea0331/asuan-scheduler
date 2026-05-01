@@ -1,18 +1,18 @@
 {
-  "freq": 0.3156,
-  "miss": 0.2103,
-  "trend": 0.3265,
-  "zone": 0.1476,
+  "freq": 0.3203,
+  "miss": 0.2135,
+  "trend": 0.3014,
+  "zone": 0.1648,
   "cold_miss_front": 0.394,
   "cold_cycle_front": 0.3104,
   "cold_freq_front": 0.2956,
   "cold_miss_back": 0.2955,
   "cold_cycle_back": 0.409,
   "cold_freq_back": 0.2955,
-  "neighbor_bonus": 0.04499999999999999,
-  "gamma": 0.82,
-  "version": 7,
-  "algo_version": "v7.4.1",
+  "neighbor_bonus": 0.039999999999999994,
+  "gamma": 0.84,
+  "version": 6,
+  "algo_version": "v7.1",
   "evolution_log": [
     {
       "date": "2026-04-30",
@@ -230,50 +230,6 @@
       },
       "is_major": false,
       "algo_version": "v7.1"
-    },
-    {
-      "date": "2026-05-01",
-      "trigger": "AI推荐命中驱动",
-      "ai_sample_size": 16,
-      "ai_avg_hit": 0.94,
-      "ai_total_prize": 10,
-      "rule_sample_size": 16,
-      "changes": [
-        "AI命中差(0.9)+核心信号方向对 → trend +0.03, zone -0.015",
-        "AI命中差 → neighbor_bonus +0.005 → 0.045",
-        "大乐透AI命中差(0.8) → gamma -0.01 → 0.83",
-        "七星彩AI命中差(0.2) → gamma -0.01 → 0.82"
-      ],
-      "old_weights": {
-        "freq": 0.3203,
-        "miss": 0.2135,
-        "trend": 0.3014,
-        "zone": 0.1648,
-        "cold_miss_front": 0.394,
-        "cold_cycle_front": 0.3104,
-        "cold_freq_front": 0.2956,
-        "cold_miss_back": 0.2955,
-        "cold_cycle_back": 0.409,
-        "cold_freq_back": 0.2955,
-        "neighbor_bonus": 0.04,
-        "gamma": 0.84
-      },
-      "new_weights": {
-        "freq": 0.3156,
-        "miss": 0.2103,
-        "trend": 0.3265,
-        "zone": 0.1476,
-        "cold_miss_front": 0.394,
-        "cold_cycle_front": 0.3104,
-        "cold_freq_front": 0.2956,
-        "cold_miss_back": 0.2955,
-        "cold_cycle_back": 0.409,
-        "cold_freq_back": 0.2955,
-        "neighbor_bonus": 0.045,
-        "gamma": 0.82
-      },
-      "is_major": false,
-      "algo_version": "v7.4.1"
     }
   ]
 }
