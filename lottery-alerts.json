@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-01",
+  "generated_at": "2026-05-01 09:28:43",
+  "count": 2,
+  "alerts": [
+    {
+      "level": "🔴",
+      "type": "gepa_major",
+      "title": "GEPA重大更新",
+      "detail": "算法进化至v7.4.1，变更: 扩展2(1.1)>核心注(0.9) → trend +0.02, zone +0.01; 冷号注(0.0)<核心注(0.9) → cold_miss -0.02, cold_cycle +0.01",
+      "action": "检查新版权重是否合理，必要时手动回退"
+    },
+    {
+      "level": "📈",
+      "type": "beat_baseline",
+      "title": "双色球策略优于随机基线",
+      "detail": "最佳命中3个 vs 随机均值1.23个（超出1.8）",
+      "action": "策略有效，继续观察稳定性"
+    }
+  ]
+}
