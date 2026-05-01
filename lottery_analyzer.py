@@ -2081,6 +2081,129 @@ def kelly_fraction(estimated_hit_prob, odds):
     return max(f, 0)
 
 
+# ===== 🔴 v7.4: 奖级判定 =====
+
+def judge_prize_ssq(red_hits, blue_hit):
+    """双色球奖级判定：根据红球命中数+蓝球命中判定奖级和奖金"""
+    if red_hits == 6 and blue_hit:
+        return {'tier': 1, 'name': '一等奖', 'prize': 5000000}
+    elif red_hits == 6:
+        return {'tier': 2, 'name': '二等奖', 'prize': 200000}
+    elif red_hits == 5 and blue_hit:
+        return {'tier': 3, 'name': '三等奖', 'prize': 3000}
+    elif red_hits == 5 or (red_hits == 4 and blue_hit):
+        return {'tier': 4, 'name': '四等奖', 'prize': 200}
+    elif red_hits == 4 or (red_hits == 3 and blue_hit):
+        return {'tier': 5, 'name': '五等奖', 'prize': 10}
+    elif red_hits == 2 and blue_hit:
+        return {'tier': 6, 'name': '六等奖', 'prize': 5}
+    elif red_hits == 1 and blue_hit:
+        return {'tier': 6, 'name': '六等奖', 'prize': 5}
+    elif blue_hit:
+        return {'tier': 6, 'name': '六等奖', 'prize': 5}
+    else:
+        return {'tier': 0, 'name': '未中奖', 'prize': 0}
+
+def judge_prize_dlt(front_hits, back_hits):
+    """大乐透奖级判定"""
+    if front_hits == 5 and back_hits == 2:
+        return {'tier': 1, 'name': '一等奖', 'prize': 5000000}
+    elif front_hits == 5 and back_hits == 1:
+        return {'tier': 2, 'name': '二等奖', 'prize': 100000}
+    elif front_hits == 5:
+        return {'tier': 3, 'name': '三等奖', 'prize': 5000}
+    elif front_hits == 4 and back_hits == 2:
+        return {'tier': 4, 'name': '四等奖', 'prize': 3000}
+    elif front_hits == 4 and back_hits == 1:
+        return {'tier': 5, 'name': '五等奖', 'prize': 300}
+    elif front_hits == 3 and back_hits == 2:
+        return {'tier': 5, 'name': '五等奖', 'prize': 300}
+    elif front_hits == 4:
+        return {'tier': 6, 'name': '六等奖', 'prize': 15}
+    elif front_hits == 3 and back_hits == 1:
+        return {'tier': 6, 'name': '六等奖', 'prize': 15}
+    elif front_hits == 2 and back_hits == 2:
+        return {'tier': 6, 'name': '六等奖', 'prize': 15}
+    elif front_hits == 3:
+        return {'tier': 7, 'name': '七等奖', 'prize': 5}
+    elif front_hits == 2 and back_hits == 1:
+        return {'tier': 7, 'name': '七等奖', 'prize': 5}
+    elif front_hits == 1 and back_hits == 2:
+        return {'tier': 7, 'name': '七等奖', 'prize': 5}
+    elif back_hits == 2:
+        return {'tier': 7, 'name': '七等奖', 'prize': 5}
+    elif back_hits == 1:
+        return {'tier': 8, 'name': '八等奖', 'prize': 5}
+    else:
+        return {'tier': 0, 'name': '未中奖', 'prize': 0}
+
+def judge_prize_qxc(digit_hits):
+    """七星彩奖级判定"""
+    if digit_hits == 7:
+        return {'tier': 1, 'name': '一等奖', 'prize': 5000000}
+    elif digit_hits == 6:
+        return {'tier': 2, 'name': '二等奖', 'prize': 50000}
+    elif digit_hits == 5:
+        return {'tier': 3, 'name': '三等奖', 'prize': 3000}
+    elif digit_hits == 4:
+        return {'tier': 4, 'name': '四等奖', 'prize': 500}
+    elif digit_hits == 3:
+        return {'tier': 5, 'name': '五等奖', 'prize': 30}
+    elif digit_hits == 2:
+        return {'tier': 6, 'name': '六等奖', 'prize': 5}
+    else:
+        return {'tier': 0, 'name': '未中奖', 'prize': 0}
+
+
+def _random_pick_ssq(history):
+    """随机选号（双色球基线）"""
+    import random
+    all_reds = list(range(1, 34))
+    all_blues = list(range(1, 17))
+    reds = sorted(random.sample(all_reds, 6))
+    blue = random.choice(all_blues)
+    return {'reds': reds, 'blue': blue}
+
+def _random_pick_dlt(history):
+    """随机选号（大乐透基线）"""
+    import random
+    all_front = list(range(1, 36))
+    all_back = list(range(1, 13))
+    front = sorted(random.sample(all_front, 5))
+    back = sorted(random.sample(all_back, 2))
+    return {'front': front, 'back': back}
+
+def _random_pick_qxc(history):
+    """随机选号（七星彩基线）"""
+    import random
+    digits = [random.randint(0, 9) for _ in range(7)]
+    return {'digits': digits}
+
+def _run_random_baseline(game, history, actual, n_trials=100):
+    """跑n次随机选号基线，返回平均命中数"""
+    import random
+    random.seed()  # 确保不同运行结果不同
+    totals = []
+    for _ in range(n_trials):
+        if game == 'ssq':
+            pick = _random_pick_ssq(history)
+            red_hits = len(_get_hit_numbers(pick['reds'], actual['reds']))
+            blue_hit = 1 if pick['blue'] == actual['blue'] else 0
+            totals.append(red_hits + blue_hit)
+        elif game == 'dlt':
+            pick = _random_pick_dlt(history)
+            front_hits = len(_get_hit_numbers(pick['front'], actual['front']))
+            back_hits = len(_get_hit_numbers(pick['back'], actual['back']))
+            totals.append(front_hits + back_hits)
+        elif game == 'qxc':
+            pick = _random_pick_qxc(history)
+            digit_hits = sum(1 for i in range(7) if pick['digits'][i] == actual['digits'][i])
+            totals.append(digit_hits)
+    avg = sum(totals) / len(totals) if totals else 0
+    max_hit = max(totals) if totals else 0
+    return {'avg': round(avg, 2), 'max': max_hit, 'trials': n_trials}
+
+
 # 🟢 v6.2: 多奖级Kelly期望值（替代单一赔率）
 PRIZE_TIERS = {
     'ssq': [
@@ -2308,20 +2431,35 @@ def _run_backtest():
             recs = wa.generate_recs_ssq(analysis, kelly_bias=0.0)
 
             hits = []
+            total_prize = 0
             for rec in recs:
                 red_hit_nums = _get_hit_numbers(rec['reds'], actual['reds'])
                 blue_hit = 1 if rec['blue'] == actual['blue'] else 0
+                red_hits = len(red_hit_nums)
+                # 🔴 v7.4: 奖级判定
+                prize = judge_prize_ssq(red_hits, blue_hit)
+                total_prize += prize['prize']
                 hits.append({
                     'strategy': rec['strategy'],
-                    'red_hits': len(red_hit_nums),
+                    'red_hits': red_hits,
                     'red_hit_nums': red_hit_nums,
                     'blue_hit': blue_hit,
-                    'total': len(red_hit_nums) + blue_hit,
+                    'total': red_hits + blue_hit,
                     'predicted_reds': rec['reds'],
                     'predicted_blue': rec['blue'],
                     'actual_reds': actual['reds'],
                     'actual_blue': actual['blue'],
+                    'prize_tier': prize['tier'],
+                    'prize_name': prize['name'],
+                    'prize_amount': prize['prize'],
                 })
+
+            # 🔴 v7.4: 随机基线
+            baseline = _run_random_baseline('ssq', ssq_pre_draw, actual)
+
+            # 🔴 v7.4: AI推荐回测（读昨日AI推荐记录）
+            ai_hit_info = _backtest_ai_prediction('ssq', today_str, actual)
+
             backtest_result['ssq'] = {
                 'period': actual['period'],
                 'hits': hits,
@@ -2329,8 +2467,12 @@ def _run_backtest():
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
                 'actual_reds': actual['reds'],
                 'actual_blue': actual['blue'],
+                'total_prize': total_prize,
+                'total_cost': len(recs) * 2,  # 每注2元
+                'baseline': baseline,
+                'ai_hit': ai_hit_info,
             }
-            print(f"[回测] 双色球 第{actual['period']}期: 最佳策略={backtest_result['ssq']['best_strategy']}, 命中={backtest_result['ssq']['best_total']}个")
+            print(f"[回测] 双色球 第{actual['period']}期: 最佳={backtest_result['ssq']['best_strategy']}({backtest_result['ssq']['best_total']}个) 奖金{total_prize}元 基线均值{baseline['avg']}")
         else:
             print("[回测] 双色球数据不足，跳过")
 
@@ -2346,21 +2488,37 @@ def _run_backtest():
             recs = wa.generate_recs_dlt(analysis, kelly_bias=0.0)
 
             hits = []
+            total_prize = 0
             for rec in recs:
                 front_hit_nums = _get_hit_numbers(rec['front'], actual['front'])
                 back_hit_nums = _get_hit_numbers(rec['back'], actual['back'])
+                front_hits = len(front_hit_nums)
+                back_hits = len(back_hit_nums)
+                # 🔴 v7.4: 奖级判定
+                prize = judge_prize_dlt(front_hits, back_hits)
+                total_prize += prize['prize']
                 hits.append({
                     'strategy': rec['strategy'],
-                    'front_hits': len(front_hit_nums),
+                    'front_hits': front_hits,
                     'front_hit_nums': front_hit_nums,
-                    'back_hits': len(back_hit_nums),
+                    'back_hits': back_hits,
                     'back_hit_nums': back_hit_nums,
-                    'total': len(front_hit_nums) + len(back_hit_nums),
+                    'total': front_hits + back_hits,
                     'predicted_front': rec['front'],
                     'predicted_back': rec['back'],
                     'actual_front': actual['front'],
                     'actual_back': actual['back'],
+                    'prize_tier': prize['tier'],
+                    'prize_name': prize['name'],
+                    'prize_amount': prize['prize'],
                 })
+
+            # 🔴 v7.4: 随机基线
+            baseline = _run_random_baseline('dlt', dlt_pre_draw, actual)
+
+            # 🔴 v7.4: AI推荐回测
+            ai_hit_info = _backtest_ai_prediction('dlt', today_str, actual)
+
             backtest_result['dlt'] = {
                 'period': actual['period'],
                 'hits': hits,
@@ -2368,8 +2526,12 @@ def _run_backtest():
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
                 'actual_front': actual['front'],
                 'actual_back': actual['back'],
+                'total_prize': total_prize,
+                'total_cost': len(recs) * 2,
+                'baseline': baseline,
+                'ai_hit': ai_hit_info,
             }
-            print(f"[回测] 大乐透 第{actual['period']}期: 最佳策略={backtest_result['dlt']['best_strategy']}, 命中={backtest_result['dlt']['best_total']}个")
+            print(f"[回测] 大乐透 第{actual['period']}期: 最佳={backtest_result['dlt']['best_strategy']}({backtest_result['dlt']['best_total']}个) 奖金{total_prize}元 基线均值{baseline['avg']}")
         else:
             print("[回测] 大乐透数据不足，跳过")
 
@@ -2385,9 +2547,13 @@ def _run_backtest():
             recs = wa.generate_recs_qxc(analysis, kelly_bias=0.0)
 
             hits = []
+            total_prize = 0
             for rec in recs:
                 digit_hits_detail = [(i, rec['digits'][i], actual['digits'][i], rec['digits'][i] == actual['digits'][i]) for i in range(7)]
                 digit_hit_count = sum(1 for _, _, _, hit in digit_hits_detail if hit)
+                # 🔴 v7.4: 奖级判定
+                prize = judge_prize_qxc(digit_hit_count)
+                total_prize += prize['prize']
                 hits.append({
                     'strategy': rec['strategy'],
                     'digit_hits': digit_hit_count,
@@ -2395,15 +2561,29 @@ def _run_backtest():
                     'total': digit_hit_count,
                     'predicted': rec['digits'],
                     'actual': actual['digits'],
+                    'prize_tier': prize['tier'],
+                    'prize_name': prize['name'],
+                    'prize_amount': prize['prize'],
                 })
+
+            # 🔴 v7.4: 随机基线
+            baseline = _run_random_baseline('qxc', qxc_pre_draw, actual)
+
+            # 🔴 v7.4: AI推荐回测
+            ai_hit_info = _backtest_ai_prediction('qxc', today_str, actual)
+
             backtest_result['qxc'] = {
                 'period': actual['period'],
                 'hits': hits,
                 'best_strategy': max(hits, key=lambda x: x['total'])['strategy'] if hits else None,
                 'best_total': max(hits, key=lambda x: x['total'])['total'] if hits else 0,
                 'actual_digits': actual['digits'],
+                'total_prize': total_prize,
+                'total_cost': len(recs) * 2,
+                'baseline': baseline,
+                'ai_hit': ai_hit_info,
             }
-            print(f"[回测] 七星彩 第{actual['period']}期: 最佳策略={backtest_result['qxc']['best_strategy']}, 命中={backtest_result['qxc']['best_total']}个")
+            print(f"[回测] 七星彩 第{actual['period']}期: 最佳={backtest_result['qxc']['best_strategy']}({backtest_result['qxc']['best_total']}个) 奖金{total_prize}元 基线均值{baseline['avg']}")
         else:
             print("[回测] 七星彩数据不足，跳过")
 
@@ -2417,6 +2597,166 @@ def _run_backtest():
         return backtest_result
 
     return None
+
+
+def _backtest_ai_prediction(game, today_str, actual):
+    """🔴 v7.4: 回测昨日AI推荐（读lottery-predictions.json中昨天的AI推荐记录，对比开奖号）"""
+    predictions = _load_predictions()
+    yesterday_str = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
+    # 找昨天的预测
+    yesterday_pred = None
+    for p in predictions:
+        if p.get('date') == yesterday_str:
+            yesterday_pred = p
+            break
+    if not yesterday_pred:
+        return None
+
+    recs = yesterday_pred.get(f'{game}_recs', [])
+    if not recs:
+        return None
+
+    hits = []
+    for rec in recs:
+        if game == 'ssq':
+            red_hit_nums = _get_hit_numbers(rec.get('reds', []), actual.get('reds', []))
+            blue_hit = 1 if rec.get('blue') == actual.get('blue') else 0
+            red_hits = len(red_hit_nums)
+            prize = judge_prize_ssq(red_hits, blue_hit)
+            hits.append({
+                'strategy': rec.get('strategy', 'AI'),
+                'red_hits': red_hits,
+                'blue_hit': blue_hit,
+                'total': red_hits + blue_hit,
+                'prize_name': prize['name'],
+                'prize_amount': prize['prize'],
+            })
+        elif game == 'dlt':
+            front_hit_nums = _get_hit_numbers(rec.get('front', []), actual.get('front', []))
+            back_hit_nums = _get_hit_numbers(rec.get('back', []), actual.get('back', []))
+            front_hits = len(front_hit_nums)
+            back_hits = len(back_hit_nums)
+            prize = judge_prize_dlt(front_hits, back_hits)
+            hits.append({
+                'strategy': rec.get('strategy', 'AI'),
+                'front_hits': front_hits,
+                'back_hits': back_hits,
+                'total': front_hits + back_hits,
+                'prize_name': prize['name'],
+                'prize_amount': prize['prize'],
+            })
+        elif game == 'qxc':
+            digit_hit_count = sum(1 for i in range(7) if rec.get('digits', [0]*7)[i] == actual.get('digits', [0]*7)[i])
+            prize = judge_prize_qxc(digit_hit_count)
+            hits.append({
+                'strategy': rec.get('strategy', 'AI'),
+                'digit_hits': digit_hit_count,
+                'total': digit_hit_count,
+                'prize_name': prize['name'],
+                'prize_amount': prize['prize'],
+            })
+
+    if not hits:
+        return None
+
+    best = max(hits, key=lambda x: x['total'])
+    total_prize = sum(h.get('prize_amount', 0) for h in hits)
+    return {
+        'source': 'AI推荐（刘海蟾）',
+        'best_strategy': best.get('strategy', 'AI'),
+        'best_total': best['total'],
+        'total_prize': total_prize,
+        'total_cost': len(hits) * 2,
+        'hits': hits,
+    }
+
+
+def run_batch_backtest(n_periods=10):
+    """🔴 v7.4: 多期批量回测 — 一次回测最近n期，出汇总报告
+    对每期：用开奖前数据+当前权重生成推荐→对比开奖号→判奖级
+    返回汇总统计（各策略命中率、中奖率、随机基线对比）
+    """
+    import random
+    results = []
+
+    for game, fetch_fn, game_name in [
+        ('ssq', fetch_ssq_history, '双色球'),
+        ('dlt', fetch_dlt_history, '大乐透'),
+        ('qxc', fetch_qxc_history, '七星彩'),
+    ]:
+        fetch_count = n_periods + 5  # 多抓几期保证够用
+        if game == 'qxc':
+            fetch_count = n_periods * 2 + 10  # 七星彩隔期开奖
+        history = fetch_fn(fetch_count)
+        if not history or len(history) < n_periods + 1:
+            print(f"[批量回测] {game_name}数据不足，跳过")
+            continue
+
+        strategy_stats = defaultdict(lambda: {'hits': [], 'prizes': [], 'count': 0})
+        baseline_totals = []
+
+        for i in range(n_periods):
+            actual = history[i]
+            pre_draw = history[i+1:]  # 去掉actual及之后
+            if len(pre_draw) < 5:
+                continue
+
+            wa = WeightedAnalyzer(pre_draw)
+            analysis = getattr(wa, f'analyze_{game}')()
+            recs = getattr(wa, f'generate_recs_{game}')(analysis, kelly_bias=0.0)
+
+            for rec in recs:
+                strategy = str(rec.get('strategy', 'unknown'))
+                if game == 'ssq':
+                    red_hits = len(_get_hit_numbers(rec['reds'], actual['reds']))
+                    blue_hit = 1 if rec['blue'] == actual['blue'] else 0
+                    total = red_hits + blue_hit
+                    prize = judge_prize_ssq(red_hits, blue_hit)
+                elif game == 'dlt':
+                    front_hits = len(_get_hit_numbers(rec['front'], actual['front']))
+                    back_hits = len(_get_hit_numbers(rec['back'], actual['back']))
+                    total = front_hits + back_hits
+                    prize = judge_prize_dlt(front_hits, back_hits)
+                elif game == 'qxc':
+                    digit_hits = sum(1 for j in range(7) if rec['digits'][j] == actual['digits'][j])
+                    total = digit_hits
+                    prize = judge_prize_qxc(digit_hits)
+
+                strategy_stats[strategy]['hits'].append(total)
+                strategy_stats[strategy]['prizes'].append(prize['prize'])
+                strategy_stats[strategy]['count'] += 1
+
+            # 随机基线（每期跑50次）
+            baseline = _run_random_baseline(game, pre_draw, actual, n_trials=50)
+            baseline_totals.append(baseline['avg'])
+
+        # 汇总
+        strategy_summary = {}
+        for s, data in strategy_stats.items():
+            avg_hit = sum(data['hits']) / len(data['hits']) if data['hits'] else 0
+            total_prize = sum(data['prizes'])
+            total_cost = data['count'] * 2
+            win_rate = sum(1 for p in data['prizes'] if p > 0) / len(data['prizes']) if data['prizes'] else 0
+            strategy_summary[s] = {
+                'avg_hit': round(avg_hit, 2),
+                'total_prize': total_prize,
+                'total_cost': total_cost,
+                'roi': round((total_prize - total_cost) / total_cost * 100, 1) if total_cost > 0 else 0,
+                'win_rate': round(win_rate * 100, 1),
+                'count': data['count'],
+            }
+
+        baseline_avg = round(sum(baseline_totals) / len(baseline_totals), 2) if baseline_totals else 0
+        results.append({
+            'game': game,
+            'game_name': game_name,
+            'periods_tested': n_periods,
+            'strategy_summary': strategy_summary,
+            'baseline_avg': baseline_avg,
+        })
+        print(f"[批量回测] {game_name}({n_periods}期): 基线均值={baseline_avg}")
+
+    return results
 
 
 def _format_backtest_for_ai(backtest_result):
@@ -2958,8 +3298,19 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
                 pred_r = ' '.join(f'{n:02d}' for n in h['predicted_reds'])
                 hit_nums = ' '.join(f'{n:02d}✅' for n in h.get('red_hit_nums', []))
                 blue_status = '✅' if h['blue_hit'] else '❌'
-                lines.append(f"  {h['strategy']}: {pred_r} + 蓝{h['predicted_blue']:02d} → 红球{h['red_hits']}/6({hit_nums}) 蓝球{blue_status} = {h['total']}")
+                prize_tag = f" 🏆{h.get('prize_name', '')}({h.get('prize_amount', 0)}元)" if h.get('prize_tier', 0) > 0 else ''
+                lines.append(f"  {h['strategy']}: {pred_r} + 蓝{h['predicted_blue']:02d} → 红球{h['red_hits']}/6({hit_nums}) 蓝球{blue_status} = {h['total']}{prize_tag}")
             lines.append(f"  ▶ 最佳: {ssq['best_strategy']}({ssq['best_total']}个)")
+            # 🔴 v7.4: 奖金汇总+基线对比
+            total_prize = ssq.get('total_prize', 0)
+            total_cost = ssq.get('total_cost', 0)
+            lines.append(f"  💰 奖金: {total_prize}元 / 投入: {total_cost}元")
+            baseline = ssq.get('baseline', {})
+            if baseline:
+                lines.append(f"  📊 随机基线: 均值{baseline['avg']}个(100次) vs 策略最佳{ssq['best_total']}个")
+            ai_hit = ssq.get('ai_hit', {})
+            if ai_hit:
+                lines.append(f"  🤖 AI推荐回测: 最佳{ai_hit.get('best_total', 0)}个, 奖金{ai_hit.get('total_prize', 0)}元")
             lines.append("")
 
         if 'dlt' in backtest_result:
@@ -2971,8 +3322,19 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
                 pred_f = ' '.join(f'{n:02d}' for n in h['predicted_front'])
                 hit_f = ' '.join(f'{n:02d}✅' for n in h.get('front_hit_nums', []))
                 hit_b = ' '.join(f'{n:02d}✅' for n in h.get('back_hit_nums', []))
-                lines.append(f"  {h['strategy']}: {pred_f} + 后{' '.join(f'{n:02d}' for n in h['predicted_back'])} → 前区{h['front_hits']}/5({hit_f}) 后区{h['back_hits']}/2({hit_b}) = {h['total']}")
+                lines.append(f"  {h['strategy']}: {pred_f} + 后{' '.join(f'{n:02d}' for n in h['predicted_back'])} → 前区{h['front_hits']}/5({hit_f}) 后区{h['back_hits']}/2({hit_b}) = {h['total']}" +
+                             (f" 🏆{h.get('prize_name', '')}({h.get('prize_amount', 0)}元)" if h.get('prize_tier', 0) > 0 else ''))
             lines.append(f"  ▶ 最佳: {dlt['best_strategy']}({dlt['best_total']}个)")
+            # 🔴 v7.4: 奖金汇总+基线对比
+            total_prize = dlt.get('total_prize', 0)
+            total_cost = dlt.get('total_cost', 0)
+            lines.append(f"  💰 奖金: {total_prize}元 / 投入: {total_cost}元")
+            baseline = dlt.get('baseline', {})
+            if baseline:
+                lines.append(f"  📊 随机基线: 均值{baseline['avg']}个(100次) vs 策略最佳{dlt['best_total']}个")
+            ai_hit = dlt.get('ai_hit', {})
+            if ai_hit:
+                lines.append(f"  🤖 AI推荐回测: 最佳{ai_hit.get('best_total', 0)}个, 奖金{ai_hit.get('total_prize', 0)}元")
             lines.append("")
 
         if 'qxc' in backtest_result:
@@ -2984,8 +3346,19 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
                 pos_marks = ''
                 for i, pred_val, actual_val, hit in h.get('digit_hits_detail', []):
                     pos_marks += f'{pred_val}{"✅" if hit else "❌"} '
-                lines.append(f"  {h['strategy']}: {pred_d} → {pos_marks}= {h['digit_hits']}/7")
+                lines.append(f"  {h['strategy']}: {pred_d} → {pos_marks}= {h['digit_hits']}/7" +
+                             (f" 🏆{h.get('prize_name', '')}({h.get('prize_amount', 0)}元)" if h.get('prize_tier', 0) > 0 else ''))
             lines.append(f"  ▶ 最佳: {qxc['best_strategy']}({qxc['best_total']}个)")
+            # 🔴 v7.4: 奖金汇总+基线对比
+            total_prize = qxc.get('total_prize', 0)
+            total_cost = qxc.get('total_cost', 0)
+            lines.append(f"  💰 奖金: {total_prize}元 / 投入: {total_cost}元")
+            baseline = qxc.get('baseline', {})
+            if baseline:
+                lines.append(f"  📊 随机基线: 均值{baseline['avg']}个(100次) vs 策略最佳{qxc['best_total']}个")
+            ai_hit = qxc.get('ai_hit', {})
+            if ai_hit:
+                lines.append(f"  🤖 AI推荐回测: 最佳{ai_hit.get('best_total', 0)}个, 奖金{ai_hit.get('total_prize', 0)}元")
             lines.append("")
 
     if ssq_result:
@@ -3292,14 +3665,16 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                           ssq_history=None, dlt_history=None, qxc_history=None):
     """
     🔴 v7.4: 重大事件告警检测
-    检测7类重大事件，返回告警列表：
+    检测9类重大事件，返回告警列表：
     1. GEPA重大更新（is_major=True）
     2. GEPA空转（连续t=0）
-    3. 回测命中爆发（单注≥4个号）
-    4. 冷号注首次命中
-    5. Kelly值偏高（>3%）
-    6. 重大策略调整（GEPA参数变化≥0.04）
-    7. 规律发现（相关性/趋势/周期异常信号）
+    3. GEPA策略调整（任何参数变化，不管大小）
+    4. 回测命中爆发（单注≥4个号）
+    5. 回测中奖通知（任何奖级≥4等）
+    6. 冷号注首次命中
+    7. Kelly值偏高（>3%）
+    8. 规律发现（相关性/趋势/周期异常信号）
+    9. 策略优于/劣于随机基线
     """
     alerts = []
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
@@ -3333,28 +3708,79 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                     'action': '建议锁定GEPA或重构进化机制（增大步长/扩大回测窗口）',
                 })
 
-    # === 3. 回测命中爆发 ===
+    # === 4. 回测命中爆发 + 中奖通知 + 基线对比 ===
     if backtest_result:
         for game in ['ssq', 'dlt', 'qxc']:
             if game not in backtest_result:
                 continue
             game_name = LOTTERY_NAMES.get(game, game)
             hits = backtest_result[game].get('hits', [])
+            baseline = backtest_result[game].get('baseline', {})
+            ai_hit = backtest_result[game].get('ai_hit', {})
+
+            # 命中爆发
             for h in hits:
                 total = h.get('total', 0)
                 strategy = str(h.get('strategy', ''))
+                prize_name = h.get('prize_name', '未中奖')
+                prize_amount = h.get('prize_amount', 0)
+
                 if total >= 4:
                     alerts.append({
                         'level': '🎯',
                         'type': 'backtest_hit',
                         'title': f'{game_name}回测命中{total}个号！',
-                        'detail': f"策略: {strategy}, 红球命中{h.get('red_hits', 0)}个"
-                                  f"{(', 蓝球命中' if game == 'ssq' else ', 后区命中') if h.get('blue_hit' if game == 'ssq' else 'back_hits', 0) else ''}",
+                        'detail': f"策略: {strategy}, 奖级: {prize_name}({prize_amount}元)",
                         'action': '验证该策略是否可持续，注意是否为随机波动',
                     })
-                    break  # 同彩种只报一次
+                    break
 
-    # === 4. 冷号注首次命中 ===
+                # 中奖通知（≥五等奖）
+                if h.get('prize_tier', 0) >= 4:
+                    alerts.append({
+                        'level': '🏆',
+                        'type': 'backtest_prize',
+                        'title': f'{game_name}回测{prize_name}！',
+                        'detail': f"策略: {strategy}, 命中{total}个号, {prize_name}({prize_amount}元)",
+                        'action': '回测中奖信号，持续关注该策略实战表现',
+                    })
+                    break
+
+            # 策略 vs 随机基线
+            if baseline and hits:
+                best_total = max(h.get('total', 0) for h in hits)
+                baseline_avg = baseline.get('avg', 0)
+                if best_total > baseline_avg + 1.5:
+                    alerts.append({
+                        'level': '📈',
+                        'type': 'beat_baseline',
+                        'title': f'{game_name}策略优于随机基线',
+                        'detail': f"最佳命中{best_total}个 vs 随机均值{baseline_avg}个（超出{best_total - baseline_avg:.1f}）",
+                        'action': '策略有效，继续观察稳定性',
+                    })
+                elif best_total < baseline_avg - 0.5:
+                    alerts.append({
+                        'level': '📉',
+                        'type': 'below_baseline',
+                        'title': f'{game_name}策略劣于随机基线！',
+                        'detail': f"最佳命中{best_total}个 vs 随机均值{baseline_avg}个（低于{baseline_avg - best_total:.1f}）",
+                        'action': '策略可能失效，考虑回退权重或调整参数',
+                    })
+
+            # AI推荐回测
+            if ai_hit and ai_hit.get('best_total', 0) > 0:
+                ai_best = ai_hit['best_total']
+                rule_best = max(h.get('total', 0) for h in hits) if hits else 0
+                if ai_best > rule_best:
+                    alerts.append({
+                        'level': '🤖',
+                        'type': 'ai_beats_rules',
+                        'title': f'{game_name}AI推荐优于规则推荐',
+                        'detail': f"AI命中{ai_best}个 vs 规则{rule_best}个, AI奖金{ai_hit.get('total_prize', 0)}元",
+                        'action': 'AI推荐更准，考虑给AI推荐更高权重',
+                    })
+
+    # === 5. 冷号注首次命中 ===
     if backtest_result:
         for game in ['ssq', 'dlt', 'qxc']:
             if game not in backtest_result:
@@ -3364,7 +3790,6 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
             for h in hits:
                 strategy = str(h.get('strategy', ''))
                 if 'cold' in strategy.lower() and h.get('total', 0) >= 2:
-                    # 检查历史冷号注命中率
                     bt_log = _load_backtest()
                     cold_hits_count = 0
                     for bt in bt_log[-10:]:
@@ -3372,19 +3797,20 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                             for bh in bt[game].get('hits', []):
                                 if 'cold' in str(bh.get('strategy', '')).lower() and bh.get('total', 0) >= 2:
                                     cold_hits_count += 1
-                    if cold_hits_count <= 1:  # 首次或极罕见
+                    if cold_hits_count <= 1:
+                        prize_name = h.get('prize_name', '未中奖')
                         alerts.append({
                             'level': '❄️',
                             'type': 'cold_first_hit',
                             'title': f'{game_name}冷号注命中！',
-                            'detail': f"策略: {strategy}, 命中{h.get('total', 0)}个号（近10期冷号注仅命中{cold_hits_count}次）",
+                            'detail': f"策略: {strategy}, 命中{h.get('total', 0)}个号, {prize_name}（近10期冷号注仅命中{cold_hits_count}次）",
                             'action': '冷号注信号出现，关注后续是否形成趋势',
                         })
                         break
 
-    # === 5. Kelly值偏高 ===
+    # === 6. Kelly值偏高 ===
     if kelly_map:
-        KELLY_HIGH_THRESHOLD = 0.03  # 3%以上视为偏高
+        KELLY_HIGH_THRESHOLD = 0.03
         for game_key, kelly_val in kelly_map.items():
             game_name = LOTTERY_NAMES.get(game_key, game_key)
             if kelly_val > KELLY_HIGH_THRESHOLD:
@@ -3392,36 +3818,36 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                     'level': '💰',
                     'type': 'kelly_high',
                     'title': f'{game_name}Kelly值偏高！',
-                    'detail': f"Kelly={kelly_val:.2%}（阈值{KELLY_HIGH_THRESHOLD:.0%}），"
-                              f"数学期望为正，值得加注",
+                    'detail': f"Kelly={kelly_val:.2%}（阈值{KELLY_HIGH_THRESHOLD:.0%}），数学期望为正",
                     'action': f'考虑增加{game_name}投注额（Kelly建议比例的1/4~1/2）',
                 })
 
-    # === 6. 重大策略调整 ===
+    # === 3. GEPA策略调整通知（不管大小都告诉你） ===
     if evolved_config:
         evo_log = evolved_config.get('evolution_log', [])
         if evo_log:
             latest = evo_log[-1]
-            old_w = latest.get('old_weights', {})
-            new_w = latest.get('new_weights', {})
-            big_changes = []
-            for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss_front', 'cold_cycle_front',
-                        'cold_miss_back', 'cold_cycle_back', 'neighbor_bonus', 'gamma']:
-                old_v = old_w.get(key, 0)
-                new_v = new_w.get(key, 0)
-                diff = abs(new_v - old_v)
-                if diff >= 0.03 and not latest.get('is_major'):  # 重大更新已在#1报过
-                    big_changes.append(f"{key}: {old_v:.3f}→{new_v:.3f}(Δ{diff:.3f})")
-            if big_changes:
-                alerts.append({
-                    'level': '🔧',
-                    'type': 'strategy_shift',
-                    'title': '策略参数显著调整',
-                    'detail': '; '.join(big_changes),
-                    'action': '关注调整后效果，如连续走差考虑回退',
-                })
+            if latest.get('date') == today_str:  # 今天的调整
+                old_w = latest.get('old_weights', {})
+                new_w = latest.get('new_weights', {})
+                all_changes = []
+                for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss_front', 'cold_cycle_front',
+                            'cold_miss_back', 'cold_cycle_back', 'neighbor_bonus', 'gamma']:
+                    old_v = old_w.get(key, 0)
+                    new_v = new_w.get(key, 0)
+                    diff = abs(new_v - old_v)
+                    if diff > 0:
+                        all_changes.append(f"{key}: {old_v:.3f}→{new_v:.3f}(Δ{diff:+.3f})")
+                if all_changes and not latest.get('is_major'):  # major已在#1报过
+                    alerts.append({
+                        'level': '🔧',
+                        'type': 'strategy_adjust',
+                        'title': 'GEPA调整了策略参数',
+                        'detail': '; '.join(all_changes),
+                        'action': '关注后续回测效果，连续走差可考虑回退',
+                    })
 
-    # === 7. 规律发现 ===
+    # === 4. 回测命中爆发 ===
     # 7a. 号码相关性异常（某对号码条件概率远高于先验）
     for game, history, game_name in [
         ('ssq', ssq_history, '双色球'),
