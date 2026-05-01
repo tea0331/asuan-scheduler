@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v7.4 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导+重大事件告警）
+彩票号码分析模块 v7.4.2 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导+重大事件告警+AI去抄答案）
 
 v7.4核心改动（重大事件告警）：
 1. 🔴 新增detect_lottery_alerts()：检测7类重大事件并生成告警
@@ -1683,10 +1683,14 @@ def _format_ssq_for_ai(history, kelly_bias=0.0):
     stats.append(f"🔴蓝球遗漏: {', '.join(f'{n}({m}期未出)' for n, m in blue_miss_sorted[:5])}")
 
     # 加权号码池（追热/回补/综合各6个）
-    weighted_recs = wa.generate_recs_ssq(analysis, kelly_bias=kelly_bias)  # 🟢 v6.1: Kelly驱动
-    for rec in weighted_recs:
-        reds_str = ' '.join(f'{n:02d}' for n in rec['reds'])
-        stats.append(f"📊{rec['strategy']}: {reds_str} + 蓝{rec['blue']:02d}")
+    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案导致每天推荐一样）
+    # 改为只提供加权TOP号池，让AI自己组合
+    red_weight_dict = dict(analysis['red_weights'])
+    blue_weight_dict = dict(analysis['blue_weights'])
+    top_reds = sorted(red_weight_dict.items(), key=lambda x: x[1], reverse=True)[:12]
+    top_blues = sorted(blue_weight_dict.items(), key=lambda x: x[1], reverse=True)[:5]
+    stats.append(f"📊加权TOP12红球(权重高→低): {', '.join(f'{n}({w:.2f})' for n, w in top_reds)}")
+    stats.append(f"📊加权TOP5蓝球(权重高→低): {', '.join(f'{n}({w:.2f})' for n, w in top_blues)}")
 
     # 分区平衡
     zb = analysis['zone_balance']
@@ -1730,11 +1734,13 @@ def _format_dlt_for_ai(history, kelly_bias=0.0):
     back_miss_sorted = sorted(analysis['back_miss'].items(), key=lambda x: x[1], reverse=True)
     stats.append(f"🔴后区遗漏: {', '.join(f'{n}({m}期未出)' for n, m in back_miss_sorted[:5])}")
 
-    weighted_recs = wa.generate_recs_dlt(analysis, kelly_bias=kelly_bias)  # 🟢 v6.1: Kelly驱动
-    for rec in weighted_recs:
-        front_str = ' '.join(f'{n:02d}' for n in rec['front'])
-        back_str = ' '.join(f'{n:02d}' for n in rec['back'])
-        stats.append(f"📊{rec['strategy']}: {front_str} + 后{back_str}")
+    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
+    front_weight_dict = dict(analysis['front_weights'])
+    back_weight_dict = dict(analysis['back_weights'])
+    top_front = sorted(front_weight_dict.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_back = sorted(back_weight_dict.items(), key=lambda x: x[1], reverse=True)[:5]
+    stats.append(f"📊加权TOP10前区(权重高→低): {', '.join(f'{n}({w:.2f})' for n, w in top_front)}")
+    stats.append(f"📊加权TOP5后区(权重高→低): {', '.join(f'{n}({w:.2f})' for n, w in top_back)}")
 
     zb = analysis['zone_balance']
     total_z = sum(zb) or 1
@@ -1761,10 +1767,11 @@ def _format_qxc_for_ai(history, kelly_bias=0.0):
         miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
         stats.append(f"🔴第{i+1}位遗漏TOP3: {', '.join(f'{n}({m}期未出)' for n, m in miss_sorted[:3])}")
 
-    weighted_recs = wa.generate_recs_qxc(analysis, kelly_bias=kelly_bias)  # 🟢 v6.2: Kelly驱动
-    for rec in weighted_recs:
-        digits_str = ' '.join(str(n) for n in rec['digits'])
-        stats.append(f"📊{rec['strategy']}: {digits_str}")
+    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
+    for i, pd in enumerate(analysis['positions']):
+        pw = dict(pd.get('weights', []))
+        top3 = sorted(pw.items(), key=lambda x: x[1], reverse=True)[:3]
+        stats.append(f"📊第{i+1}位加权TOP3: {', '.join(f'{n}({w:.2f})' for n, w in top3)}")
 
     return '\n'.join(lines) + '\n\n' + '\n'.join(stats)
 
