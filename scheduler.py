@@ -613,8 +613,19 @@ def run_task_and_email(task_name, task, today_str):
     # 🔴 第二步：彩票推荐（优先读刘海蟾摘要，摘要不新鲜就先跑daily_run，最后fallback旧版）
     lottery_section = ''
     lottery_source = '❓'  # 来源标记，邮件里能看到
-    LIUHAI_DIGEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
-    LIUHAI_DAILY_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'liuhai-chan', 'backend', 'daily_run.py')
+
+    # 🔴 路径适配：GitHub Actions checkout两个仓库时，目录结构不同
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _is_github_actions = os.environ.get('RUN_ENV') == 'github-actions' or os.environ.get('GITHUB_ACTIONS') == 'true'
+    if _is_github_actions:
+        # GitHub Actions: 两个仓库同级checkout到 $GITHUB_WORKSPACE 下
+        _workspace = os.environ.get('GITHUB_WORKSPACE', '/__w/asuan-scheduler/asuan-scheduler')
+        LIUHAI_DIGEST = os.path.join(_workspace, 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
+        LIUHAI_DAILY_RUN = os.path.join(_workspace, 'liuhai-chan', 'backend', 'daily_run.py')
+    else:
+        # 本地: 相对路径 ../liuhai-chan/
+        LIUHAI_DIGEST = os.path.join(_script_dir, '..', 'liuhai-chan', 'backend', 'data', 'lottery-digest.json')
+        LIUHAI_DAILY_RUN = os.path.join(_script_dir, '..', 'liuhai-chan', 'backend', 'daily_run.py')
 
     # 检查摘要是否新鲜（日期匹配）
     digest_fresh = False
