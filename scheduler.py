@@ -75,7 +75,7 @@ TASKS = {
 每个领域2-3条，格式为markdown：
 1. **时事新闻**：国内外重大新闻
 2. **科技/AI资讯**：AI、编程、互联网动态
-3. **财经/投资资讯**：A股、港股、美股市场动态
+3. **财经/投资资讯**：A股、港股市场动态
 4. **热搜话题**：微博/抖音热门
 
 ## 二、市场扫描（投资创业研究）
@@ -134,7 +134,7 @@ TASKS = {
 每个领域2-3条：
 1. **时事新闻**：国内外重大新闻
 2. **科技/AI资讯**：AI、编程、互联网动态
-3. **财经/投资资讯**：A股、港股、美股市场动态
+3. **财经/投资资讯**：A股、港股市场动态
 4. **热搜话题**：微博/抖音热门
 
 ## 二、市场扫描（投资创业研究）
@@ -491,15 +491,16 @@ def send_task_email(task, today_str, file_path, subject_override=None):
 
     body = f"""<html><head><meta charset="utf-8">
 <style>
-body {{ font-family: -apple-system, 'Microsoft YaHei', sans-serif; font-size: 14px; line-height: 1.7; color: #333; max-width: 800px; margin: 0 auto; padding: 10px; }}
-h1 {{ font-size: 20px; border-bottom: 2px solid #e74c3c; padding-bottom: 6px; }}
-h2 {{ font-size: 17px; color: #2c3e50; margin-top: 20px; border-left: 4px solid #3498db; padding-left: 10px; }}
-h3 {{ font-size: 15px; color: #555; }}
+body {{ font-family: -apple-system, 'Microsoft YaHei', sans-serif; font-size: 15px; line-height: 1.8; color: #222; max-width: 720px; margin: 0 auto; padding: 16px; background: #fff; }}
+h1 {{ font-size: 18px; font-weight: 600; border-bottom: 1px solid #ccc; padding-bottom: 6px; color: #222; }}
+h2 {{ font-size: 16px; font-weight: 600; color: #222; margin-top: 24px; padding-bottom: 4px; }}
+h3 {{ font-size: 15px; font-weight: 600; color: #333; }}
 table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
-th, td {{ border: 1px solid #ddd; padding: 6px 10px; text-align: center; }}
-th {{ background: #f5f5f5; }}
-blockquote {{ border-left: 3px solid #e74c3c; padding-left: 10px; color: #666; margin: 10px 0; }}
-code {{ background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }}
+th, td {{ border: 1px solid #ddd; padding: 5px 8px; text-align: center; font-size: 14px; }}
+th {{ background: #f8f8f8; font-weight: 600; }}
+blockquote {{ border-left: 2px solid #999; padding-left: 10px; color: #555; margin: 10px 0; }}
+strong {{ font-weight: 600; }}
+code {{ background: #f5f5f5; padding: 1px 3px; border-radius: 2px; font-size: 13px; }}
 hr {{ border: none; border-top: 1px solid #ddd; margin: 20px 0; }}
 </style>
 </head><body>
