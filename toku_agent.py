@@ -139,7 +139,7 @@ def call_hunyuan(system_prompt, user_prompt, max_tokens=4000):
         'Content-Type': 'application/json'
     }
     payload = {
-        'model': 'hunyuan-turbos-latest',  # 腾讯混元最新版
+        'model': 'hunyuan-lite',  # 腾讯混元轻量版
         'messages': [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt}
