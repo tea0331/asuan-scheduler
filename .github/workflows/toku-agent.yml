@@ -23,7 +23,7 @@ jobs:
       TOKU_API_KEY: ${{ secrets.TOKU_API_KEY }}
       WP_API_KEY: ${{ secrets.WP_API_KEY }}
       NEAR_API_KEY: ${{ secrets.NEAR_API_KEY }}
-      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      HUNYUAN_API_KEY: ${{ secrets.HUNYUAN_API_KEY }}
       REPO_DIR: "."
 
     steps:

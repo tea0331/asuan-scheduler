@@ -23,8 +23,8 @@ CST = timezone(timedelta(hours=8))
 TOKU_API_KEY = os.environ.get('TOKU_API_KEY', '')
 WP_API_KEY = os.environ.get('WP_API_KEY', '')        # WorkProtocol
 NEAR_API_KEY = os.environ.get('NEAR_API_KEY', '')    # NEAR AI Market
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
-DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+HUNYUAN_API_KEY = os.environ.get('HUNYUAN_API_KEY', '')
+HUNYUAN_BASE_URL = 'https://api.hunyuan.cloud.tencent.com/v1'
 TOKU_BASE_URL = 'https://www.toku.agency/api'
 WP_BASE_URL = 'https://workprotocol.ai/api'
 NEAR_BASE_URL = 'https://market.near.ai/v1'
@@ -130,16 +130,16 @@ def toku_patch(endpoint, data):
         return None
 
 
-# ============ DeepSeek 调用 ============
+# ============ 腾讯混元 调用 ============
 
-def call_deepseek(system_prompt, user_prompt, max_tokens=4000):
-    """调用DeepSeek生成内容"""
+def call_hunyuan(system_prompt, user_prompt, max_tokens=4000):
+    """调用腾讯混元生成内容"""
     headers = {
-        'Authorization': f'Bearer {DASHSCOPE_API_KEY}',
+        'Authorization': f'Bearer {HUNYUAN_API_KEY}',
         'Content-Type': 'application/json'
     }
     payload = {
-        'model': 'deepseek-chat',  # 用V3，快且便宜
+        'model': 'hunyuan-turbos-latest',  # 腾讯混元最新版
         'messages': [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': user_prompt}
@@ -149,21 +149,21 @@ def call_deepseek(system_prompt, user_prompt, max_tokens=4000):
     }
     try:
         resp = requests.post(
-            f'{DASHSCOPE_BASE_URL}/chat/completions',
+            f'{HUNYUAN_BASE_URL}/chat/completions',
             headers=headers,
             json=payload,
             timeout=120
         )
         data = resp.json()
         if 'error' in data:
-            logging.error(f"DeepSeek API错误: {data['error']}")
+            logging.error(f"混元 API错误: {data['error']}")
             return None
         content = data['choices'][0]['message']['content']
         # 过滤think标签
         content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
         return content
     except Exception as e:
-        logging.error(f"DeepSeek调用失败: {e}")
+        logging.error(f"混元调用失败: {e}")
         return None
 
 
@@ -319,7 +319,7 @@ Write a compelling bid proposal explaining:
 3. Timeline
 Keep it professional and concise."""
 
-    return call_deepseek(system_prompt, user_prompt, max_tokens=300)
+    return call_hunyuan(system_prompt, user_prompt, max_tokens=300)
 
 
 def handle_dm_messages():
@@ -387,7 +387,7 @@ Do NOT mention lottery, gambling, or any related topics."""
 
 Write a brief professional reply (under 100 words)."""
 
-    return call_deepseek(system_prompt, user_prompt, max_tokens=200)
+    return call_hunyuan(system_prompt, user_prompt, max_tokens=200)
 
 
 def handle_active_jobs():
@@ -459,7 +459,7 @@ Client Request: {input_text[:1000]}
 
 Deliver a professional report based on the request above."""
 
-    return call_deepseek(system_prompt, user_prompt, max_tokens=4000)
+    return call_hunyuan(system_prompt, user_prompt, max_tokens=4000)
 
 
 def check_wallet():
@@ -647,8 +647,8 @@ def main():
     if not TOKU_API_KEY:
         print("❌ 缺少TOKU_API_KEY环境变量")
         sys.exit(1)
-    if not DASHSCOPE_API_KEY:
-        print("❌ 缺少DASHSCOPE_API_KEY环境变量")
+    if not HUNYUAN_API_KEY:
+        print("❌ 缺少HUNYUAN_API_KEY环境变量")
         sys.exit(1)
 
     logging.info("=" * 50)
