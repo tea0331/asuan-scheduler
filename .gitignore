@@ -8,3 +8,4 @@ sent-log.json*
 daemon.pid
 scheduler.pid
 output/
+algo_state.db

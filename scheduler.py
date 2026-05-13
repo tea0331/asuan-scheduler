@@ -684,6 +684,14 @@ def run_task_and_email(task_name, task, today_str):
             logging.error(f"[彩票] 推荐生成失败: {e}")
             lottery_section = '\n---\n🎰 彩票推荐生成异常，请手动运行lottery_analyzer.py\n---\n'
 
+    # 🟢 v8.0: 算法模块每日更新（结算昨日 + ROI计算 + 策略权重更新）
+    try:
+        from algo_module import run_algo_daily_update
+        run_algo_daily_update()
+        logging.info("[Algo] 算法模块每日更新完成")
+    except Exception as e:
+        logging.warning(f"[Algo] 算法模块每日更新跳过: {e}")
+
     # 第三步：写入文件（🔴 含彩票内容，保证文件和邮件一致）
     output_file = None
     if content:
