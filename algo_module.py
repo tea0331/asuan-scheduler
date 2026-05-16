@@ -41,7 +41,7 @@ DEFAULT_WEIGHT_CONFIG = {
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
     'neighbor_bonus': 0.03, 'gamma': 0.88,
-    'version': 1, 'algo_version': 'v9.0', 'evolution_log': [],
+    'version': 1, 'algo_version': 'v3.0', 'evolution_log': [],
 }
 
 ALL_PARAM_KEYS = [
@@ -136,7 +136,7 @@ class AlgoDB:
         c.execute('''CREATE TABLE IF NOT EXISTS algo_gepa_state (
             id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
             game TEXT NOT NULL DEFAULT 'all', version INTEGER NOT NULL DEFAULT 1,
-            algo_version TEXT NOT NULL DEFAULT 'v8.0',
+            algo_version TEXT NOT NULL DEFAULT 'v3.0',
             weights TEXT NOT NULL DEFAULT '{}', lock_config TEXT NOT NULL DEFAULT '{}',
             evolution_log TEXT NOT NULL DEFAULT '[]', ai_avg_hit REAL NOT NULL DEFAULT 0,
             step_size REAL NOT NULL DEFAULT 0.02, is_major INTEGER NOT NULL DEFAULT 0,
@@ -229,7 +229,7 @@ class AlgoDB:
                      VALUES (?, 'all', ?, ?, ?, '{}', ?, 0, 0.02, 0, ?)''',
                   (today,
                    config.get('version', 1),
-                   config.get('algo_version', 'v8.0'),
+                   config.get('algo_version', 'v3.0'),
                    json.dumps({k: config.get(k, DEFAULT_WEIGHT_CONFIG.get(k, 0)) for k in ALL_PARAM_KEYS}, ensure_ascii=False),
                    json.dumps(config.get('evolution_log', []), ensure_ascii=False),
                    _now_cst().isoformat()))
@@ -264,7 +264,7 @@ class AlgoDB:
                      VALUES (?, 'all', ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                   (date,
                    config.get('version', 1),
-                   config.get('algo_version', 'v8.0'),
+                   config.get('algo_version', 'v3.0'),
                    json.dumps({k: config.get(k, 0) for k in ALL_PARAM_KEYS}, ensure_ascii=False),
                    json.dumps(config.get('lock_config', {}), ensure_ascii=False),
                    json.dumps(config.get('evolution_log', []), ensure_ascii=False),
@@ -503,7 +503,7 @@ class AlgoDB:
             config = dict(DEFAULT_WEIGHT_CONFIG)
             config.update(state['weights'])
             config['version'] = state.get('version', 1)
-            config['algo_version'] = state.get('algo_version', 'v8.0')
+            config['algo_version'] = state.get('algo_version', 'v3.0')
             config['evolution_log'] = state.get('evolution_log', [])
             config['lock_config'] = state.get('lock_config', {})
             return config
@@ -698,9 +698,9 @@ class GEPAEvolver:
 
         if is_major:
             import re
-            algo_version = config.get('algo_version', 'v8.0')
+            algo_version = config.get('algo_version', 'v3.0')
             m = re.match(r'(v\d+)\.(\d+)', algo_version)
-            config['algo_version'] = f"{m.group(1)}.{int(m.group(2)) + 1}" if m else 'v8.0'
+            config['algo_version'] = f"{m.group(1)}.{int(m.group(2)) + 1}" if m else 'v3.0'
 
         # 进化日志
         evo_entry = {
@@ -710,7 +710,7 @@ class GEPAEvolver:
             'changes': changes,
             'old_weights': {k: round(old_config.get(k, 0), 4) for k in ALL_PARAM_KEYS},
             'new_weights': {k: round(config.get(k, 0), 4) for k in ALL_PARAM_KEYS},
-            'is_major': is_major, 'algo_version': config.get('algo_version', 'v8.0'),
+            'is_major': is_major, 'algo_version': config.get('algo_version', 'v3.0'),
         }
         evo_log = config.get('evolution_log', [])
         evo_log.append(evo_entry)
@@ -720,7 +720,7 @@ class GEPAEvolver:
         self.db.save_gepa_state(today_str, config, ai_avg_hit=ai_avg, step_size=step, is_major=is_major)
 
         major_tag = '🔴 重大更新' if is_major else '🟢 微调'
-        print(f"[GEPA进化] {major_tag} → {config.get('algo_version', 'v8.0')} (AI均值={ai_avg:.2f})")
+        print(f"[GEPA进化] {major_tag} → {config.get('algo_version', 'v3.0')} (AI均值={ai_avg:.2f})")
         for c in changes:
             print(f"  {c}")
 
@@ -1363,7 +1363,7 @@ class AlgoEngine:
         params['p0_weights'] = {k: config.get(k, 0) for k in ALL_PARAM_KEYS}
         self.db.save_params(today, params)
 
-        print(f"[AlgoEngine] 进化完成 → {config.get('algo_version', 'v8.0')}")
+        print(f"[AlgoEngine] 进化完成 → {config.get('algo_version', 'v3.0')}")
         return config
 
     def optimize(self, ssq_result, dlt_result, qxc_result, kelly_map, budget=10):

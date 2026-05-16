@@ -201,7 +201,7 @@ class AlgoOrchestrator:
             config['lock_config'] = gepa_state.get('lock_config', {})
             config['evolution_log'] = gepa_state.get('evolution_log', [])
             config['version'] = gepa_state.get('version', 1)
-            config['algo_version'] = gepa_state.get('algo_version', 'v9.0')
+            config['algo_version'] = gepa_state.get('algo_version', 'v3.0')
             self.db.save_gepa_state(
                 _now_cst().strftime('%Y-%m-%d'),
                 config,

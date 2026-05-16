@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-彩票号码分析模块 v7.4.2 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导+重大事件告警+AI去抄答案）
+彩票号码分析模块 v3.0 — 刘海蟾点金（加权统计+GEPA自动进化+Kelly驱动选号+冷号注+休市+预算策略+多奖级EV+相关性分析+统计显著性+scrapling降级引擎+和值约束引导+重大事件告警+AI去抄答案）
 
 v7.4核心改动（重大事件告警）：
 1. 🔴 新增detect_lottery_alerts()：检测7类重大事件并生成告警
@@ -945,7 +945,7 @@ class WeightedAnalyzer:
                 if (n - 1) in last_drawn or (n + 1) in last_drawn:
                     neighbor_bonus = self.neighbor_bonus
 
-            # 🟢 v7.1: 号码相关性bonus — 某号出现时，历史中与其同区/连号的号也出现概率更高
+            # 🟢 v7.1→v3.0: 号码相关性bonus — 某号出现时，历史中与其同区/连号的号也出现概率更高
             # 计算条件概率：P(n出现 | 上期某号出现) vs P(n出现)
             correlation_bonus = 0
             if self.history:
@@ -982,7 +982,7 @@ class WeightedAnalyzer:
                 self.w_zone * z_factor +  # 🟢 zone终于生效
                 overdue_bonus +  # 🟢 v6.2: 遗漏周期加分
                 neighbor_bonus +  # 🟢 v6.7: 邻号加分
-                correlation_bonus  # 🟢 v7.1: 号码相关性加分
+                correlation_bonus  # 🟢 v7.1→v3.0: 号码相关性加分
             )
 
 
@@ -1701,7 +1701,7 @@ def _format_ssq_for_ai(history, kelly_bias=0.0):
     stats.append(f"🔴蓝球遗漏: {', '.join(f'{n}({m}期未出)' for n, m in blue_miss_sorted[:5])}")
 
     # 加权号码池（追热/回补/综合各6个）
-    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案导致每天推荐一样）
+    # 🔴 v7.4.2→v3.0: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案导致每天推荐一样）
     # 改为只提供加权TOP号池，让AI自己组合
     red_weight_dict = dict(analysis['red_weights'])
     blue_weight_dict = dict(analysis['blue_weights'])
@@ -1752,7 +1752,7 @@ def _format_dlt_for_ai(history, kelly_bias=0.0):
     back_miss_sorted = sorted(analysis['back_miss'].items(), key=lambda x: x[1], reverse=True)
     stats.append(f"🔴后区遗漏: {', '.join(f'{n}({m}期未出)' for n, m in back_miss_sorted[:5])}")
 
-    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
+    # 🔴 v7.4.2→v3.0: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
     front_weight_dict = dict(analysis['front_weights'])
     back_weight_dict = dict(analysis['back_weights'])
     top_front = sorted(front_weight_dict.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -1785,7 +1785,7 @@ def _format_qxc_for_ai(history, kelly_bias=0.0):
         miss_sorted = sorted(pd['miss'].items(), key=lambda x: x[1], reverse=True)
         stats.append(f"🔴第{i+1}位遗漏TOP3: {', '.join(f'{n}({m}期未出)' for n, m in miss_sorted[:3])}")
 
-    # 🔴 v7.4.2: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
+    # 🔴 v7.4.2→v3.0: 不再把WeightedAnalyzer推荐喂给AI（AI会直接抄答案）
     for i, pd in enumerate(analysis['positions']):
         pw = dict(pd.get('weights', []))
         top3 = sorted(pw.items(), key=lambda x: x[1], reverse=True)[:3]
@@ -1830,7 +1830,7 @@ DEFAULT_WEIGHT_CONFIG = {
     'gamma': 0.88,
     # 🔴 版本与日志
     'version': 1,
-    'algo_version': 'v7.1',
+    'algo_version': 'v3.0',
     'evolution_log': [],   # 🔴 GEPA进化日志：重大逻辑变更
 }
 
@@ -1851,7 +1851,7 @@ def _save_weight_config(config):
 
 
 
-# 🟢 v8.0: GEPA已迁入统一算法引擎 algo_module.py → AlgoEngine.evolve()
+# 🟢 v8.0→v3.0: GEPA已迁入统一算法引擎 algo_module.py → AlgoEngine.evolve()
 
 # ===== 🟢 P2: Kelly仓位管理 =====
 
@@ -2196,7 +2196,7 @@ def _run_backtest():
     # 🔴 v6.8: 记录回测时使用的权重快照（方便追溯"这个结果基于什么参数"）
     config = _load_weight_config()
     backtest_result['weight_snapshot'] = {
-        'algo_version': config.get('algo_version', 'v7.1'),
+        'algo_version': config.get('algo_version', 'v3.0'),
         'freq': config.get('freq', 0.30), 'miss': config.get('miss', 0.25),
         'trend': config.get('trend', 0.25), 'zone': config.get('zone', 0.20),
         'cold_miss_front': config.get('cold_miss_front', 0.40),
@@ -2714,7 +2714,7 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 
 红球/前区从小到大排列，用两位数（如02 07 12）。"""
 
-    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v7.4.2升级：1.不再直接抄加权推荐结果，改为参考加权号池自主选号；2.每天推荐必须与昨天不同，结合新数据做差异化；3.4注之间覆盖面要广，每注至少2个不同号码。4注梯度：核心注(追热)→扩展1(中变)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注参考加权TOP号但加入奇偶/区间/连号判断；2.扩展1保留3号换3号，扩展2保留2号换4号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
+    system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v7.4.2→v3.0升级：1.不再直接抄加权推荐结果，改为参考加权号池自主选号；2.每天推荐必须与昨天不同，结合新数据做差异化；3.4注之间覆盖面要广，每注至少2个不同号码。4注梯度：核心注(追热)→扩展1(中变)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注参考加权TOP号但加入奇偶/区间/连号判断；2.扩展1保留3号换3号，扩展2保留2号换4号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
 
     # 🔴 优先办公室Qwen3.6-abliterated（彩票零隐私，免费不限量，不会拒绝预测）
     if OFFICE_ENABLED:
@@ -3277,7 +3277,7 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
         lines.append(f"  - ⚠️ 预算不足{price}元，无法购买完整注")
     lines.append(f"  - 🎯 核心注=权重追热 | 冷号注=遗漏搏冷 | 两者互补覆盖面最广")
 
-    algo_ver = config.get('algo_version', 'v7.1')
+    algo_ver = config.get('algo_version', 'v3.0')
     evo_log = config.get('evolution_log', [])
     last_evo = evo_log[-1] if evo_log else None
     lines.append(f"\n📊 **算法参数**: {algo_ver} | 核心: 频率={config.get('freq',0.3):.0%} 遗漏={config.get('miss',0.25):.0%} 趋势={config.get('trend',0.25):.0%} 分区={config.get('zone',0.2):.0%} | 冷号前区: 遗漏={config.get('cold_miss_front',0.4):.0%} 周期={config.get('cold_cycle_front',0.3):.0%} | 冷号后区: 周期={config.get('cold_cycle_back',0.4):.0%} 遗漏={config.get('cold_miss_back',0.3):.0%} | 邻号+{config.get('neighbor_bonus',0.03):.3f} γ={config.get('gamma',0.88):.2f}")
@@ -3317,12 +3317,12 @@ def generate_lottery_recommendations():
             default_config=DEFAULT_WEIGHT_CONFIG,
         )
         if evolved_config:
-            version_tag = evolved_config.get('algo_version', 'v8.0')
+            version_tag = evolved_config.get('algo_version', 'v3.0')
             is_major = evolved_config.get('evolution_log', [{}])[-1].get('is_major', False) if evolved_config.get('evolution_log') else False
             print(f"[AlgoEngine] 已进化至{version_tag}{'（重大更新！）' if is_major else ''}")
         else:
             evolved_config = _load_weight_config()
-            print(f"[AlgoEngine] 算法无变化，当前{evolved_config.get('algo_version', 'v8.0')}")
+            print(f"[AlgoEngine] 算法无变化，当前{evolved_config.get('algo_version', 'v3.0')}")
     except Exception as e:
         evolved_config = _load_weight_config()
         print(f"[AlgoEngine] 进化异常，使用当前配置: {e}")
@@ -3458,7 +3458,7 @@ def generate_lottery_recommendations():
     # 4. 在输出中附加回测结果
     result = format_lottery_section(ssq_result, dlt_result, qxc_result, backtest_result)
 
-    # 🟢 v8.0: 算法模块 — 策略自适应+组合优化
+    # 🟢 v8.0→v3.0: 算法模块 — 策略自适应+组合优化
     try:
         from algo_module import run_algo_optimize
         algo_result = run_algo_optimize(ssq_result, dlt_result, qxc_result, kelly_map, BUDGET_CONFIG['default'])
