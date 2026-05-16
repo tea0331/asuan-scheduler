@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-刘海蟾点金 - 统一算法引擎 v2.0
+刘海蟾点金 - 统一算法引擎 v3.0
 GEPA权重进化 + 策略权重自适应 + 组合投注优化 + ROI追踪 + 自动进化
 
 统一入口: AlgoEngine
@@ -41,7 +41,7 @@ DEFAULT_WEIGHT_CONFIG = {
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
     'neighbor_bonus': 0.03, 'gamma': 0.88,
-    'version': 1, 'algo_version': 'v8.0', 'evolution_log': [],
+    'version': 1, 'algo_version': 'v9.0', 'evolution_log': [],
 }
 
 ALL_PARAM_KEYS = [
@@ -60,8 +60,10 @@ class StrategyProfile:
     P1_AGGRESSIVE = {'key': 'P1_AGGRESSIVE', 'name': 'P1激进注', 'bias': 'hot', 'kelly_mult': 1.5, 'source': 'algo'}
     P2_RECOVERY = {'key': 'P2_RECOVERY', 'name': 'P2回补注', 'bias': 'cold', 'kelly_mult': 0.8, 'source': 'algo'}
     P3_BALANCED = {'key': 'P3_BALANCED', 'name': 'P3均衡注', 'bias': 'balanced', 'kelly_mult': 1.0, 'source': 'algo'}
+    P4_MARKOV = {'key': 'P4_MARKOV', 'name': 'P4转移注', 'bias': 'transition', 'kelly_mult': 1.0, 'source': 'markov'}
+    P5_BAYESIAN = {'key': 'P5_BAYESIAN', 'name': 'P5贝叶斯注', 'bias': 'bayesian', 'kelly_mult': 1.0, 'source': 'bayesian'}
 
-    ALL = [P0_CORE, P1_AGGRESSIVE, P2_RECOVERY, P3_BALANCED]
+    ALL = [P0_CORE, P1_AGGRESSIVE, P2_RECOVERY, P3_BALANCED, P4_MARKOV, P5_BAYESIAN]
 
     @classmethod
     def get(cls, key):
@@ -161,6 +163,37 @@ class AlgoDB:
             c.execute('ALTER TABLE algo_strategy_state ADD COLUMN source TEXT NOT NULL DEFAULT \'predefined\'')
         except sqlite3.OperationalError:
             pass  # 列已存在
+
+        # v3.0新增表
+        c.execute('''CREATE TABLE IF NOT EXISTS algo_bayesian_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game TEXT NOT NULL,
+            alpha_json TEXT NOT NULL DEFAULT '{}',
+            beta_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT NOT NULL,
+            UNIQUE(game))''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS algo_markov_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game TEXT NOT NULL,
+            transition_json TEXT NOT NULL DEFAULT '{}',
+            current_state_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT NOT NULL,
+            UNIQUE(game))''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS algo_stacking_weights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game TEXT NOT NULL,
+            meta_weights_json TEXT NOT NULL DEFAULT '{}',
+            fitted_at TEXT NOT NULL,
+            UNIQUE(game))''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS algo_orchestrator_context (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            context TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(date))''')
 
         conn.commit()
         conn.close()
@@ -1364,11 +1397,20 @@ class AlgoEngine:
         self.roi_tracker.calc_daily_roi(yesterday)
 
     def daily_update(self):
-        """完整每日流程: settle → evolve → cleanup"""
-        self.settle()
-        # evolve由generate_lottery_recommendations()调用（带回测数据），这里不重复调用
-        self.db.cleanup()
-        print("[AlgoEngine] 每日更新完成")
+        """完整每日流程: settle → evolve → cleanup
+        v3.0: 尝试使用Orchestrator，失败则降级到原有流程
+        """
+        try:
+            from algo_orchestrator import AlgoOrchestrator
+            orch = AlgoOrchestrator()
+            orch.daily_run()
+            self.db.cleanup()
+            print("[AlgoEngine] v3.0 Orchestrator每日更新完成")
+        except ImportError:
+            # 降级到v2.0流程
+            self.settle()
+            self.db.cleanup()
+            print("[AlgoEngine] v2.0 降级模式每日更新完成")
 
 
 # ===== 输出结果 =====
@@ -1489,7 +1531,7 @@ def run_algo_daily_update():
 
 if __name__ == '__main__':
     print("=" * 50)
-    print("刘海蟾点金 - 统一算法引擎 v2.0 自检")
+    print("刘海蟾点金 - 统一算法引擎 v3.0 自检")
     print("=" * 50)
     db = AlgoDB()
     print(f"✓ 数据库: {db.db_path}")
