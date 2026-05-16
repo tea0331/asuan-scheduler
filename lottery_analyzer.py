@@ -77,8 +77,8 @@ except ImportError:
 
 CST = timezone(timedelta(hours=8))
 
-# 百炼API配置 — 🔴 优先环境变量，回退硬编码
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', 'REDACTED_DASHSCOPE_KEY')
+# 百炼API配置 — 🔴 仅从环境变量读取，不硬编码key
+DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 # 🔴 办公室Qwen3.6-abliterated（免费不限量！彩票零隐私，优先走这里）

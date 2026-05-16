@@ -1,11 +1,19 @@
 __pycache__/
 *.pyc
 *.log
-state.db
+*.db
+*.sqlite
+
+# 运行时生成的数据文件（不应入库）
 lottery-backtest.json
 lottery-predictions.json
+lottery-alerts.json
+lottery-digest.json
+weight-config.json
 sent-log.json*
+toku-daily-report.md
+
+# 环境和进程文件
 daemon.pid
 scheduler.pid
 output/
-algo_state.db
