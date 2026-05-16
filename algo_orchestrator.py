@@ -95,9 +95,18 @@ class AlgoOrchestrator:
         return self._monte_carlo
 
     def daily_run(self, history_data=None):
-        """每日完整流程"""
+        """每日完整流程
+        
+        Args:
+            history_data: 可选，外部传入的历史数据 {game: [draws]}
+                         如果不传，Orchestrator会自己从网络拉取
+        """
         today = _now_cst().strftime('%Y-%m-%d')
         print(f"[Orchestrator] === 开始每日流程 {today} ===")
+
+        # Step 0: 获取历史数据（如果外部没传，自己拉）
+        if history_data is None:
+            history_data = self._fetch_history()
 
         # Step 1: 结算 + 贝叶斯更新
         self._safe_run('settle', self._step_settle)
@@ -254,6 +263,33 @@ class AlgoOrchestrator:
         elif game == 'qxc':
             return lambda d: d.get('digits', d.get('numbers', []))
         return lambda d: d.get('numbers', [])
+
+    def _fetch_history(self):
+        """从网络拉取历史开奖数据
+        
+        Returns:
+            dict: {game: [draws]}  各玩法历史数据
+        """
+        history = {}
+        try:
+            from lottery_analyzer import fetch_ssq_history, fetch_dlt_history, fetch_qxc_history
+            print("[Orchestrator] 拉取历史数据...")
+            
+            for game, fetch_fn in [('ssq', fetch_ssq_history), ('dlt', fetch_dlt_history), ('qxc', fetch_qxc_history)]:
+                try:
+                    data = fetch_fn(periods=50)
+                    if data:
+                        history[game] = data
+                        print(f"[Orchestrator] {game}: {len(data)}期历史数据")
+                    else:
+                        print(f"[Orchestrator] {game}: 无数据")
+                except Exception as e:
+                    print(f"[Orchestrator] {game} 数据拉取失败: {e}")
+                    
+        except ImportError:
+            print("[Orchestrator] ⚠️ lottery_analyzer不可用，新模块将跳过历史数据分析")
+        
+        return history
 
 
 def run_orchestrator_daily():
