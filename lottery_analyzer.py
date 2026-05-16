@@ -545,19 +545,23 @@ def _fetch_dlt_500com(periods, retries=3):
     return None
 
 def _fetch_qxc_500com(periods):
-    """七星彩：datachart历史页已404，改用kaijiang单期页面逐期抓取"""
+    """七星彩：从kaijiang.500.com主页+详情页逐期抓取
+    v3.0修复: 正则适配ball_orange class + 支持换行/空格
+    """
     try:
         results = []
         # 先从开奖主页获取最新期号列表
         index_url = 'https://kaijiang.500.com/qxc.shtml'
         resp = requests.get(index_url, headers=HEADERS, timeout=15)
         resp.encoding = 'gb2312'
-        # 提取期号
+        
+        # 主页直接有当期号码
+        current_digits = re.findall(r'class="ball_orange">\s*(\d)\s*</li>', resp.text)
         period_list = re.findall(r'qxc/(\d{5})\.shtml', resp.text)
         if not period_list:
             print("[七星彩-500] 主页未找到期号列表")
             return None
-
+        
         # 去重保序
         seen = set()
         unique_periods = []
@@ -565,19 +569,33 @@ def _fetch_qxc_500com(periods):
             if p not in seen:
                 seen.add(p)
                 unique_periods.append(p)
-
-        for period in unique_periods[:periods]:
+        
+        # 当期号码直接从主页拿
+        if current_digits and len(current_digits) >= 7:
+            results.append({'period': unique_periods[0], 'digits': [int(d) for d in current_digits[:7]]})
+            print(f"[七星彩-500] 主页当期: {unique_periods[0]} → {current_digits[:7]}")
+        
+        # 历史期逐期抓详情页（跳过已拿到的当期）
+        start_idx = 1 if current_digits and len(current_digits) >= 7 else 0
+        for period in unique_periods[start_idx:periods]:
             try:
                 page_url = f'https://kaijiang.500.com/shtml/qxc/{period}.shtml'
                 page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
                 page_resp.encoding = 'gb2312'
-                # 提取号码：class含ball的标签里的单个数字
-                digits = re.findall(r'class="[^"]*ball[^"]*"[^>]*>(\d)<', page_resp.text)
+                # 修复正则: ball_orange后可能有换行/空格
+                digits = re.findall(r'class="ball_orange">\s*(\d)\s*</li>', page_resp.text)
                 if len(digits) >= 7:
                     results.append({'period': period, 'digits': [int(d) for d in digits[:7]]})
+                else:
+                    # 备用正则: 任意ball class
+                    digits = re.findall(r'class="[^"]*ball[^"]*"[^>]*>\s*(\d)\s*<', page_resp.text)
+                    if len(digits) >= 7:
+                        results.append({'period': period, 'digits': [int(d) for d in digits[:7]]})
             except Exception:
                 continue
 
+        if results:
+            print(f"[七星彩-500] 抓取成功: {len(results)}期 (最新{results[0]['period']})")
         return results if results else None
     except Exception as e:
         print(f"[七星彩-500] 抓取失败: {e}")
