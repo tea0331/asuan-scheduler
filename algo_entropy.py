@@ -29,9 +29,13 @@ class EntropyDetector:
     def calc_shannon_entropy(numbers, number_range):
         """
         计算号码分布的香农熵
-
+        
+        衡量号码在number_range上的分布均匀程度:
+        - 完全均匀(每个号出现1次): 熵最大
+        - 集中在少数号: 熵低
+        
         Args:
-            numbers: 开出号码列表（多期合并）
+            numbers: 开出号码列表（多期合并计算更有意义）
             number_range: 号码范围 list[int]
         Returns:
             float: 香农熵 (bits)
@@ -42,8 +46,8 @@ class EntropyDetector:
         freq = Counter(numbers)
         total = len(numbers)
         entropy = 0.0
-        for n in number_range:
-            p = freq.get(n, 0) / total
+        for n in freq:  # 只遍历实际出现的号码
+            p = freq[n] / total
             if p > 0:
                 entropy -= p * math.log2(p)
         return entropy
@@ -58,8 +62,14 @@ class EntropyDetector:
 
     def calc_entropy_ratio(self, draws, number_range, extract_fn):
         """
-        计算近window期的平均熵比 (实际熵/最大熵)
-
+        计算近window期号码分布的熵比
+        
+        方法: 将近window期所有号码合并，计算在number_range上的分布熵
+        与均匀分布的max_entropy=log2(len(number_range))比较
+        
+        - 熵比接近1.0 = 号码分布接近均匀 = 纯随机
+        - 熵比低 = 号码分布不均匀 = 可能存在模式
+        
         Args:
             draws: 历史开奖数据列表
             number_range: 号码范围
@@ -75,15 +85,18 @@ class EntropyDetector:
         if not recent:
             return 1.0
 
-        ratios = []
+        # 合并近window期所有号码
+        all_numbers = []
         for draw in recent:
             nums = extract_fn(draw) if callable(extract_fn) else draw
-            if not nums:
-                continue
-            e = self.calc_shannon_entropy(nums, number_range)
-            ratios.append(e / max_e)
+            all_numbers.extend(nums)
 
-        return sum(ratios) / len(ratios) if ratios else 1.0
+        if not all_numbers:
+            return 1.0
+
+        # 计算合并分布的熵
+        e = self.calc_shannon_entropy(all_numbers, number_range)
+        return e / max_e
 
     def is_anomalous(self, draws, number_range, extract_fn):
         """

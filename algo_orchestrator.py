@@ -187,18 +187,30 @@ class AlgoOrchestrator:
 
     def _step_evolve(self, history_data):
         """GEPA进化（受context影响）"""
-        # 根据模式调整进化参数
+        # 根据模式调整GEPA的step_size（存储在DB，不在对象属性上）
         mode = self.context.get('mode', 'normal')
-        if mode == 'conservative':
-            # 保守模式：缩小进化步长
-            self.engine.gepa.step_size = max(0.01, self.engine.gepa.step_size * 0.5)
-        elif mode == 'aggressive':
-            # 激进模式：扩大进化步长
-            self.engine.gepa.step_size = min(0.05, self.engine.gepa.step_size * 1.5)
-
-        # 调用原有evolve（参数由调用方传入）
-        # 这里只做模式适配，实际evolve由lottery_analyzer调用
-        pass
+        gepa_state = self.db.get_latest_gepa_state()
+        if gepa_state:
+            step = gepa_state.get('step_size', 0.02)
+            if mode == 'conservative':
+                step = max(0.01, step * 0.5)
+            elif mode == 'aggressive':
+                step = min(0.05, step * 1.5)
+            # 写回DB
+            config = {k: gepa_state['weights'].get(k, 0) for k in __import__('algo_module', fromlist=['ALL_PARAM_KEYS']).ALL_PARAM_KEYS}
+            config['lock_config'] = gepa_state.get('lock_config', {})
+            config['evolution_log'] = gepa_state.get('evolution_log', [])
+            config['version'] = gepa_state.get('version', 1)
+            config['algo_version'] = gepa_state.get('algo_version', 'v9.0')
+            self.db.save_gepa_state(
+                _now_cst().strftime('%Y-%m-%d'),
+                config,
+                step_size=step,
+                is_major=False
+            )
+            print(f"[Orchestrator] GEPA step_size调整: {gepa_state.get('step_size', 0.02):.3f}→{step:.3f} (模式={mode})")
+        else:
+            print(f"[Orchestrator] 无GEPA状态，跳过step_size调整")
 
     def _step_stacking(self, history_data):
         """Stacking集成预测"""
