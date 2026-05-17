@@ -1895,6 +1895,29 @@ def _load_weight_config():
         return dict(DEFAULT_WEIGHT_CONFIG)
 
 
+def _load_orchestrator_context():
+    """从DB读取Orchestrator最新context（v3.0统一进化路径）
+    替代原来直接调run_algo_evolve()的双路径问题
+    返回dict: {mode, entropy_ratio, bayesian_adj, markov_signals, ...} 或 None
+    """
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'algo_state.db')
+    if not os.path.exists(db_path):
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute('''SELECT context FROM algo_orchestrator_context
+                     ORDER BY date DESC LIMIT 1''')
+        row = c.fetchone()
+        conn.close()
+        if row:
+            context = json.loads(row[0])
+            return context
+    except Exception:
+        pass
+    return None
+
+
 def _save_weight_config(config):
     """保存权重配置"""
     with open(WEIGHT_CONFIG_FILE, 'w') as f:
@@ -3348,7 +3371,7 @@ def generate_lottery_recommendations():
     print("[彩票] 开始生成推荐（刘海蟾点金模式）...")
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-    # 🔴 v6.8: 执行顺序 = 回测→进化→推荐
+    # 🔴 v6.8→v3.0: 执行顺序 = 回测→读取Orchestrator进化结果→推荐
     # 第1步：先用当前权重回测昨日（测试的是"昨天推荐时的权重"）
     print("[回测] 用当前版本代码回测昨日开奖...")
     backtest_result = _run_backtest()
@@ -3356,27 +3379,16 @@ def generate_lottery_recommendations():
     if backtest_feedback:
         print(f"[回测] 已生成回测反馈: {len(backtest_feedback)}字符")
 
-    # 第2步：基于回测结果统一算法引擎进化（GEPA+策略权重+发现+退火）
-    try:
-        from algo_module import run_algo_evolve
-        evolved_config = run_algo_evolve(
-            backtest_data=_load_backtest(),
-            predictions_data=_load_predictions(),
-            judge_prize_fn=lambda game: {'ssq': judge_prize_ssq, 'dlt': judge_prize_dlt, 'qxc': judge_prize_qxc}.get(game),
-            get_hit_numbers_fn=_get_hit_numbers,
-            strategy_map=STRATEGY_MAP,
-            default_config=DEFAULT_WEIGHT_CONFIG,
-        )
-        if evolved_config:
-            version_tag = evolved_config.get('algo_version', 'v3.0')
-            is_major = evolved_config.get('evolution_log', [{}])[-1].get('is_major', False) if evolved_config.get('evolution_log') else False
-            print(f"[AlgoEngine] 已进化至{version_tag}{'（重大更新！）' if is_major else ''}")
-        else:
-            evolved_config = _load_weight_config()
-            print(f"[AlgoEngine] 算法无变化，当前{evolved_config.get('algo_version', 'v3.0')}")
-    except Exception as e:
+    # 第2步（v3.0重构）：从DB读取Orchestrator已产出的进化结果，不再独立调run_algo_evolve
+    # 原因：generate_lottery_recommendations()和Orchestrator.daily_run()都有进化逻辑，
+    # 双路径会互相覆盖权重。v3.0统一由Orchestrator负责进化，此处只读取结果。
+    evolved_config = _load_orchestrator_context()
+    if evolved_config:
+        print(f"[AlgoEngine] 读取Orchestrator进化结果: 模式={evolved_config.get('mode', '?')}, "
+              f"熵比={evolved_config.get('entropy_ratio', '?')}")
+    else:
         evolved_config = _load_weight_config()
-        print(f"[AlgoEngine] 进化异常，使用当前配置: {e}")
+        print("[AlgoEngine] 无Orchestrator记录，使用当前权重配置")
 
     fallback = SimpleAnalyzer()
     ssq_result = None
@@ -3530,11 +3542,11 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                           ssq_result=None, dlt_result=None, qxc_result=None,
                           ssq_history=None, dlt_history=None, qxc_history=None):
     """
-    🔴 v7.4: 重大事件告警检测
+    🔴 v7.4→v3.0: 重大事件告警检测
     检测9类重大事件，返回告警列表：
-    1. GEPA重大更新（is_major=True）
-    2. GEPA空转（连续t=0）
-    3. GEPA策略调整（任何参数变化，不管大小）
+    1. Orchestrator模式切换（保守/激进）
+    2. 熵比异常（偏低/偏高）
+    3. 马尔可夫冷→热信号
     4. 回测命中爆发（单注≥4个号）
     5. 回测中奖通知（任何奖级≥4等）
     6. 冷号注首次命中
@@ -3545,33 +3557,38 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
     alerts = []
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-    # === 1. GEPA重大更新 ===
+    # === 1. Orchestrator模式切换告警（v3.0替换原GEPA重大更新） ===
     if evolved_config:
-        evo_log = evolved_config.get('evolution_log', [])
-        if evo_log:
-            latest = evo_log[-1]
-            if latest.get('is_major'):
-                alerts.append({
-                    'level': '🔴',
-                    'type': 'gepa_major',
-                    'title': 'GEPA重大更新',
-                    'detail': f"算法进化至{evolved_config.get('algo_version', '?')}，"
-                              f"变更: {'; '.join(latest.get('changes', []))}",
-                    'action': '检查新版权重是否合理，必要时手动回退',
-                })
+        mode = evolved_config.get('mode', 'normal')
+        if mode != 'normal':
+            mode_cn = {'conservative': '保守', 'aggressive': '激进'}.get(mode, mode)
+            alerts.append({
+                'level': '🔴',
+                'type': 'orchestrator_mode',
+                'title': f'Orchestrator进入{mode_cn}模式',
+                'detail': f"当前模式={mode}, 熵比={evolved_config.get('entropy_ratio', '?')}",
+                'action': '保守模式→缩小步长防过拟合；激进模式→加大步长捕捉趋势',
+            })
 
-    # === 2. GEPA空转检测 ===
+    # === 2. 熵比异常检测（v3.0替换原GEPA空转检测） ===
     if evolved_config:
-        evo_log = evolved_config.get('evolution_log', [])
-        if len(evo_log) >= 2:
-            recent_2 = evo_log[-2:]
-            if all(e.get('t_test', {}).get('t_value', 1) == 0 for e in recent_2):
+        entropy_ratio = evolved_config.get('entropy_ratio', 1.0)
+        if isinstance(entropy_ratio, (int, float)):
+            if entropy_ratio < 0.75:
                 alerts.append({
                     'level': '⚠️',
-                    'type': 'gepa_stall',
-                    'title': 'GEPA连续空转',
-                    'detail': f"最近{len(recent_2)}次进化t=0（不显著），权重可能已到局部最优",
-                    'action': '建议锁定GEPA或重构进化机制（增大步长/扩大回测窗口）',
+                    'type': 'entropy_low',
+                    'title': '号码分布熵比偏低！',
+                    'detail': f"熵比={entropy_ratio:.4f}（阈值0.75），分布明显偏离均匀，可能有规律可循",
+                    'action': '关注马尔可夫信号和贝叶斯修正，当前是捕捉规律的好时机',
+                })
+            elif entropy_ratio > 0.98:
+                alerts.append({
+                    'level': '📊',
+                    'type': 'entropy_high',
+                    'title': '号码分布接近随机',
+                    'detail': f"熵比={entropy_ratio:.4f}（接近1.0），分布均匀，规律性弱",
+                    'action': '当前不适合激进策略，建议保守投注',
                 })
 
     # === 4. 回测命中爆发 + 中奖通知 + 基线对比 ===
@@ -3688,30 +3705,25 @@ def detect_lottery_alerts(evolved_config=None, backtest_result=None, kelly_map=N
                     'action': f'考虑增加{game_name}投注额（Kelly建议比例的1/4~1/2）',
                 })
 
-    # === 3. GEPA策略调整通知（不管大小都告诉你） ===
+    # === 3. 马尔可夫冷→热信号告警（v3.0替换原GEPA策略调整通知） ===
     if evolved_config:
-        evo_log = evolved_config.get('evolution_log', [])
-        if evo_log:
-            latest = evo_log[-1]
-            if latest.get('date') == today_str:  # 今天的调整
-                old_w = latest.get('old_weights', {})
-                new_w = latest.get('new_weights', {})
-                all_changes = []
-                for key in ['freq', 'miss', 'trend', 'zone', 'cold_miss_front', 'cold_cycle_front',
-                            'cold_miss_back', 'cold_cycle_back', 'neighbor_bonus', 'gamma']:
-                    old_v = old_w.get(key, 0)
-                    new_v = new_w.get(key, 0)
-                    diff = abs(new_v - old_v)
-                    if diff > 0:
-                        all_changes.append(f"{key}: {old_v:.3f}→{new_v:.3f}(Δ{diff:+.3f})")
-                if all_changes and not latest.get('is_major'):  # major已在#1报过
-                    alerts.append({
-                        'level': '🔧',
-                        'type': 'strategy_adjust',
-                        'title': 'GEPA调整了策略参数',
-                        'detail': '; '.join(all_changes),
-                        'action': '关注后续回测效果，连续走差可考虑回退',
-                    })
+        markov_signals = evolved_config.get('markov_signals', {})
+        for game, signals in markov_signals.items():
+            game_name = LOTTERY_NAMES.get(game, game)
+            top_trans = signals.get('top_transition', [])
+            if top_trans and isinstance(top_trans, list):
+                # 取最显著的冷→热信号
+                for sig in top_trans[:3]:
+                    num = sig.get('number', '?')
+                    prob = sig.get('transition_prob', 0)
+                    if prob > 0.5:  # 转移概率>50%
+                        alerts.append({
+                            'level': '🔧',
+                            'type': 'markov_cold_to_hot',
+                            'title': f'{game_name}号码{num}冷→热信号',
+                            'detail': f"转移概率={prob:.1%}, 当前状态={sig.get('current_state', '?')}",
+                            'action': '马尔可夫信号提示该号可能回补，结合贝叶斯修正判断',
+                        })
 
     # === 4. 回测命中爆发 ===
     # 7a. 号码相关性异常（某对号码条件概率远高于先验）
