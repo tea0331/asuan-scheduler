@@ -1399,11 +1399,17 @@ class AlgoEngine:
     def daily_update(self):
         """完整每日流程: settle → evolve → cleanup
         v3.0: 尝试使用Orchestrator，失败则降级到原有流程
+        Orchestrator返回context(模式/贝叶斯修正/马尔可夫信号)，写入DB供lottery_analyzer读取
         """
         try:
             from algo_orchestrator import AlgoOrchestrator
             orch = AlgoOrchestrator()
-            orch.daily_run()
+            context = orch.daily_run()
+            
+            # 将Orchestrator context写入DB，供lottery_analyzer读取
+            if context:
+                self._save_orchestrator_context(context)
+            
             self.db.cleanup()
             print("[AlgoEngine] v3.0 Orchestrator每日更新完成")
         except ImportError:
@@ -1411,6 +1417,52 @@ class AlgoEngine:
             self.settle()
             self.db.cleanup()
             print("[AlgoEngine] v2.0 降级模式每日更新完成")
+    
+    def _save_orchestrator_context(self, context):
+        """将Orchestrator输出的关键信号写入DB，供lottery_analyzer读取"""
+        today = _now_cst().strftime('%Y-%m-%d')
+        
+        # 写入algo_orchestrator_context表（已存在）
+        try:
+            conn = self.db._get_conn()
+            c = conn.cursor()
+            
+            # 确保表存在
+            c.execute('''CREATE TABLE IF NOT EXISTS algo_orchestrator_context (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                context TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(date))''')
+            
+            c.execute('''INSERT OR REPLACE INTO algo_orchestrator_context (date, context, created_at)
+                         VALUES (?, ?, ?)''',
+                      (today, json.dumps(context, ensure_ascii=False, default=str), _now_cst().isoformat()))
+            
+            # 单独存储贝叶斯修正系数到便捷表（lottery_analyzer直接读）
+            c.execute('''CREATE TABLE IF NOT EXISTS algo_bayesian_weights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                game TEXT NOT NULL,
+                adjustments TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(date, game))''')
+            
+            bayesian_adj = context.get('bayesian_adj', {})
+            for game, adj in bayesian_adj.items():
+                c.execute('''INSERT OR REPLACE INTO algo_bayesian_weights (date, game, adjustments, created_at)
+                             VALUES (?, ?, ?, ?)''',
+                          (today, game, json.dumps(adj, ensure_ascii=False), _now_cst().isoformat()))
+            
+            conn.commit()
+            conn.close()
+            
+            mode = context.get('mode', 'normal')
+            entropy = context.get('entropy_ratio', 1.0)
+            adj_games = list(bayesian_adj.keys()) if bayesian_adj else []
+            print(f"[AlgoEngine] context已写入DB: 模式={mode}, 熵比={entropy:.4f}, 贝叶斯修正={adj_games}")
+        except Exception as e:
+            print(f"[AlgoEngine] context写入DB失败: {e}")
 
 
 # ===== 输出结果 =====

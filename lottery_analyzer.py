@@ -839,6 +839,45 @@ class WeightedAnalyzer:
         self.cold_cycle_back = config.get('cold_cycle_back', 0.40)
         self.cold_freq_back = config.get('cold_freq_back', 0.30)
 
+    def _load_bayesian_adj(self, number_range):
+        """v3.0: 从DB读取贝叶斯修正系数
+        
+        读取algo_bayesian_weights表中最新一条记录，
+        根据number_range判断是哪个game（33=ssq, 35=dlt, else=qxc）
+        返回: dict {number: adjustment} 或 None（无数据时）
+        """
+        try:
+            import sqlite3
+            db_path = os.path.join(_BASE_DIR, 'algo_state.db')
+            if not os.path.exists(db_path):
+                return None
+            
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            
+            # 判断game
+            if max(number_range) == 33:
+                game = 'ssq'
+            elif max(number_range) == 35:
+                game = 'dlt'
+            else:
+                game = 'qxc'
+            
+            # 读取最新修正系数
+            c.execute('''SELECT adjustments FROM algo_bayesian_weights 
+                         WHERE game=? ORDER BY date DESC LIMIT 1''', (game,))
+            row = c.fetchone()
+            conn.close()
+            
+            if row:
+                adj = json.loads(row[0])
+                # 确保key是int
+                return {int(k): v for k, v in adj.items()}
+        except Exception as e:
+            # 静默失败，不影响主流程
+            pass
+        return None
+
     def _calc_weights(self, number_range, extract_fn, total_periods):
         """通用加权计算
         extract_fn(history_item) -> list of numbers
@@ -985,6 +1024,18 @@ class WeightedAnalyzer:
                 correlation_bonus  # 🟢 v7.1→v3.0: 号码相关性加分
             )
 
+        # === v3.0: 贝叶斯动态权重修正 ===
+        # 从DB读取Orchestrator计算的修正系数，对权重做±20%微调
+        bayesian_adj = self._load_bayesian_adj(number_range)
+        if bayesian_adj:
+            adj_count = 0
+            for n in number_range:
+                adj = bayesian_adj.get(n, 1.0)
+                if adj != 1.0:
+                    weights[n] *= adj
+                    adj_count += 1
+            if adj_count > 0:
+                print(f"  [Bayesian] 修正{adj_count}个号码权重")
 
         return weights, raw_freq, miss, avg_miss_interval  # 🟢 v6.3: raw_freq替代decay_freq返回
 

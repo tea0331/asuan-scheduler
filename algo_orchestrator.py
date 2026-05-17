@@ -147,10 +147,18 @@ class AlgoOrchestrator:
             self.context['module_status'][step_name] = f'error: {str(e)[:100]}'
 
     def _step_settle(self):
-        """结算 + 贝叶斯后验更新"""
+        """结算 + 贝叶斯后验更新 + 修正系数写入context"""
         self.engine.settle()
         # 贝叶斯用昨日开奖数据更新先验→后验
         self.bayesian.update_from_settlement(self.db)
+        # 将贝叶斯修正系数写入context（供lottery_analyzer读取）
+        for game in ['ssq', 'dlt', 'qxc']:
+            try:
+                number_range = self._get_number_range(game)
+                adj = self.bayesian.get_weight_adjustment(game, number_range)
+                self.context['bayesian_adj'][game] = adj
+            except Exception as e:
+                print(f"[Orchestrator] 贝叶斯修正系数获取失败({game}): {e}")
 
     def _step_entropy(self, history_data):
         """信息熵检测"""
