@@ -63,8 +63,8 @@ TASKS = {
     'daily-digest': {
         'hour': 7, 'minute': 0,
         'output_dir': os.environ.get('OUTPUT_DIR', os.path.join(_BASE_DIR, 'output')),
-        'desc': '阿算日报',
-        'email_subject_prefix': '阿算日报',
+        'desc': '阿算帮刘老板发财日报',
+        'email_subject_prefix': '阿算帮刘老板发财日报',
         'model': 'deepseek-r1',  # 合并后用R1，质量更好
         'use_office': True,
         'system_prompt': os.environ.get('SYSTEM_PROMPT', '你是阿算，一个投资分析AI助手。请生成每日综合报告，重点关注AI算力和出海方向。'),
@@ -742,7 +742,7 @@ def run_task_and_email(task_name, task, today_str):
     # 第三步：写入文件（🔴 含彩票内容，保证文件和邮件一致）
     output_file = None
     if content:
-        title = '阿算日报'
+        title = '阿算帮刘老板发财日报'
         full_content = f"# {title} — {today_str}\n\n---\n\n{content}{lottery_section}"
 
         os.makedirs(task['output_dir'], exist_ok=True)

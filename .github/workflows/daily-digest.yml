@@ -1,7 +1,9 @@
 name: Daily Digest
 
 on:
-  # 🟢 v8.0: 定时cron已移除，服务器为主力，GitHub Actions仅作手动备用
+  # 🟢 v3.0: 恢复定时cron，每天北京时间07:00自动执行
+  schedule:
+    - cron: "0 23 * * *"  # UTC 23:00 = CST 07:00
   workflow_dispatch:
     inputs:
       force_rerun:
