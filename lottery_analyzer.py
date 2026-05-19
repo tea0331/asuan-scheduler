@@ -81,6 +81,11 @@ CST = timezone(timedelta(hours=8))
 DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
+# 🔴 v3.0: 混元API（主用，替代百炼DeepSeek，有免费额度）
+HUNYUAN_API_KEY = os.environ.get('HUNYUAN_API_KEY', '')
+HUNYUAN_BASE_URL = 'https://api.hunyuan.cloud.tencent.com/v1'
+HUNYUAN_MODEL = 'hunyuan-lite'
+
 # 🔴 办公室Qwen3.6-abliterated（免费不限量！彩票零隐私，优先走这里）
 OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
 OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
@@ -2826,21 +2831,30 @@ def _call_jiran(ssq_text, dlt_text, qxc_text, backtest_feedback=''):
 
     system_msg = '你是刘海蟾，求是方法论驱动的彩票分析AI。v7.4.2→v3.0升级：1.不再直接抄加权推荐结果，改为参考加权号池自主选号；2.每天推荐必须与昨天不同，结合新数据做差异化；3.4注之间覆盖面要广，每注至少2个不同号码。4注梯度：核心注(追热)→扩展1(中变)→扩展2(大换)→冷号注(搏冷)。规则：1.核心注参考加权TOP号但加入奇偶/区间/连号判断；2.扩展1保留3号换3号，扩展2保留2号换4号；3.冷号注选遗漏值TOP号；4.严格按格式输出4组，不输出分析过程。彩票本质随机，求是让过程系统可追溯，不提高中奖率。'
 
-    # 🔴 优先办公室Qwen3.6-abliterated（彩票零隐私，免费不限量，不会拒绝预测）
+    # 🔴 v3.0: 优先办公室Qwen3.6 → 混元 → 百炼DeepSeek（最后兜底）
     if OFFICE_ENABLED:
         result = _call_llm(OFFICE_API_BASE, OFFICE_API_KEY, OFFICE_MODEL, system_msg, prompt, max_tokens=1000, timeout=120)
         if result:
             print(f"[刘海蟾] 办公室Qwen3.6-abliterated推算完成: {len(result)}字符")
             return result
-        print("[刘海蟾] 办公室API失败，回退百炼DeepSeek-V3")
+        print("[刘海蟾] 办公室API失败，尝试混元...")
 
-    # 回退到百炼DeepSeek-V3
-    print("[刘海蟾] 办公室API失败，回退百炼DeepSeek-V3")
-    result = _call_llm(DASHSCOPE_BASE_URL, DASHSCOPE_API_KEY, 'deepseek-v3', system_msg, prompt, max_tokens=1000, timeout=45)
-    if result:
-        print(f"[刘海蟾] 百炼DeepSeek推算完成: {len(result)}字符")
-        return result
+    # v3.0: 第二优先 — 混元（免费额度）
+    if HUNYUAN_API_KEY:
+        result = _call_llm(HUNYUAN_BASE_URL, HUNYUAN_API_KEY, HUNYUAN_MODEL, system_msg, prompt, max_tokens=1000, timeout=60)
+        if result:
+            print(f"[刘海蟾] 混元推算完成: {len(result)}字符")
+            return result
+        print("[刘海蟾] 混元失败，回退百炼DeepSeek-V3")
 
+    # 最后兜底 — 百炼DeepSeek-V3（付费）
+    if DASHSCOPE_API_KEY:
+        result = _call_llm(DASHSCOPE_BASE_URL, DASHSCOPE_API_KEY, 'deepseek-v3', system_msg, prompt, max_tokens=1000, timeout=45)
+        if result:
+            print(f"[刘海蟾] 百炼DeepSeek推算完成: {len(result)}字符")
+            return result
+
+    print("[刘海蟾] 所有API均不可用")
     return None
 
 
