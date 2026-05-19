@@ -51,11 +51,6 @@ SMTP_TO = os.environ.get('SMTP_TO', '')
 DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
 DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
-# API配置 — 混元（v3.0主用，替代百炼DeepSeek）
-HUNYUAN_API_KEY = os.environ.get('HUNYUAN_API_KEY', '')
-HUNYUAN_BASE_URL = 'https://api.hunyuan.cloud.tencent.com/v1'
-HUNYUAN_MODEL = 'hunyuan-lite'  # 免费额度，够日报用
-
 # API配置 — 办公室Qwen3.6-abliterated（免费，不限量，不会拒绝彩票预测）
 OFFICE_API_BASE = os.environ.get('OFFICE_API_BASE', '')
 OFFICE_API_KEY = os.environ.get('OFFICE_API_KEY', '')
@@ -417,7 +412,7 @@ def generate_with_deepseek(task_name, task, today_str):
     user_prompt = task['user_prompt_template'].format(date=today_str)
     system_prompt = task['system_prompt']
 
-    # 🔴 v3.0: 优先办公室Qwen3.6（免费）→ 混元（免费额度）→ 百炼DeepSeek（付费兜底）
+    # 优先使用办公室Qwen3.6（免费不限量）
     # 走办公室API时自动切换到脱敏版prompt，防止第三方服务器看到敏感信息
     use_office = task.get('use_office', True)
 
@@ -435,45 +430,24 @@ def generate_with_deepseek(task_name, task, today_str):
             system_prompt=office_system,
             user_prompt=office_user_prompt,
             max_tokens=8000,
-            timeout=180,
+            timeout=180,  # 🔴 办公室Qwen3.6约5-8 tokens/sec，3分钟够生成2000+tokens
         )
         if result:
             return result
-        logging.warning(f"[{task_name}] 办公室Qwen3.6超时或失败，尝试混元...")
+        logging.warning(f"[{task_name}] 办公室Qwen3.6超时或失败，回退百炼DeepSeek（完整prompt）")
 
-    # v3.0: 第二优先 — 混元（免费额度，替代百炼DeepSeek）
-    if HUNYUAN_API_KEY:
-        logging.info(f"[{task_name}] 使用混元: model={HUNYUAN_MODEL}")
-        result = _call_api(
-            task_name=task_name,
-            base_url=HUNYUAN_BASE_URL,
-            api_key=HUNYUAN_API_KEY,
-            model=HUNYUAN_MODEL,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=8000,
-            timeout=300,
-        )
-        if result:
-            return result
-        logging.warning(f"[{task_name}] 混元失败，回退百炼DeepSeek")
-
-    # 最后兜底 — 百炼DeepSeek（付费，仅在以上都失败时使用）
-    if DASHSCOPE_API_KEY:
-        logging.info(f"[{task_name}] 兜底使用百炼DeepSeek: model={model}")
-        return _call_api(
-            task_name=task_name,
-            base_url=DASHSCOPE_BASE_URL,
-            api_key=DASHSCOPE_API_KEY,
-            model=model,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=8000,
-            timeout=300,
-        )
-
-    logging.error(f"[{task_name}] 所有API均不可用（办公室/混元/百炼）")
-    return None
+    # 回退到百炼DeepSeek — 使用完整版prompt（HTTPS加密传输，安全）
+    logging.info(f"[{task_name}] 使用百炼DeepSeek: model={model}")
+    return _call_api(
+        task_name=task_name,
+        base_url=DASHSCOPE_BASE_URL,
+        api_key=DASHSCOPE_API_KEY,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=8000,
+        timeout=300,
+    )
 
 
 def _call_api(task_name, base_url, api_key, model, system_prompt, user_prompt, max_tokens=8000, timeout=300):
