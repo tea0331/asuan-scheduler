@@ -2232,14 +2232,14 @@ def _calc_hit_rate(predictions, actual):
 
 
 def _run_backtest():
-    """回测当前版本 vs 昨天开奖结果
-    🔴 v6.8核心改进：用当前版本代码重新生成推荐，而非读旧版推荐记录
+    """回测昨日推荐 vs 昨天开奖结果
+    🔴 v3.0核心改进：优先从lottery-predictions.json读昨天实际推荐的号码回测
+    而非用当前权重重新生成（重新生成会导致推荐号码与日报不一致）
     逻辑：
     1. 抓取昨天开奖号码
-    2. 抓取历史数据，去掉最新一期（模拟"开奖前的信息"）
-    3. 用当前WeightedAnalyzer生成推荐
+    2. 优先从lottery-predictions.json读昨天实际保存的推荐
+    3. 如果没有保存记录，fallback到用当前WeightedAnalyzer生成
     4. 对比推荐号 vs 实际开奖号
-    这样每次版本迭代后，回测验证的都是当前算法的水平
     """
     backtest_log = _load_backtest()
     today_str = datetime.now(CST).strftime('%Y-%m-%d')
@@ -2254,16 +2254,31 @@ def _run_backtest():
     draw_names_str = ', '.join(draw_names)
     print(f"[回测] 昨天开奖彩种: {draw_names_str}")
 
-    # 🔴 防止重复回测：检查今天是否已用当前版本回测过
+    # 🔴 防止重复回测：检查今天是否已回测过
     for bt in backtest_log:
-        if bt.get('backtest_date') == today_str and bt.get('backtest_method') == 'current_version':
-            print(f"[回测] 今天已用当前版本回测过，跳过")
+        if bt.get('backtest_date') == today_str and bt.get('backtest_method') in ('saved_predictions', 'current_version'):
+            print(f"[回测] 今天已回测过，跳过")
             return bt
+
+    # 🔴 v3.0: 优先读昨天保存的推荐（保证回测号码=日报推荐号码）
+    predictions = _load_predictions()
+    yesterday_str = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
+    yesterday_pred = None
+    for p in predictions:
+        if p.get('date') == yesterday_str:
+            yesterday_pred = p
+            break
+
+    backtest_method = 'saved_predictions' if yesterday_pred else 'current_version'
+    if yesterday_pred:
+        print(f"[回测] 使用昨天保存的推荐记录回测（保证与日报一致）")
+    else:
+        print(f"[回测] 无昨日推荐记录，fallback到当前权重重新生成")
 
     backtest_result = {
         'date': (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d'),
         'backtest_date': today_str,
-        'backtest_method': 'current_version',  # 🔴 标记回测方法，区分旧版
+        'backtest_method': backtest_method,  # 🔴 v3.0: saved_predictions 或 current_version
         'draw_games': draw_games,
     }
 
@@ -2286,11 +2301,18 @@ def _run_backtest():
         ssq_history = fetch_ssq_history(16)  # 多抓1期，去掉最新开奖
         if ssq_history and len(ssq_history) >= 6:
             actual = ssq_history[0]  # 最新一期 = 昨天开奖
-            ssq_pre_draw = ssq_history[1:]  # 去掉最新期，模拟开奖前的数据
 
-            wa = WeightedAnalyzer(ssq_pre_draw)
-            analysis = wa.analyze_ssq()
-            recs = wa.generate_recs_ssq(analysis, kelly_bias=0.0)
+            # 🔴 v3.0: 优先使用昨天保存的推荐，而非重新生成
+            recs = None
+            if yesterday_pred and yesterday_pred.get('ssq_recs'):
+                recs = yesterday_pred['ssq_recs']
+                print(f"[回测] 双色球: 使用昨日保存的推荐（{len(recs)}注）")
+            if not recs:
+                ssq_pre_draw = ssq_history[1:]
+                wa = WeightedAnalyzer(ssq_pre_draw)
+                analysis = wa.analyze_ssq()
+                recs = wa.generate_recs_ssq(analysis, kelly_bias=0.0)
+                print(f"[回测] 双色球: 重新生成推荐（{len(recs)}注）")
 
             hits = []
             total_prize = 0
@@ -2343,11 +2365,18 @@ def _run_backtest():
         dlt_history = fetch_dlt_history(16)
         if dlt_history and len(dlt_history) >= 6:
             actual = dlt_history[0]
-            dlt_pre_draw = dlt_history[1:]
 
-            wa = WeightedAnalyzer(dlt_pre_draw)
-            analysis = wa.analyze_dlt()
-            recs = wa.generate_recs_dlt(analysis, kelly_bias=0.0)
+            # 🔴 v3.0: 优先使用昨天保存的推荐
+            recs = None
+            if yesterday_pred and yesterday_pred.get('dlt_recs'):
+                recs = yesterday_pred['dlt_recs']
+                print(f"[回测] 大乐透: 使用昨日保存的推荐（{len(recs)}注）")
+            if not recs:
+                dlt_pre_draw = dlt_history[1:]
+                wa = WeightedAnalyzer(dlt_pre_draw)
+                analysis = wa.analyze_dlt()
+                recs = wa.generate_recs_dlt(analysis, kelly_bias=0.0)
+                print(f"[回测] 大乐透: 重新生成推荐（{len(recs)}注）")
 
             hits = []
             total_prize = 0
@@ -2402,11 +2431,18 @@ def _run_backtest():
         qxc_history = fetch_qxc_history(31)  # 七星彩隔期开奖，多抓一些
         if qxc_history and len(qxc_history) >= 6:
             actual = qxc_history[0]
-            qxc_pre_draw = qxc_history[1:]
 
-            wa = WeightedAnalyzer(qxc_pre_draw)
-            analysis = wa.analyze_qxc()
-            recs = wa.generate_recs_qxc(analysis, kelly_bias=0.0)
+            # 🔴 v3.0: 优先使用昨天保存的推荐
+            recs = None
+            if yesterday_pred and yesterday_pred.get('qxc_recs'):
+                recs = yesterday_pred['qxc_recs']
+                print(f"[回测] 七星彩: 使用昨日保存的推荐（{len(recs)}注）")
+            if not recs:
+                qxc_pre_draw = qxc_history[1:]
+                wa = WeightedAnalyzer(qxc_pre_draw)
+                analysis = wa.analyze_qxc()
+                recs = wa.generate_recs_qxc(analysis, kelly_bias=0.0)
+                print(f"[回测] 七星彩: 重新生成推荐（{len(recs)}注）")
 
             hits = []
             total_prize = 0
