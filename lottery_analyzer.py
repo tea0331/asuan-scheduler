@@ -69,6 +69,7 @@ import requests
 import re
 import random
 import json
+import sqlite3
 import math
 import time
 from collections import Counter, defaultdict
@@ -1976,6 +1977,39 @@ def format_lottery_section(ssq_result=None, dlt_result=None, qxc_result=None, ba
     return '\n'.join(lines)
 
 
+# ===== Orchestrator桥接 =====
+
+def _load_orchestrator_context():
+    """从DB读取Orchestrator最新context（v3.0统一进化路径）
+    Orchestrator.daily_run()产出context写入algo_state.db
+    此函数供lottery_analyzer读取，替代原来直接调run_algo_evolve()的双路径问题
+    返回dict: {mode, entropy_ratio, bayesian_adj, markov_signals, confidence, ...} 或 None
+    """
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'algo_state.db')
+    if not os.path.exists(db_path):
+        print("[Orchestrator桥接] algo_state.db不存在，Orchestrator尚未运行")
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute('''SELECT context FROM algo_orchestrator_context
+                     ORDER BY date DESC LIMIT 1''')
+        row = c.fetchone()
+        conn.close()
+        if row:
+            context = json.loads(row[0])
+            mode = context.get('mode', '?')
+            entropy = context.get('entropy_ratio', '?')
+            print(f"[Orchestrator桥接] 读取成功: 模式={mode}, 熵比={entropy}")
+            return context
+        else:
+            print("[Orchestrator桥接] DB中无context记录")
+            return None
+    except Exception as e:
+        print(f"[Orchestrator桥接] 读取失败: {e}")
+        return None
+
+
 # ===== 主入口 =====
 
 def generate_lottery_recommendations():
@@ -2000,20 +2034,14 @@ def generate_lottery_recommendations():
     # 第2步(v3.0重构):从DB读取Orchestrator已产出的进化结果,不再独立调run_algo_evolve
     # 原因:generate_lottery_recommendations()和Orchestrator.daily_run()都有进化逻辑,
     # 双路径会互相覆盖权重。v3.0统一由Orchestrator负责进化,此处只读取结果。
-    evolved_config = None
-    try:
-        evolved_config = _load_orchestrator_context()
-    except NameError:
-        print("[AlgoEngine] _load_orchestrator_context未定义,跳过")
-    except Exception as e:
-        print(f"[AlgoEngine] 读取Orchestrator失败: {e}")
+    evolved_config = _load_orchestrator_context()
     if evolved_config:
         print(f"[AlgoEngine] 读取Orchestrator进化结果: 模式={evolved_config.get('mode', '?')}, "
               f"熵比={evolved_config.get('entropy_ratio', '?')}")
     else:
         import json
         try:
-            with open('/root/asuan-scheduler/weight-config.json', 'r') as f: config = json.load(f)
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weight-config.json'), 'r') as f: config = json.load(f)
         except Exception: config = {}
         print("[AlgoEngine] 无Orchestrator记录,使用当前权重配置")
 

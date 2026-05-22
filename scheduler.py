@@ -742,6 +742,15 @@ def run_task_and_email(task_name, task, today_str):
     except Exception as e:
         logging.warning(f"[Algo] 算法模块每日更新跳过: {e}")
 
+    # 🔴 v3.0: Orchestrator大脑每日运行（贝叶斯+熵+马尔可夫+进化+Stacking+蒙特卡洛）
+    try:
+        from algo_orchestrator import AlgoOrchestrator
+        orch = AlgoOrchestrator()
+        context = orch.daily_run()
+        logging.info(f"[Orchestrator] 大脑运行完成: 模式={context.get('mode')}, 熵比={context.get('entropy_ratio', 0):.4f}")
+    except Exception as e:
+        logging.warning(f"[Orchestrator] 大脑运行跳过(不影响推荐): {e}")
+
     # 第三步：写入文件（🔴 含彩票内容，保证文件和邮件一致）
     output_file = None
     if content:
