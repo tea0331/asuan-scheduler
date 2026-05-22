@@ -1171,6 +1171,56 @@ class WeightedAnalyzer:
             })
         return {'positions': pos_data, 'total_periods': total}
 
+    def generate_recs_qxc(self, analysis):
+        """根据加权分析生成七星彩推荐（逐位选号）
+        核心注:每位权重最高
+        扩展1:前3位核心+后4位次高
+        扩展2:前2位核心+后5位中等频率
+        冷号注:每位遗漏最高
+        """
+        positions = analysis['positions']
+        total = analysis.get('total_periods', 15)
+
+        # 核心注:每位权重最高
+        core = []
+        for pos_data in positions:
+            weights = pos_data['weights']
+            core.append(weights[0][0] if weights else 0)
+
+        # 扩展1:前3位核心+后4位次高权重
+        ext1 = list(core)
+        for i in range(3, 7):
+            weights = positions[i]['weights']
+            ext1[i] = weights[1][0] if len(weights) > 1 else (weights[0][0] if weights else 0)
+
+        # 扩展2:前2位核心+后5位中等频率
+        ext2 = list(core)
+        for i in range(2, 7):
+            freq = positions[i]['freq']
+            # 选频率2-3次的号，没有则选遗漏高的
+            mid = [n for n, c in freq.items() if 2 <= c <= 3]
+            if not mid:
+                miss = positions[i]['miss']
+                mid = sorted(miss.keys(), key=lambda x: miss.get(x, 0), reverse=True)[:1]
+            ext2[i] = mid[0] if mid else (positions[i]['weights'][0][0] if positions[i]['weights'] else 0)
+
+        # 冷号注:每位遗漏最高
+        cold = []
+        for pos_data in positions:
+            miss = pos_data['miss']
+            if miss:
+                cold_num = sorted(miss.keys(), key=lambda x: miss[x], reverse=True)[0]
+            else:
+                cold_num = pos_data['weights'][0][0] if pos_data['weights'] else 0
+            cold.append(cold_num)
+
+        return [
+            {'digits': core, 'strategy': '核心注(权重)'},
+            {'digits': ext1, 'strategy': '扩展1(次热)'},
+            {'digits': ext2, 'strategy': '扩展2(回补)'},
+            {'digits': cold, 'strategy': '冷号注(遗漏)'},
+        ]
+
     def _smart_blue_select(self, analysis, mode='hot', exclude=None):
         """🔴 双色球蓝球智能选号(1-16)
         mode: 'hot'权重优先 / 'mix'均衡 / 'miss'遗漏回补
@@ -1616,44 +1666,55 @@ class WeightedAnalyzer:
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         # 🔴 优化v7.5: P0核心注占35%(2注),P1降至20% - 观察期05-21~05-23
         core_front_A = sorted(core_front_by_weight[:5])
-        if len(core_front_by_weight) >= 10:
-            core_front_B = sorted(core_front_by_weight[6:11])
+        # 核心注B: 完全独立(TOP6-10,和A不重叠)
+        core_front_B_pool = [n for n, w, f, m in all_pool[5:10]]
+        if len(core_front_B_pool) >= 5:
+            core_front_B = sorted(core_front_B_pool)
         else:
             core_front_B = core_front_A  # fallback
         
-        # 核心蓝球
-        core_back = analysis['blue_weights'][0][0] if analysis.get('blue_weights') else 1
-        if len(analysis.get('blue_weights', [])) > 1:
-            core_back_2 = analysis['blue_weights'][1][0]
-        else:
-            core_back_2 = core_back
-        
-        # 扩展1: 频率TOP4 + 次高2号
+        # 核心后区（DLT后区1-12）
+        back_weight_list = analysis.get('back_weights', [])
+        back_miss_dict = analysis.get('back_miss', {})
+        core_back = back_weight_list[0][0] if back_weight_list else 1
+        core_back_2 = back_weight_list[1][0] if len(back_weight_list) > 1 else core_back
+
+        # 扩展1: 频率TOP3 + 次高2号（DLT前区5个号）
         top8 = sorted(all_pool, key=lambda x: x[1], reverse=True)
-        ext1_keep = sorted([n for n, w, f, m in top8[:4]])
+        ext1_keep = sorted([n for n, w, f, m in top8[:3]])
         ext1_new = sorted([n for n, w, f, m in top8[6:10] if n not in ext1_keep][:2])
         ext1_front = sorted(ext1_keep + ext1_new)
-        
+        # 扩展1后区: 权重第3+权重第4
+        ext1_back_1 = back_weight_list[2][0] if len(back_weight_list) > 2 else core_back
+        ext1_back_2 = back_weight_list[3][0] if len(back_weight_list) > 3 else core_back_2
+
         # 扩展2: 核心2号 + 频率中等号(出现2-3次)
         ext2_keep = sorted(core_front_by_weight[:2])
         mid_freq = sorted([(n, f) for n, w, f, m in all_pool if 2 <= f <= 3 and n not in core_front_by_weight][:3])
         if len(mid_freq) < 3:
             mid_freq = sorted([(n, f) for n, w, f, m in all_pool if f <= 1 and n not in core_front_by_weight][:3])
         ext2_front = sorted(ext2_keep + [n for n, f in mid_freq[:3]])
-        
+        # 扩展2后区: 权重次热+遗漏回补
+        ext2_back_1 = back_weight_list[1][0] if len(back_weight_list) > 1 else core_back
+        # 遗漏最高的后区号
+        back_miss_sorted = sorted(back_miss_dict.items(), key=lambda x: x[1], reverse=True) if back_miss_dict else []
+        ext2_back_2 = back_miss_sorted[0][0] if back_miss_sorted else core_back_2
+
         # 冷号注(遗漏最高的号码)
         miss_front = sorted([(n, m) for n, w, f, m in all_pool if m > 0], key=lambda x: x[1], reverse=True)
         if not miss_front:
             miss_front = sorted([(n, 0) for n in range(1, 36) if n not in [x[0] for x in all_pool[:5]]][:5])
         cold_front = sorted([n for n, m in miss_front[:5]])
-        cold_back = analysis['blue_miss_weights'][0][0] if analysis.get('blue_miss_weights') else 1
-        
+        # 冷号后区: 遗漏最高的两个
+        cold_back_1 = back_miss_sorted[0][0] if len(back_miss_sorted) > 0 else 1
+        cold_back_2 = back_miss_sorted[1][0] if len(back_miss_sorted) > 1 else cold_back_1
+
         return [
             {'front': core_front_A, 'back': [core_back, core_back_2], 'strategy': '核心注(加权)A'},
             {'front': core_front_B, 'back': [core_back, core_back_2], 'strategy': '核心注(加权)B'},
-            {'front': ext1_front, 'back': [core_back, core_back_2], 'strategy': '扩展1(加权)'},
-            {'front': ext2_front, 'back': [core_back, core_back_2], 'strategy': '扩展2(加权)'},
-            {'front': cold_front, 'back': [cold_back, core_back_2], 'strategy': '冷号注(遗漏)'},
+            {'front': ext1_front, 'back': [ext1_back_1, ext1_back_2], 'strategy': '扩展1(加权)'},
+            {'front': ext2_front, 'back': [ext2_back_1, ext2_back_2], 'strategy': '扩展2(加权)'},
+            {'front': cold_front, 'back': [cold_back_1, cold_back_2], 'strategy': '冷号注(遗漏)'},
         ]
 
 
