@@ -4,15 +4,12 @@ import os
 import sys
 import logging
 import smtplib
+import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 import json
 import requests
-import random
-
-# 添加项目根目录到path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 CST = timezone(timedelta(hours=8))
 today_str = datetime.now(CST).strftime('%Y-%m-%d')
@@ -26,10 +23,6 @@ SMTP_PASS = 'NYuLnGar8wT8RBit'
 SMTP_TO = 'tea0331@163.com'
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-
-# 确保output目录存在
-output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
-os.makedirs(output_dir, exist_ok=True)
 
 def send_email(subject, body):
     """发送邮件"""
@@ -121,15 +114,44 @@ def generate_lottery_section():
         
         # 今日推荐（所有彩种每天都生成）
         try:
-            # 使用WeightedAnalyzer生成推荐
-            wa = la.WeightedAnalyzer(ssq_data)
-            analysis = wa.analyze_ssq()
-            recs = wa.generate_recs_ssq(analysis)
+            from collections import Counter
+            # 双色球推荐生成（直接实现）
+            red_counter = Counter()
+            blue_counter = Counter()
+            for d in ssq_data:
+                red_counter.update(d['reds'])
+                blue_counter.update([d['blue']])
+            # 核心注：权重TOP6红球 + 最高权重蓝球
+            core_reds = sorted([n for n, _ in red_counter.most_common(6)])
+            core_blue = blue_counter.most_common(1)[0][0]
+            # 扩展1：TOP3核心 + 次高频3个（去重）
+            top6 = sorted(core_reds)
+            ext1_reds = sorted(top6[:3] + [n for n, _ in red_counter.most_common(10) if n not in top6][:3])
+            ext1_blue = blue_counter.most_common(2)[1][0] if len(blue_counter) > 1 else core_blue
+            # 扩展2：TOP2核心 + 中等频率4个（去重）
+            mid_reds = sorted([n for n in range(1,34) if 2 <= red_counter.get(n,0) <= 5][:4])
+            if len(mid_reds) < 4:
+                mid_reds = sorted([n for n, _ in red_counter.most_common(12)[2:6]])
+            ext2_reds = sorted(top6[:2] + [n for n in mid_reds if n not in top6[:2]][:4])
+            ext2_blue = blue_counter.most_common(3)[2][0] if len(blue_counter) > 2 else core_blue
+            # 冷号注：遗漏最高的6个红球（去重）
+            cold_reds = sorted([n for n in range(1,34) if red_counter.get(n,0) == 0])
+            if len(cold_reds) < 6:
+                cold_reds = sorted([n for n, _ in sorted(red_counter.items(), key=lambda x: x[1])[:6]])
+            # 确保和核心注不重复
+            if len(set(cold_reds) & set(top6)) > 0:
+                # 有重复，从剩余号码里补
+                remaining = [n for n in range(1,34) if n not in top6 and n not in cold_reds][:6-len(cold_reds)]
+                cold_reds = sorted(list(set(cold_reds) | set(remaining))[:6]
+            recs = [
+                {'reds': core_reds, 'blue': core_blue, 'strategy': '核心注(频率)'},
+                {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': '扩展1(频率)'},
+                {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': '扩展2(频率)'},
+                {'reds': cold_reds[:6], 'blue': cold_blue, 'strategy': '冷号注(遗漏)'},
+            ]
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
-                rec_reds = rec.get('reds', [])
-                rec_blue = rec.get('blue', 0)
-                section += f"  - {rec.get('strategy', '未知')}: 红={rec_reds} 蓝={rec_blue:02d}\n"
+                section += f"  - {rec.get('strategy', '未知')}: 红={rec.get('reds', [])} 蓝={rec.get('blue', 0):02d}\n"
         except Exception as e:
             section += f"\n(推荐生成失败: {e})\n"
         
@@ -142,8 +164,7 @@ def generate_lottery_section():
                 
                 # 读取昨日推荐并对比
                 try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
+                    with open('/root/asuan-scheduler/lottery-predictions.json', 'r') as f:
                         predictions = json.load(f)
                     yesterday_str = yesterday.strftime('%Y-%m-%d')
                     for item in predictions:
@@ -182,15 +203,46 @@ def generate_lottery_section():
         
         # 今日推荐（所有彩种每天都生成）
         try:
-            # 使用WeightedAnalyzer生成推荐
-            wa = la.WeightedAnalyzer(dlt_data)
-            analysis = wa.analyze_dlt()
-            recs = wa.generate_recs_dlt(analysis)
+            from collections import Counter
+            front_counter = Counter()
+            back_counter = Counter()
+            for d in dlt_data:
+                front_counter.update(d['front'])
+                back_counter.update(d['back'])
+            top7 = front_counter.most_common(7)
+            core_by_freq = [n for n, _ in top7][:5]
+            core = sorted(core_by_freq)
+            core_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(2)[1][0]])
+            ext1_keep = sorted(core_by_freq[:3])
+            ext1_new = sorted([n for n, _ in top7[5:10] if n not in ext1_keep][:2])
+            ext1_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(3)[1][0]]) if len(back_counter.most_common(3)) > 1 else core_back
+            ext2_keep = sorted(core_by_freq[:2])
+            mid_freq_front = sorted([n for n in range(1, 36) if 2 <= front_counter.get(n, 0) <= 3 and n not in core_by_freq][:3])
+            if len(mid_freq_front) < 3:
+                mid_freq_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:3])
+            ext2_front = sorted(ext2_keep + mid_freq_front[:3])
+            ext2_back_candidates = sorted([n for n in range(1, 13) if 1 <= back_counter.get(n, 0) <= 2 and n not in core_back][:2])
+            if len(ext2_back_candidates) < 2:
+                ext2_back_candidates = sorted([n for n in range(1, 13) if back_counter.get(n, 0) <= 1 and n not in core_back][:2])
+            if len(ext2_back_candidates) < 2:
+                ext2_back_candidates = core_back
+            miss_front = sorted([n for n in range(1, 36) if n not in front_counter or front_counter.get(n, 0) == 0][:5])
+            miss_back = sorted([n for n in range(1, 13) if n not in back_counter or back_counter.get(n, 0) == 0][:2])
+            if len(miss_front) < 5:
+                miss_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:5])
+            if len(miss_back) < 2:
+                miss_back = sorted([n for n in range(1, 13) if back_counter.get(n, 0) <= 1 and n not in core_back][:2])
+            if len(miss_back) < 2:
+                miss_back = [1, 2]
+            recs = [
+                {'front': core, 'back': core_back, 'strategy': '核心注(频率)'},
+                {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': '扩展1(频率)'},
+                {'front': ext2_front, 'back': ext2_back_candidates, 'strategy': '扩展2(频率)'},
+                {'front': miss_front, 'back': miss_back, 'strategy': '冷号注(遗漏)'},
+            ]
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
-                rec_front = rec.get('front', [])
-                rec_back = rec.get('back', [])
-                section += f"  - {rec.get('strategy', '未知')}: 前={rec_front} 后={rec_back}\n"
+                section += f"  - {rec.get('strategy', '未知')}: 前={rec.get('front', [])} 后={rec.get('back', [])}\n"
         except Exception as e:
             section += f"\n(推荐生成失败: {e})\n"
         
@@ -203,8 +255,7 @@ def generate_lottery_section():
                 
                 # 读取昨日推荐并对比
                 try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
+                    with open('/root/asuan-scheduler/lottery-predictions.json', 'r') as f:
                         predictions = json.load(f)
                     yesterday_str = yesterday.strftime('%Y-%m-%d')
                     for item in predictions:
@@ -242,10 +293,8 @@ def generate_lottery_section():
         
         # 今日推荐（所有彩种每天都生成）
         try:
-            # 使用WeightedAnalyzer生成推荐
             wa = la.WeightedAnalyzer(qxc_data)
-            analysis = wa.analyze_qxc()
-            recs = wa.generate_recs_qxc(analysis)
+            recs = wa.analyze_qxc(qxc_data)  # 直接返回推荐列表
             # 去重：如果推荐和最新开奖高度相似，微调
             if qxc_data:
                 latest = qxc_data[0]
@@ -255,6 +304,7 @@ def generate_lottery_section():
                     if rec_digits and latest_digits:
                         same_count = sum(1 for a, b in zip(rec_digits, latest_digits) if a == b)
                         if same_count >= 6:  # 6位以上相同，微调最后一位
+                            import random
                             # 随机改1-2位（不改变策略本质）
                             for _ in range(min(2, len(rec_digits)-1)):
                                 pos = random.randint(0, 5)  # 前6位
@@ -276,8 +326,7 @@ def generate_lottery_section():
                 
                 # 读取昨日推荐并对比
                 try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
+                    with open('/root/asuan-scheduler/lottery-predictions.json', 'r') as f:
                         predictions = json.load(f)
                     yesterday_str = yesterday.strftime('%Y-%m-%d')
                     for item in predictions:
@@ -311,8 +360,7 @@ if __name__ == '__main__':
         # Fallback: 用昨天的
         logging.warning("[新闻] API失败，尝试用昨日内容")
         try:
-            yesterday_file = os.path.join(output_dir, f"{yesterday.strftime('%Y-%m-%d')}.md")
-            with open(yesterday_file, 'r', encoding='utf-8') as f:
+            with open('/root/asuan-scheduler/output/2026-05-20.md', 'r', encoding='utf-8') as f:
                 old_content = f.read()
             # 提取新闻部分（到"---\n\n## 🎰"之前）
             if '---\n\n## 🎰' in old_content:
@@ -330,7 +378,7 @@ if __name__ == '__main__':
     full_content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}"
     
     # 4. 写文件
-    output_path = os.path.join(output_dir, f"{today_str}.md")
+    output_path = f'/root/asuan-scheduler/output/{today_str}.md'
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(full_content)
     logging.info(f"✅ 已写入: {output_path} ({len(full_content)}字符)")
