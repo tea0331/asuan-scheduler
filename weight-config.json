@@ -12,7 +12,7 @@
   "neighbor_bonus": 0.04999999999999999,
   "gamma": 0.8099999999999999,
   "version": 8,
-  "algo_version": "v7.1",
+  "algo_version": "v3.0",
   "evolution_log": [
     {
       "date": "2026-04-30",
@@ -55,7 +55,7 @@
         "gamma": 0.88
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-04-30",
@@ -98,7 +98,7 @@
         "gamma": 0.88
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-05-01",
@@ -141,7 +141,7 @@
         "gamma": 0.88
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-05-01",
@@ -185,7 +185,7 @@
         "gamma": 0.86
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-05-01",
@@ -229,7 +229,7 @@
         "gamma": 0.84
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-05-01",
@@ -273,7 +273,7 @@
         "gamma": 0.82
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     },
     {
       "date": "2026-05-02",
@@ -316,7 +316,7 @@
         "gamma": 0.81
       },
       "is_major": false,
-      "algo_version": "v7.1"
+      "algo_version": "v3.0"
     }
   ]
 }
