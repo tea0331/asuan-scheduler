@@ -1648,6 +1648,66 @@ class WeightedAnalyzer:
             {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': Strategy.COLD_FALLBACK},
         ]
 
+    def analyze_dlt(self, history):
+        front_counter = Counter()
+        back_counter = Counter()
+        for d in history:
+            front_counter.update(d['front'])
+            back_counter.update(d['back'])
+        top7 = front_counter.most_common(7)
+        core_by_freq = [n for n, _ in top7][:5]  # 🔴 Bug6修复:保持频率排序
+        core = sorted(core_by_freq)  # 只用于显示
+        core_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(2)[1][0]])
+        ext1_keep = sorted(core_by_freq[:3])  # 🔴 Bug6修复:按频率TOP3保留
+        ext1_new = sorted([n for n, _ in top7[5:10] if n not in ext1_keep][:2])
+        ext1_back = sorted([back_counter.most_common(1)[0][0], back_counter.most_common(3)[1][0]]) if len(back_counter.most_common(3)) > 1 else core_back
+        # 🔴 扩展2:保留核心2号 + 频率中等号(出现2-3次),模拟"大换血但不是全冷"
+        ext2_keep = sorted(core_by_freq[:2])
+        mid_freq_front = sorted([n for n in range(1, 36) if 2 <= front_counter.get(n, 0) <= 3 and n not in core_by_freq][:3])
+        if len(mid_freq_front) < 3:
+            mid_freq_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:3])
+        ext2_front = sorted(ext2_keep + mid_freq_front[:3])
+        ext2_back_candidates = sorted([n for n in range(1, 13) if 1 <= back_counter.get(n, 0) <= 2 and n not in core_back][:2])
+        if len(ext2_back_candidates) < 2:
+            ext2_back_candidates = sorted([n for n in range(1, 13) if back_counter.get(n, 0) >= 1 and n not in core_back][:2])
+        if len(ext2_back_candidates) < 2:
+            ext2_back_candidates = core_back
+        # 🟢 v6吸收:冷号注(遗漏最高的号码)
+        miss_front = sorted([n for n in range(1, 36) if n not in front_counter or front_counter.get(n, 0) == 0][:5])
+        miss_back = sorted([n for n in range(1, 13) if n not in back_counter or back_counter.get(n, 0) == 0][:2])
+        if len(miss_front) < 5:
+            miss_front = sorted([n for n in range(1, 36) if front_counter.get(n, 0) <= 1 and n not in core_by_freq][:5])
+        if len(miss_back) < 2:
+            miss_back = sorted([n for n in range(1, 13) if back_counter.get(n, 0) <= 1 and n not in core_back][:2])
+        if len(miss_back) < 2:
+            miss_back = [1, 2]
+        return [
+            {'front': core, 'back': core_back, 'strategy': Strategy.CORE_FALLBACK},
+            {'front': sorted(ext1_keep + ext1_new), 'back': ext1_back, 'strategy': Strategy.EXT1_FALLBACK},
+            {'front': ext2_front, 'back': ext2_back_candidates, 'strategy': Strategy.EXT2_FALLBACK},
+            {'front': miss_front, 'back': miss_back, 'strategy': Strategy.COLD_FALLBACK},
+        ]
+
+    def analyze_qxc(self, history):
+        recs = []
+        # 核心注:每位最高频(前6位0-9,最后一位0-14)
+        core = []
+        for pos in range(6):
+            counter = Counter(d['digits'][pos] for d in history)
+            core.append(counter.most_common(1)[0][0])
+        # 最后一位(第7位)取值范围0-14
+        last_counter = Counter(d['digits'][6] for d in history)
+        core.append(last_counter.most_common(1)[0][0])
+
+        # 扩展1:前3位核心 + 后4位次高频(最后一位单独处理)
+        ext1 = list(core)
+        for pos in range(3, 6):
+            counter = Counter(d['digits'][pos] for d in history)
+            ext1[pos] = counter.most_common(2)[1][0] if len(counter.most_common(2)) > 1 else core[pos]
+        # 最后一位扩展
+        last_counter = Counter(d['digits'][6] for d in history)
+        ext1[6] = last_counter.most_common(2)[1][0] if len(last_counter.most_common(2)) > 1 else core[6]
+
         # 🔴 扩展2:前2位核心 + 后5位中等频率(出现2-3次)
         ext2 = list(core)
         for pos in range(2, 6):
