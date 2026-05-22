@@ -1615,68 +1615,46 @@ class WeightedAnalyzer:
 
         core_front_by_weight = [n for n, w, f, m in all_pool[:5]]
         # 🔴 优化v7.5: P0核心注占35%(2注),P1降至20% - 观察期05-21~05-23
-        # 旧值备用: P0=29% P1=22% P2=24% P3=24%
         core_front_A = sorted(core_front_by_weight[:5])
-        # 核心注B: 完全独立(TOP6-10,和A不重叠)
         if len(core_front_by_weight) >= 10:
             core_front_B = sorted(core_front_by_weight[6:11])
         else:
             core_front_B = core_front_A  # fallback
-        core = sorted(core_by_freq)  # 只用于显示
-        core_blue = blue_counter.most_common(1)[0][0]
-        # 扩展1:保留频率TOP4 + 频率次高2号
-        ext1_keep = sorted(core_by_freq[:4])  # 🔴 Bug6修复:按频率TOP4保留,不是号码最小的4个
-        ext1_new = sorted([n for n, _ in top8[6:10] if n not in ext1_keep][:2])
-        ext1_blue = blue_counter.most_common(2)[-1][0] if len(blue_counter.most_common(2)) > 1 else core_blue
-        # 🔴 扩展2:保留核心2号 + 频率中等号(出现2-3次),模拟"大换血但不是全冷"
-        ext2_keep = sorted(core_by_freq[:2])
-        mid_freq = sorted([n for n in range(1, 34) if 2 <= red_counter.get(n, 0) <= 3 and n not in core_by_freq][:4])
-        if len(mid_freq) < 4:
-            mid_freq = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1 and n not in core_by_freq][:4])
-        ext2_reds = sorted(ext2_keep + mid_freq[:4])
-        ext2_blue_candidates = [n for n in range(1, 17) if 1 <= blue_counter.get(n, 0) <= 2]
-        ext2_blue = ext2_blue_candidates[0] if ext2_blue_candidates else (blue_counter.most_common(2)[-1][0] if len(blue_counter.most_common(2)) > 1 else core_blue)
-        # 🟢 v6吸收:冷号注(遗漏最高的号码)
-        miss_reds = sorted([n for n in range(1, 34) if n not in red_counter or red_counter.get(n, 0) == 0][:6])
-        miss_blues = sorted([n for n in range(1, 17) if n not in blue_counter or blue_counter.get(n, 0) == 0])
-        if len(miss_reds) < 6:
-            miss_reds = sorted([n for n in range(1, 34) if red_counter.get(n, 0) <= 1 and n not in core_by_freq][:6])
+        
+        # 核心蓝球
+        core_back = analysis['blue_weights'][0][0] if analysis.get('blue_weights') else 1
+        if len(analysis.get('blue_weights', [])) > 1:
+            core_back_2 = analysis['blue_weights'][1][0]
+        else:
+            core_back_2 = core_back
+        
+        # 扩展1: 频率TOP4 + 次高2号
+        top8 = sorted(all_pool, key=lambda x: x[1], reverse=True)
+        ext1_keep = sorted([n for n, w, f, m in top8[:4]])
+        ext1_new = sorted([n for n, w, f, m in top8[6:10] if n not in ext1_keep][:2])
+        ext1_front = sorted(ext1_keep + ext1_new)
+        
+        # 扩展2: 核心2号 + 频率中等号(出现2-3次)
+        ext2_keep = sorted(core_front_by_weight[:2])
+        mid_freq = sorted([(n, f) for n, w, f, m in all_pool if 2 <= f <= 3 and n not in core_front_by_weight][:3])
+        if len(mid_freq) < 3:
+            mid_freq = sorted([(n, f) for n, w, f, m in all_pool if f <= 1 and n not in core_front_by_weight][:3])
+        ext2_front = sorted(ext2_keep + [n for n, f in mid_freq[:3]])
+        
+        # 冷号注(遗漏最高的号码)
+        miss_front = sorted([(n, m) for n, w, f, m in all_pool if m > 0], key=lambda x: x[1], reverse=True)
+        if not miss_front:
+            miss_front = sorted([(n, 0) for n in range(1, 36) if n not in [x[0] for x in all_pool[:5]]][:5])
+        cold_front = sorted([n for n, m in miss_front[:5]])
+        cold_back = analysis['blue_miss_weights'][0][0] if analysis.get('blue_miss_weights') else 1
+        
         return [
-            {'reds': core, 'blue': core_blue, 'strategy': Strategy.CORE_FALLBACK},
-            {'reds': sorted(ext1_keep + ext1_new), 'blue': ext1_blue, 'strategy': Strategy.EXT1_FALLBACK},
-            {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': Strategy.EXT2_FALLBACK},
-            {'reds': miss_reds, 'blue': miss_blues[0] if miss_blues else 1, 'strategy': Strategy.COLD_FALLBACK},
+            {'front': core_front_A, 'back': [core_back, core_back_2], 'strategy': '核心注(加权)A'},
+            {'front': core_front_B, 'back': [core_back, core_back_2], 'strategy': '核心注(加权)B'},
+            {'front': ext1_front, 'back': [core_back, core_back_2], 'strategy': '扩展1(加权)'},
+            {'front': ext2_front, 'back': [core_back, core_back_2], 'strategy': '扩展2(加权)'},
+            {'front': cold_front, 'back': [cold_back, core_back_2], 'strategy': '冷号注(遗漏)'},
         ]
-
-        # 🔴 扩展2:前2位核心 + 后5位中等频率(出现2-3次)
-        ext2 = list(core)
-        for pos in range(2, 6):
-            counter = Counter(d['digits'][pos] for d in history)
-            mid = [n for n in range(10) if 2 <= counter.get(n, 0) <= 3 and n != core[pos]]
-            ext2[pos] = mid[0] if mid else ([n for n in range(10) if counter.get(n, 0) <= 1 and n != core[pos]][0] if [n for n in range(10) if counter.get(n, 0) <= 1] else counter.most_common()[-1][0])
-        # 最后一位扩展2(0-14)
-        last_counter = Counter(d['digits'][6] for d in history)
-        mid_last = [n for n in range(15) if 2 <= last_counter.get(n, 0) <= 3 and n != core[6]]
-        ext2[6] = mid_last[0] if mid_last else ([n for n in range(15) if last_counter.get(n, 0) <= 1 and n != core[6]][0] if [n for n in range(15) if last_counter.get(n, 0) <= 1] else last_counter.most_common()[-1][0])
-
-        # 🟢 v6吸收:冷号注(前6位遗漏最高的数字,最后一位0-14)
-        cold_digits = list(core)
-        for pos in range(6):
-            counter = Counter(d['digits'][pos] for d in history)
-            cold = [n for n in range(10) if counter.get(n, 0) == 0]
-            cold_digits[pos] = cold[0] if cold else counter.most_common()[-1][0]
-        # 最后一位冷号
-        last_counter = Counter(d['digits'][6] for d in history)
-        cold_last = [n for n in range(15) if last_counter.get(n, 0) == 0]
-        cold_digits[6] = cold_last[0] if cold_last else last_counter.most_common()[-1][0]
-
-        recs = [
-            {'digits': core, 'strategy': Strategy.CORE_FALLBACK},
-            {'digits': ext1, 'strategy': Strategy.EXT1_FALLBACK},
-            {'digits': ext2, 'strategy': Strategy.EXT2_FALLBACK},
-            {'digits': cold_digits, 'strategy': Strategy.COLD_FALLBACK},
-        ]
-        return recs
 
 
 # ===== 格式化输出 =====
