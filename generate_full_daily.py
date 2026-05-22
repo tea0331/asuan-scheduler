@@ -102,7 +102,16 @@ def generate_lottery_section():
         import lottery_analyzer as la
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: {e}\n---\n"
-    
+
+    # 🔴 v3.0: 先跑Orchestrator（大脑），产出context供推荐使用
+    try:
+        from algo_orchestrator import AlgoOrchestrator
+        orch = AlgoOrchestrator()
+        context = orch.daily_run()
+        print(f"[日报] ✅ Orchestrator运行完成: 模式={context.get('mode')}, 熵比={context.get('entropy_ratio', 0):.4f}")
+    except Exception as e:
+        print(f"[日报] ⚠️ Orchestrator运行失败(不影响推荐): {e}")
+
     section = "\n---\n\n## 🎰 彩票号码推荐 — 刘海蟾点金（仅供娱乐参考）\n\n"
     section += "> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n\n"
     
