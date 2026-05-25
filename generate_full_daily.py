@@ -277,7 +277,7 @@ def generate_lottery_section():
             section += f"\n(推荐生成失败: {e})\n"
         
         # 回测：只有当昨天开七星彩时才显示
-        if yesterday_weekday in [1, 4]:  # 昨天是周二/周五
+        if yesterday_weekday in [1, 4, 6]:  # 昨天是周二/周五/周日
             section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 七星彩\n"
             if qxc_data:
                 latest = qxc_data[0]
