@@ -114,18 +114,22 @@ def generate_recs_ssq(analysis: Dict, kelly_bias: float = 0.0) -> List[Dict]:
     cold_scores.sort(key=lambda x: x[1], reverse=True)
     cold_red_nums = sorted([n for n, s in cold_scores[:6]])
     
-    # 蓝球选择（简化版，使用analysis中的blue_weights）
+    # 蓝球选择（互斥逻辑，核心注A和B用不同蓝球）
     blue_weights = dict(analysis['blue_weights'])
     sorted_blues = sorted(blue_weights.items(), key=lambda x: x[1], reverse=True)
     
-    core_blue = sorted_blues[0][0] if sorted_blues else 1
-    ext1_blue = sorted_blues[1][0] if len(sorted_blues) > 1 else 1
-    ext2_blue = sorted_blues[2][0] if len(sorted_blues) > 2 else 1
+    # 核心注A：用TOP1蓝球
+    core_blue_A = sorted_blues[0][0] if sorted_blues else 1
+    # 核心注B：用TOP2蓝球（和A互斥）
+    core_blue_B = sorted_blues[1][0] if len(sorted_blues) > 1 else core_blue_A
+    
+    ext1_blue = sorted_blues[2][0] if len(sorted_blues) > 2 else 1
+    ext2_blue = sorted_blues[3][0] if len(sorted_blues) > 3 else 1
     cold_blue = sorted_blues[-1][0] if len(sorted_blues) > 3 else 1
     
     return [
-        {'reds': core_reds_A, 'blue': core_blue, 'strategy': strategy_tag},  # P0核心注A (35%)
-        {'reds': core_reds_B, 'blue': core_blue, 'strategy': strategy_tag},  # P0核心注B (35%)
+        {'reds': core_reds_A, 'blue': core_blue_A, 'strategy': strategy_tag},  # P0核心注A (35%)
+        {'reds': core_reds_B, 'blue': core_blue_B, 'strategy': strategy_tag},  # P0核心注B (35%)
         {'reds': ext1_reds, 'blue': ext1_blue, 'strategy': Strategy.EXT1_WEIGHTED},  # P1激进注 (20%)
         {'reds': ext2_reds, 'blue': ext2_blue, 'strategy': Strategy.EXT2_WEIGHTED},  # P2回补注 (23%)
         {'reds': cold_red_nums, 'blue': cold_blue, 'strategy': Strategy.COLD_MISS},  # P3冷号注 (22%)
