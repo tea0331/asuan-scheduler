@@ -599,6 +599,8 @@ def _fetch_qxc_500com(periods):
                 continue
 
         if results:
+            # 🔴 按期间号倒序排序（最新在前）
+            results.sort(key=lambda x: x['period'], reverse=True)
             print(f"[七星彩-500] 抓取成功: {len(results)}期 (最新{results[0]['period']})")
         return results if results else None
     except Exception as e:
@@ -1174,38 +1176,51 @@ class WeightedAnalyzer:
 
     def generate_recs_qxc(self, analysis):
         """根据加权分析生成七星彩推荐（逐位选号）
-        核心注:每位权重最高
-        扩展1:前3位核心+后4位次高
-        扩展2:前2位核心+后5位中等频率
-        冷号注:每位遗漏最高
+        核心注A: 每位权重最高（P0-35%）
+        核心注B: 完全独立（权重TOP7-11，和A不重叠）（P0-35%）
+        扩展1: 前3位核心+后4位次高权重（P1-20%）
+        扩展2: 前2位核心+后5位中等频率（P2-23%）
+        冷号注: 每位遗漏最高（P3-22%）
         """
         positions = analysis['positions']
         total = analysis.get('total_periods', 15)
 
-        # 核心注:每位权重最高
-        core = []
-        for pos_data in positions:
+        # 权重排序（每位前11个号码）
+        all_pool = []
+        for pos_idx, pos_data in enumerate(positions):
             weights = pos_data['weights']
-            core.append(weights[0][0] if weights else 0)
+            all_pool.append([n for n, w in weights[:11]])
 
-        # 扩展1:前3位核心+后4位次高权重
-        ext1 = list(core)
+        # 核心注A: 每位权重TOP1
+        core_A = [pool[0] if pool else 0 for pool in all_pool]
+
+        # 核心注B: 完全独立（TOP7-11，和A不重叠）
+        core_B = []
+        for pos_idx, pool in enumerate(all_pool):
+            for n in pool[6:11]:  # TOP7-11
+                if n not in core_A:
+                    core_B.append(n)
+                    break
+            else:
+                core_B.append(pool[1] if len(pool) > 1 else (pool[0] if pool else 0))
+
+        # 扩展1: 前3位核心+后4位次高权重
+        ext1 = list(core_A)
         for i in range(3, 7):
             weights = positions[i]['weights']
             ext1[i] = weights[1][0] if len(weights) > 1 else (weights[0][0] if weights else 0)
 
-        # 扩展2:前2位核心+后5位中等频率
-        ext2 = list(core)
+        # 扩展2: 前2位核心+后5位中等频率
+        ext2 = list(core_A)
         for i in range(2, 7):
             freq = positions[i]['freq']
-            # 选频率2-3次的号，没有则选遗漏高的
             mid = [n for n, c in freq.items() if 2 <= c <= 3]
             if not mid:
                 miss = positions[i]['miss']
                 mid = sorted(miss.keys(), key=lambda x: miss.get(x, 0), reverse=True)[:1]
             ext2[i] = mid[0] if mid else (positions[i]['weights'][0][0] if positions[i]['weights'] else 0)
 
-        # 冷号注:每位遗漏最高
+        # 冷号注: 每位遗漏最高
         cold = []
         for pos_data in positions:
             miss = pos_data['miss']
@@ -1216,7 +1231,8 @@ class WeightedAnalyzer:
             cold.append(cold_num)
 
         return [
-            {'digits': core, 'strategy': '核心注(权重)'},
+            {'digits': core_A, 'strategy': '核心注(权重)A'},
+            {'digits': core_B, 'strategy': '核心注(权重)B'},
             {'digits': ext1, 'strategy': '扩展1(次热)'},
             {'digits': ext2, 'strategy': '扩展2(回补)'},
             {'digits': cold, 'strategy': '冷号注(遗漏)'},
