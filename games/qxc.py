@@ -27,7 +27,9 @@ def analyze_qxc(history_data: List[Dict]) -> Dict:
     if not history_data or len(history_data) == 0:
         raise ValueError("历史数据为空，无法分析")
     
-    wa = WeightedAnalyzer(history_data)
+    # 直接调用 lottery_analyzer 中的方法
+    import lottery_analyzer as la
+    wa = la.WeightedAnalyzer(history_data)
     return wa.analyze_qxc()
 
 

@@ -120,7 +120,7 @@ def generate_lottery_section():
     
     # 双色球
     try:
-        ssq_data = la.fetch_ssq_history(15)
+        ssq_data = games.ssq.fetch_ssq_history(15)
         section += "### 🔴 双色球\n\n"
         section += "| 期号 | 红球 | 蓝球 |\n|------|------|------|\n"
         for d in ssq_data[:3]:
@@ -131,9 +131,8 @@ def generate_lottery_section():
         # 今日推荐（所有彩种每天都生成）
         try:
             # 使用WeightedAnalyzer生成推荐
-            wa = la.WeightedAnalyzer(ssq_data)
-            analysis = wa.analyze_ssq()
-            recs = wa.generate_recs_ssq(analysis)
+            analysis = games.ssq.analyze_ssq(ssq_data)
+            recs = games.ssq.generate_recs_ssq(analysis)
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
                 rec_reds = rec.get('reds', [])
@@ -181,7 +180,7 @@ def generate_lottery_section():
     
     # 大乐透
     try:
-        dlt_data = la.fetch_dlt_history(15)
+        dlt_data = games.dlt.fetch_dlt_history(15)
         section += "### 🟡 大乐透\n\n"
         section += "| 期号 | 前区 | 后区 |\n|------|------|------|\n"
         for d in dlt_data[:3]:
@@ -192,9 +191,8 @@ def generate_lottery_section():
         # 今日推荐（所有彩种每天都生成）
         try:
             # 使用WeightedAnalyzer生成推荐
-            wa = la.WeightedAnalyzer(dlt_data)
-            analysis = wa.analyze_dlt()
-            recs = wa.generate_recs_dlt(analysis)
+            analysis = games.dlt.analyze_dlt(dlt_data)
+            recs = games.dlt.generate_recs_dlt(analysis)
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
                 rec_front = rec.get('front', [])
@@ -242,7 +240,7 @@ def generate_lottery_section():
     
     # 七星彩
     try:
-        qxc_data = la.fetch_qxc_history(15)
+        qxc_data = games.qxc.fetch_qxc_history(15)
         section += "### 🟢 七星彩\n\n"
         section += "| 期号 | 号码 |\n|------|------|\n"
         for d in qxc_data[:3]:
@@ -252,9 +250,8 @@ def generate_lottery_section():
         # 今日推荐（所有彩种每天都生成）
         try:
             # 使用WeightedAnalyzer生成推荐
-            wa = la.WeightedAnalyzer(qxc_data)
-            analysis = wa.analyze_qxc()
-            recs = wa.generate_recs_qxc(analysis)
+            analysis = games.qxc.analyze_qxc(qxc_data)
+            recs = games.qxc.generate_recs_qxc(analysis)
             # 去重：如果推荐和最新开奖高度相似，微调
             if qxc_data:
                 latest = qxc_data[0]
