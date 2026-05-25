@@ -296,10 +296,10 @@ def generate_lottery_section():
                                 section += f"\n刘海蟾推荐({len(qxc_recs)}注):\n"
                                 for rec in qxc_recs:
                                     rec_digits = rec.get('digits', rec.get('numbers', []))
-                                    hit_digits = set(rec_digits) & set(latest.get('digits', latest.get('numbers', [])))
+                                    hit_count = sum(1 for i in range(min(len(rec_digits), len(latest_digits))) if i < len(rec_digits) and i < len(latest_digits) and rec_digits[i] == latest_digits[i])
                                     section += f"  - {rec.get('strategy', '未知')}: 号码={rec_digits} "
-                                    if hit_digits:
-                                        section += f"✅ 中{list(hit_digits)}"
+                                    if hit_count > 0:
+                                        section += f"✅ 中{hit_count}位"
                                     section += "\n"
                                 section += f"\n💰 回测完成\n"
                             break
