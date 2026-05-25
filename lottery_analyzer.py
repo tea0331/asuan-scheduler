@@ -1513,9 +1513,9 @@ class WeightedAnalyzer:
         # 旧值备用: P0=28% P1=29% P2=21% P3=21%
         # 核心注A: 权重TOP6
         core_reds_A = sorted(core_reds_by_weight[:6])
-        # 核心注B: 完全独立（从 all_pool[6:11] 选6个，和A不重叠）
-        if len(all_pool) >= 11:
-            core_reds_B = sorted([n for n, w, f, m in all_pool[6:11]])
+        # 核心注B: 完全独立（从 all_pool[6:12] 选6个，和A不重叠）
+        if len(all_pool) >= 12:
+            core_reds_B = sorted([n for n, w, f, m in all_pool[6:12]])
         else:
             # 数据不够时，B取权重TOP7-12（如果有的话）
             remaining = sorted(set([n for n, w, f, m in all_pool[6:]]) - set(core_reds_A))

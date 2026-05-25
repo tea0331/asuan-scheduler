@@ -97,24 +97,46 @@ def generate_recs_dlt(analysis: Dict, kelly_bias: float = 0.0) -> List[Dict]:
         miss_front = sorted([(n, 0) for n in range(1, 36) if n not in [x[0] for x in all_pool[:5]]][:5])
     cold_front = sorted([n for n, m in miss_front[:5]])
     
-    # 后区选择（简化版，使用analysis中的back_weights）
+    # 后区选择（互斥逻辑，5注后区完全不同）
     back_weight_list = analysis.get('back_weights', [])
     back_miss_dict = analysis.get('back_miss', {})
     
-    core_back = back_weight_list[0][0] if back_weight_list else 1
-    core_back_2 = back_weight_list[1][0] if len(back_weight_list) > 1 else core_back
+    # 核心注A+B：用TOP2（互斥）
+    if len(back_weight_list) >= 2:
+        core_back = [back_weight_list[0][0], back_weight_list[1][0]]
+    else:
+        core_back = [1, 2]
     
-    ext1_back_1 = back_weight_list[2][0] if len(back_weight_list) > 2 else core_back
-    ext1_back_2 = back_weight_list[3][0] if len(back_weight_list) > 3 else core_back_2
+    # 扩展1：用TOP3-4（和核心注不同）
+    if len(back_weight_list) >= 4:
+        ext1_back = [back_weight_list[2][0], back_weight_list[3][0]]
+    else:
+        ext1_back = core_back[:]
     
-    back_miss_sorted = sorted(back_miss_dict.items(), key=lambda x: x[1], reverse=True) if back_miss_dict else []
-    ext2_back_1 = back_weight_list[1][0] if len(back_weight_list) > 1 else core_back
-    ext2_back_2 = back_miss_sorted[0][0] if back_miss_sorted else core_back_2
+    # 扩展2：用TOP5-6（保证互斥）
+    if len(back_weight_list) >= 6:
+        ext2_back = [back_weight_list[4][0], back_weight_list[5][0]]
+    else:
+        ext2_back = ext1_back[:]
     
-    cold_back_1 = back_miss_sorted[0][0] if back_miss_sorted else 1
-    cold_back_2 = back_miss_sorted[1][0] if len(back_miss_sorted) > 1 else cold_back_1
+    # 冷号注：用遗漏最高的2个（和前面不同）
+    cold_back = core_back[:]  # fallback
+    if back_miss_dict:
+        sorted_miss = sorted(back_miss_dict.items(), key=lambda x: x[1], reverse=True)
+        cold_candidates = [n for n, m in sorted_miss if n not in core_back and n not in ext1_back and n not in ext2_back]
+        if len(cold_candidates) >= 2:
+            cold_back = cold_candidates[:2]
+        elif len(sorted_miss) >= 2:
+            cold_back = [sorted_miss[0][0], sorted_miss[1][0]]
     
     return [
+        {'front': core_front_A, 'back': core_back, 'strategy': '核心注(加权)A'},  # P0核心注A (35%)
+        {'front': core_front_B, 'back': core_back, 'strategy': '核心注(加权)B'},  # P0核心注B (35%)
+        {'front': ext1_front, 'back': ext1_back, 'strategy': '扩展1(加权)'},  # P1激进注 (20%)
+        {'front': ext2_front, 'back': ext2_back, 'strategy': '扩展2(加权)'},  # P2回补注 (23%)
+        {'front': cold_front, 'back': cold_back, 'strategy': '冷号注(遗漏)'},  # P3冷号注 (22%)
+    ]
+
         {'front': core_front_A, 'back': [core_back, core_back_2], 'strategy': f'核心注(加权)A'},  # P0核心注A (35%)
         {'front': core_front_B, 'back': [core_back, core_back_2], 'strategy': f'核心注(加权)B'},  # P0核心注B (35%)
         {'front': ext1_front, 'back': [ext1_back_1, ext1_back_2], 'strategy': '扩展1(加权)'},  # P1激进注 (20%)

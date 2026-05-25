@@ -76,8 +76,8 @@ def generate_recs_ssq(analysis: Dict, kelly_bias: float = 0.0) -> List[Dict]:
     core_reds_A = sorted([n for n, w, f, m in all_pool[:6]])
     
     # 核心注B: TOP6-11（完全独立）
-    if len(all_pool) >= 11:
-        core_reds_B = sorted([n for n, w, f, m in all_pool[6:11]])
+    if len(all_pool) >= 12:
+        core_reds_B = sorted([n for n, w, f, m in all_pool[6:12]])
     else:
         remaining = sorted(set([n for n, w, f, m in all_pool[6:]]) - set(core_reds_A))
         core_reds_B = sorted(list(remaining)[:6]) if remaining else core_reds_A
