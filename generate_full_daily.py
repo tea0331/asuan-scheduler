@@ -100,6 +100,9 @@ def generate_lottery_section():
     """生成彩票部分：今日推荐 + 昨日回测"""
     try:
         import lottery_analyzer as la
+        import games.ssq
+        import games.dlt
+        import games.qxc
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: {e}\n---\n"
 
