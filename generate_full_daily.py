@@ -97,7 +97,7 @@ def generate_news_section():
         return None
 
 def generate_lottery_section():
-    """生成彩票部分：今日推荐 + 昨日回测"""
+    """生成彩票部分：今日推荐 + 昨日回测 + 虚拟下注记录"""
     try:
         import lottery_analyzer as la
         import games.ssq
@@ -105,6 +105,11 @@ def generate_lottery_section():
         import games.qxc
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: {e}\n---\n"
+
+    # 🔴 闭环1: 外层变量收集推荐结果（供虚拟下注+推荐记录使用）
+    ssq_recs = None
+    dlt_recs = None
+    qxc_recs = None
 
     # 🔴 v3.0: 先跑Orchestrator（大脑），产出context供推荐使用
     try:
@@ -136,6 +141,7 @@ def generate_lottery_section():
             # 使用WeightedAnalyzer生成推荐
             analysis = games.ssq.analyze_ssq(ssq_data)
             recs = games.ssq.generate_recs_ssq(analysis)
+            ssq_recs = recs  # 🔴 闭环1: 收集推荐供虚拟下注使用
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
                 rec_reds = rec.get('reds', [])
@@ -196,6 +202,7 @@ def generate_lottery_section():
             # 使用WeightedAnalyzer生成推荐
             analysis = games.dlt.analyze_dlt(dlt_data)
             recs = games.dlt.generate_recs_dlt(analysis)
+            dlt_recs = recs  # 🔴 闭环1: 收集推荐供虚拟下注使用
             section += f"\n**今日推荐({len(recs)}注)**:\n"
             for rec in recs:
                 rec_front = rec.get('front', [])
@@ -255,6 +262,7 @@ def generate_lottery_section():
             # 使用WeightedAnalyzer生成推荐
             analysis = games.qxc.analyze_qxc(qxc_data)
             recs = games.qxc.generate_recs_qxc(analysis)
+            qxc_recs = recs  # 🔴 闭环1: 收集推荐供虚拟下注使用
             # 去重：如果推荐和最新开奖高度相似，微调
             if qxc_data:
                 latest = qxc_data[0]
@@ -308,6 +316,45 @@ def generate_lottery_section():
         section += "\n"
     except Exception as e:
         section += f"[七星彩] 错误: {e}\n\n"
+    
+    # 🔴 闭环1: 虚拟下注 — 推荐写入 algo_bets 表（供 settle 结算使用）
+    try:
+        from algo_module import AlgoDB, ROITracker
+        tracker = ROITracker(AlgoDB())
+        kelly_map = {'ssq': 0, 'dlt': 0, 'qxc': 0}
+        if ssq_recs:
+            tracker.record_bets(today_str, 'ssq', ssq_recs, kelly_map)
+            logging.info(f"[彩票] ✅ SSQ虚拟下注记录: {len(ssq_recs)}注")
+        if dlt_recs:
+            tracker.record_bets(today_str, 'dlt', dlt_recs, kelly_map)
+            logging.info(f"[彩票] ✅ DLT虚拟下注记录: {len(dlt_recs)}注")
+        if qxc_recs:
+            tracker.record_bets(today_str, 'qxc', qxc_recs, kelly_map)
+            logging.info(f"[彩票] ✅ QXC虚拟下注记录: {len(qxc_recs)}注")
+    except Exception as e:
+        logging.warning(f"[彩票] 虚拟下注记录失败: {e}")
+    
+    # 🔴 闭环4: 保存今日推荐到 lottery-predictions.json（供明日回测使用）
+    try:
+        predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
+        predictions = []
+        if os.path.exists(predictions_path):
+            with open(predictions_path, 'r', encoding='utf-8') as f:
+                predictions = json.load(f)
+        # 去重：同日覆盖
+        predictions = [p for p in predictions if p.get('date') != today_str]
+        today_prediction = {
+            'date': today_str,
+            'ssq_recs': ssq_recs,
+            'dlt_recs': dlt_recs,
+            'qxc_recs': qxc_recs,
+        }
+        predictions.append(today_prediction)
+        with open(predictions_path, 'w', encoding='utf-8') as f:
+            json.dump(predictions, f, ensure_ascii=False, indent=2)
+        logging.info(f"[彩票] ✅ 今日推荐已保存(供明日回测)")
+    except Exception as e:
+        logging.warning(f"[彩票] 保存推荐记录失败: {e}")
     
     return section
 
