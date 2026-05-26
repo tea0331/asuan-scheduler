@@ -1410,6 +1410,9 @@ class AlgoEngine:
             if context:
                 self._save_orchestrator_context(context)
             
+            # 🔴 闭环2: 结算昨日虚拟下注（record_bets在generate_full_daily.py中调用）
+            self.settle()
+            
             self.db.cleanup()
             print("[AlgoEngine] v3.0 Orchestrator每日更新完成")
         except ImportError:
