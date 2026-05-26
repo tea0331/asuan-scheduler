@@ -142,17 +142,6 @@ def generate_recs_dlt(analysis: Dict, kelly_bias: float = 0.0) -> List[Dict]:
         {'front': ext2_front, 'back': ext2_back, 'strategy': '扩展2(加权)'},  # P2回补注 (23%)
         {'front': cold_front, 'back': cold_back, 'strategy': '冷号注(遗漏)'},  # P3冷号注 (22%)
     ]
-
-        {'front': core_front_A, 'back': [core_back, core_back_2], 'strategy': f'核心注(加权)A'},  # P0核心注A (35%)
-        {'front': core_front_B, 'back': [core_back, core_back_2], 'strategy': f'核心注(加权)B'},  # P0核心注B (35%)
-        {'front': ext1_front, 'back': [ext1_back_1, ext1_back_2], 'strategy': '扩展1(加权)'},  # P1激进注 (20%)
-        {'front': ext2_front, 'back': [ext2_back_1, ext2_back_2], 'strategy': '扩展2(加权)'},  # P2回补注 (23%)
-        {'front': cold_front, 'back': [cold_back_1, cold_back_2], 'strategy': '冷号注(遗漏)'},  # P3冷号注 (22%)
-    ]
-
-
-# 便捷函数：一键获取大乐透推荐
-def get_dlt_recommendations(history_data: List[Dict], kelly_bias: float = 0.0) -> List[Dict]:
     """一键获取大乐透推荐
     
     Args:
