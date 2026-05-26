@@ -1186,15 +1186,27 @@ class ROITracker:
         self.db = db
 
     def settle(self, yesterday=None):
-        """结算昨日pending注"""
+        """结算昨日pending注（用内置逻辑，不依赖外部函数）"""
         if not yesterday:
             yesterday = (_now_cst() - timedelta(days=1)).strftime('%Y-%m-%d')
 
+        # 直接用 games/ 模块获取开奖数据
+        actual_data = {}
         try:
-            from lottery_analyzer import (fetch_ssq_history, fetch_dlt_history, fetch_qxc_history,
-                                           judge_prize_ssq, judge_prize_dlt, judge_prize_qxc, _get_hit_numbers)
-        except ImportError:
-            print("[Algo] 无法导入lottery_analyzer，跳过结算")
+            import games.ssq, games.dlt, games.qxc
+            games_modules = [
+                ('ssq', games.ssq.fetch_ssq_history),
+                ('dlt', games.dlt.fetch_dlt_history),
+                ('qxc', games.qxc.fetch_qxc_history)
+            ]
+            for game, fetch_fn in games_modules:
+                try:
+                    data = fetch_fn(1)
+                    if data: actual_data[game] = data[0]
+                except Exception as e:
+                    print(f"[Algo] {game} 获取开奖数据失败: {e}")
+        except ImportError as e:
+            print(f"[Algo] 导入games模块失败: {e}，跳过结算")
             return
 
         pending = self.db.get_pending_bets(date=yesterday)
@@ -1202,59 +1214,86 @@ class ROITracker:
             print(f"[Algo] {yesterday} 无pending注")
             return
 
-        actual_data = {}
-        for game, fetch_fn in [('ssq', fetch_ssq_history), ('dlt', fetch_dlt_history), ('qxc', fetch_qxc_history)]:
-            try:
-                data = fetch_fn(1)
-                if data: actual_data[game] = data[0]
-            except Exception:
-                pass
-
         settled_count = 0
         for bet in pending:
             game = bet['game']
             if game not in actual_data:
                 continue
+            
+            # 解析下注号码（可能是JSON字符串）
             numbers = json.loads(bet['numbers']) if isinstance(bet['numbers'], str) else bet['numbers']
             actual = actual_data[game]
-            prize = self._judge_prize(game, numbers, actual, judge_prize_ssq, judge_prize_dlt, judge_prize_qxc, _get_hit_numbers)
+            
+            # 计算命中（用内置简单逻辑）
+            prize = self._calc_prize(game, numbers, actual)
+            
+            # 结算（写入algo_settlements表）
             self.db.settle_bet(bet['id'], actual, prize['hit_count'], prize.get('tier', 0),
                                prize.get('name', '未中奖'), prize.get('prize', 0), bet.get('user_id', 'default'))
             settled_count += 1
+        
         print(f"[Algo] 结算{settled_count}注")
 
-    def _judge_prize(self, game, numbers, actual, judge_ssq, judge_dlt, judge_qxc, get_hit_numbers):
+    def _calc_prize(self, game, numbers, actual):
+        """内置奖级计算（不依赖外部函数）"""
         try:
             if game == 'ssq':
                 reds = numbers.get('reds', [])
                 blue = numbers.get('blue', 0)
-                actual_reds = actual.get('reds', actual.get('red', []))
+                actual_reds = actual.get('reds', [])
                 actual_blue = actual.get('blue', 0)
-                red_hits = len(get_hit_numbers(reds, actual_reds))
+                red_hits = len(set(reds) & set(actual_reds))
                 blue_hit = 1 if blue == actual_blue else 0
-                prize = judge_ssq(red_hits, blue_hit)
-                prize['hit_count'] = red_hits + blue_hit
-                return prize
+                # 双色球奖级判断
+                if red_hits == 6 and blue_hit == 1: return {'tier': 1, 'name': '一等奖', 'prize': 5000000, 'hit_count': red_hits + blue_hit}
+                elif red_hits == 6: return {'tier': 2, 'name': '二等奖', 'prize': 100000, 'hit_count': red_hits + blue_hit}
+                elif red_hits == 5 and blue_hit == 1: return {'tier': 3, 'name': '三等奖', 'prize': 3000, 'hit_count': red_hits + blue_hit}
+                elif red_hits == 5 or (red_hits == 4 and blue_hit == 1): return {'tier': 4, 'name': '四等奖', 'prize': 200, 'hit_count': red_hits + blue_hit}
+                elif red_hits == 4 or (red_hits == 3 and blue_hit == 1): return {'tier': 5, 'name': '五等奖', 'prize': 10, 'hit_count': red_hits + blue_hit}
+                elif blue_hit == 1: return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': red_hits + blue_hit}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': red_hits + blue_hit}
+            
             elif game == 'dlt':
                 front = numbers.get('front', [])
                 back = numbers.get('back', [])
-                actual_front = actual.get('front', actual.get('front_area', []))
-                actual_back = actual.get('back', actual.get('back_area', []))
-                front_hits = len(get_hit_numbers(front, actual_front))
-                back_hits = len(get_hit_numbers(back, actual_back))
-                prize = judge_dlt(front_hits, back_hits)
-                prize['hit_count'] = front_hits + back_hits
-                return prize
+                actual_front = actual.get('front', [])
+                actual_back = actual.get('back', [])
+                front_hits = len(set(front) & set(actual_front))
+                back_hits = len(set(back) & set(actual_back))
+                total_hits = front_hits + back_hits
+                # 大乐透奖级判断（完整9级）
+                if front_hits == 5 and back_hits == 2: return {'tier': 1, 'name': '一等奖', 'prize': 10000000, 'hit_count': total_hits}
+                elif front_hits == 5 and back_hits == 1: return {'tier': 2, 'name': '二等奖', 'prize': 500000, 'hit_count': total_hits}
+                elif front_hits == 5 or (front_hits == 4 and back_hits == 2): return {'tier': 3, 'name': '三等奖', 'prize': 10000, 'hit_count': total_hits}
+                elif (front_hits == 4 and back_hits == 1) or (front_hits == 3 and back_hits == 2): return {'tier': 4, 'name': '四等奖', 'prize': 3000, 'hit_count': total_hits}
+                elif front_hits == 4 or (front_hits == 3 and back_hits == 1) or (front_hits == 2 and back_hits == 2): return {'tier': 5, 'name': '五等奖', 'prize': 300, 'hit_count': total_hits}
+                elif front_hits == 3 or (front_hits == 2 and back_hits == 1) or (front_hits == 1 and back_hits == 2): return {'tier': 6, 'name': '六等奖', 'prize': 200, 'hit_count': total_hits}
+                elif (front_hits == 2 and back_hits == 0) or (front_hits == 1 and back_hits == 1) or (front_hits == 0 and back_hits == 2): return {'tier': 7, 'name': '七等奖', 'prize': 100, 'hit_count': total_hits}
+                elif (front_hits == 1 and back_hits == 0) or (front_hits == 0 and back_hits == 1): return {'tier': 8, 'name': '八等奖', 'prize': 15, 'hit_count': total_hits}
+                elif front_hits == 0 and back_hits == 0: return {'tier': 9, 'name': '九等奖', 'prize': 5, 'hit_count': total_hits}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
+            
             elif game == 'qxc':
-                digits = numbers.get('digits', [0]*7)
-                actual_digits = actual.get('digits', actual.get('qxc', [0]*7))
+                digits = numbers.get('digits', [])
+                actual_digits = actual.get('digits', [])
                 if isinstance(actual_digits, str): actual_digits = [int(d) for d in actual_digits]
-                digit_hits = sum(1 for i in range(7) if i < len(digits) and i < len(actual_digits) and digits[i] == actual_digits[i])
-                prize = judge_qxc(digit_hits)
-                prize['hit_count'] = digit_hits
-                return prize
+                if isinstance(digits, str): digits = [int(d) for d in digits]
+                # 逐位对比（位置相关）
+                hit_count = 0
+                for i in range(min(len(digits), len(actual_digits), 7)):
+                    if digits[i] == actual_digits[i]:
+                        hit_count += 1
+                # 七星彩奖级判断（完整6级，位置相关）
+                if hit_count == 7: return {'tier': 1, 'name': '一等奖', 'prize': 5000000, 'hit_count': hit_count}
+                elif hit_count == 6: return {'tier': 2, 'name': '二等奖', 'prize': 50000, 'hit_count': hit_count}
+                elif hit_count == 5: return {'tier': 3, 'name': '三等奖', 'prize': 5000, 'hit_count': hit_count}
+                elif hit_count == 4: return {'tier': 4, 'name': '四等奖', 'prize': 500, 'hit_count': hit_count}
+                elif hit_count == 3: return {'tier': 5, 'name': '五等奖', 'prize': 30, 'hit_count': hit_count}
+                elif hit_count == 2: return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': hit_count}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': hit_count}
         except Exception as e:
-            print(f"[Algo] 奖级判定失败: {e}")
+            print(f"[Algo] 奖级计算失败: {e}")
+        # 异常时返回未中奖（字典，不是字符串）
         return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': 0}
 
     def calc_daily_roi(self, date):
@@ -1285,14 +1324,25 @@ class ROITracker:
             avg_hit = sum(s['hit_count'] for s in all_settled) / len(all_settled)
             self.db.save_roi_daily(date, 'default', 'all', total_cost, total_prize, roi, hit_rate, avg_hit, len(all_settled))
 
-    def record_bets(self, date, game, recs, kelly_map):
-        for rec in recs:
-            strategy = rec.get('strategy', 'P0核心注')
+    def record_bets(self, date, game, recs, kelly_map, user_id='default'):
+        """记录推荐到 algo_bets 表（供结算使用）"""
+        
+        kelly = kelly_map.get(game, 2)
+        for r in recs:
             numbers = {}
-            if game == 'ssq': numbers = {'reds': rec.get('reds', []), 'blue': rec.get('blue', 1)}
-            elif game == 'dlt': numbers = {'front': rec.get('front', []), 'back': rec.get('back', [])}
-            elif game == 'qxc': numbers = {'digits': rec.get('digits', [0]*7)}
-            self.db.save_bet('default', date, game, strategy, numbers, 2, kelly_map.get(game, 0), rec.get('ev', 0))
+            if game == 'ssq':
+                numbers = {'reds': r.get('reds', []), 'blue': r.get('blue', 0)}
+            elif game == 'dlt':
+                numbers = {'front': r.get('front', []), 'back': r.get('back', [])}
+            elif game == 'qxc':
+                numbers = {'digits': r.get('digits', [])}
+            
+            cost = kelly * 2  # 简化成本计算
+            # save_bet内部会json.dumps(numbers)，这里传dict而非字符串
+            self.db.save_bet(user_id, date, game, r.get('strategy', ''), 
+                       numbers, cost, kelly, r.get('ev', 0))
+        
+        print(f"[ROI] 已记录 {len(recs)}注 ({game}) 用户={user_id}")
 
     def get_roi_summary(self, days=7):
         summary = {}
@@ -1396,6 +1446,13 @@ class AlgoEngine:
         self.roi_tracker.settle(yesterday)
         self.roi_tracker.calc_daily_roi(yesterday)
 
+    def daily_evolve(self):
+        """每日进化便捷入口（暂空壳，等3天数据积累后接入真实GEPA进化）"""
+        # TODO: 接入gepa.evolve()，用algo_settlements的真实ROI数据驱动权重演化
+        # 当前仅由Orchestrator._step_evolve()调整step_size
+        print("[AlgoEngine] GEPA权重进化暂未接入（需3天结算数据后启用）")
+        return None
+
     def daily_update(self):
         """完整每日流程: settle → evolve → cleanup
         v3.0: 尝试使用Orchestrator，失败则降级到原有流程
@@ -1410,9 +1467,8 @@ class AlgoEngine:
             if context:
                 self._save_orchestrator_context(context)
             
-            # 🔴 闭环2: 结算昨日虚拟下注（record_bets在generate_full_daily.py中调用）
+            # 闭环2: 结算昨日虚拟下注
             self.settle()
-            
             self.db.cleanup()
             print("[AlgoEngine] v3.0 Orchestrator每日更新完成")
         except ImportError:
@@ -1420,7 +1476,13 @@ class AlgoEngine:
             self.settle()
             self.db.cleanup()
             print("[AlgoEngine] v2.0 降级模式每日更新完成")
-    
+        except Exception as e:
+            print(f"[AlgoEngine] Orchestrator异常: {e}，降级执行")
+            try:
+                self.settle()
+                self.db.cleanup()
+            except:
+                pass
     def _save_orchestrator_context(self, context):
         """将Orchestrator输出的关键信号写入DB，供lottery_analyzer读取"""
         today = _now_cst().strftime('%Y-%m-%d')
@@ -1599,3 +1661,65 @@ if __name__ == '__main__':
     weights = selector.get_current_weights(db, 'ssq')
     print(f"✓ 策略权重: {weights}")
     print("\n自检通过 ✓")
+
+
+    def daily_evolve(self):
+        """每日进化便捷入口（自动收集数据）"""
+        from games.ssq import judge_prize_ssq, get_hit_numbers as get_hit_ssq
+        from games.dlt import judge_prize_dlt, get_hit_numbers as get_hit_dlt
+        from games.qxc import judge_prize_qxc, get_hit_numbers as get_hit_qxc
+        
+        # 1. 收集回测数据（最近15天）
+        backtest_data = self.db.get_backtest_history(days=15)
+        
+        # 2. 收集AI推荐数据（从 lottery-predictions.json）
+        import json, os
+        predictions_data = {}
+        try:
+            with open('lottery-predictions.json', 'r') as f:
+                preds = json.load(f)
+            for p in preds:
+                date = p.get('date')
+                if date:
+                    predictions_data[date] = {
+                        'ssq': p.get('ssq_recs', []),
+                        'dlt': p.get('dlt_recs', []),
+                        'qxc': p.get('qxc_recs', [])
+                    }
+        except:
+            print("[AlgoEngine] 无 lottery-predictions.json，跳过进化")
+            return None
+        
+        # 3. 策略映射
+        strategy_map = {
+            'ssq': {'核心注': '核心注', '扩展1': '扩展1', '扩展2': '扩展2', '冷号注': '冷号注'},
+            'dlt': {'核心注': '核心注', '扩展1': '扩展1', '扩展2': '扩展2', '冷号注': '冷号注'},
+            'qxc': {'核心注': '核心注', '扩展1': '扩展1', '扩展2': '扩展2', '冷号注': '冷号注'}
+        }
+        
+        # 4. 默认配置
+        default_config = DEFAULT_WEIGHT_CONFIG
+        
+        # 5. 分彩种进化
+        for game, judge_fn, hit_fn in [
+            ('ssq', judge_prize_ssq, get_hit_ssq),
+            ('dlt', judge_prize_dlt, get_hit_dlt),
+            ('qxc', judge_prize_qxc, get_hit_qxc)
+        ]:
+            game_backtest = [b for b in backtest_data if b.get('game') == game]
+            game_preds = {d: predictions_data[d].get(game, []) for d in predictions_data}
+            
+            if len(game_backtest) >= 3:
+                evolved = self.gepa.evolve(
+                    game_backtest, game_preds,
+                    judge_fn, hit_fn,
+                    strategy_map.get(game, {}), default_config
+                )
+                if evolved:
+                    print(f"[AlgoEngine] {game} 进化完成")
+        
+        # 6. 保存最终配置
+        config = self.db.load_weight_config()
+        self.db.sync_to_weight_config(config)
+        print(f"[AlgoEngine] 每日进化完成 → {config.get('algo_version', 'v3.0')}")
+        return config
