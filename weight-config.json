@@ -1,6 +1,6 @@
 {
-  "freq": 0.3159,
-  "miss": 0.2022,
+  "freq": 0.3209,
+  "miss": 0.1972,
   "trend": 0.3512,
   "zone": 0.1307,
   "cold_miss_front": 0.394,
@@ -11,7 +11,7 @@
   "cold_freq_back": 0.2955,
   "neighbor_bonus": 0.04999999999999999,
   "gamma": 0.8099999999999999,
-  "version": 11,
+  "version": 12,
   "algo_version": "v8.1",
   "evolution_log": [
     {
@@ -317,6 +317,20 @@
       },
       "is_major": false,
       "algo_version": "v7.1"
+    },
+    {
+      "date": "2026-05-27",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 259,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 热号领先 → freq +0.005, miss -0.005",
+        "[qxc] 热号领先 → freq +0.005, miss -0.005"
+      ],
+      "final_signals": {
+        "freq": 0.005,
+        "miss": -0.005
+      }
     },
     {
       "date": "2026-05-27",

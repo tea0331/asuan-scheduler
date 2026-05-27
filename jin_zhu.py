@@ -8,8 +8,8 @@
 架构四层：
   Model Layer   → weight-config.json (唯一模型参数出处)
   Generation Layer → generate_ssq/dlt/qxc (策略差异化+随机扰动+邻号加分)
-  Evaluation Layer → settle/backtest (结果驱动进化 + 网站结算桥)
-  Evolution Layer  → GEPA (写回Model，下一代自动生效 + 网站虚拟用户信号)
+  Evaluation Layer → settle/backtest (结果驱动进化 + 系统结算)
+  Evolution Layer  → GEPA (写回Model，下一代自动生效 + 系统虚拟用户信号)
 
 v8.3 统一虚拟用户:
   - generate_recs() 支持 model_override (虚拟用户各人参数化生成)
@@ -157,7 +157,7 @@ class JinZhu:
         # 临时覆盖模型参数（虚拟用户各人有不同策略参数）
         _orig_model = None
         if model_override:
-            _orig_model = dict(self.model)
+            _orig_model = json.loads(json.dumps(self.model))  # 深拷贝防污染
             for k, v in model_override.items():
                 if k in self.model:
                     self.model[k] = v
@@ -745,7 +745,7 @@ class JinZhu:
     # ============================================================
 
     def settle(self, game: str = None, date: str = None):
-        """结算指定日期的推荐，写入 algo_settlements + 网站predictions"""
+        """结算指定日期的推荐，写入 algo_settlements（含default和虚拟用户）"""
         from algo_module import AlgoDB
         db = AlgoDB()
 
@@ -793,7 +793,7 @@ class JinZhu:
 
         conn = db._get_conn()
         rows = conn.execute(
-            "SELECT id, numbers, strategy FROM algo_bets WHERE date=? AND game=? AND status='pending'",
+            "SELECT id, numbers, strategy, user_id, cost FROM algo_bets WHERE date=? AND game=? AND status='pending'",
             (date, game)
         ).fetchall()
         conn.close()
@@ -812,17 +812,19 @@ class JinZhu:
         for row in rows:
             numbers = json.loads(row['numbers'])
             strategy = row['strategy']
+            bet_user_id = row['user_id']  # 从bet记录读取真实user_id
+            bet_cost = row['cost'] or 2    # 从bet记录读取cost
 
             prize_info = engine._calc_prize(game, numbers, actual)
 
-            total_cost += 2
+            total_cost += bet_cost
             total_prize += prize_info.get('prize', 0)
 
             conn = db._get_conn()
             actual_str = json.dumps(actual, ensure_ascii=False)
             conn.execute(
                 "INSERT INTO algo_settlements (bet_id, user_id, actual_numbers, hit_count, prize_tier, prize_name, prize_amount, settled_at) VALUES (?,?,?,?,?,?,?,?)",
-                (row['id'], 'default', actual_str, prize_info.get('hit_count', 0),
+                (row['id'], bet_user_id, actual_str, prize_info.get('hit_count', 0),
                  prize_info.get('tier', 0), prize_info.get('name', '未中奖'),
                  prize_info.get('prize', 0), _now_cst().strftime('%Y-%m-%d %H:%M:%S'))
             )
@@ -990,7 +992,8 @@ class JinZhu:
         games = [game] if game else ['ssq', 'dlt', 'qxc']
 
         # P0修复: 收集所有彩种的进化信号，最后合并投票
-        all_signals = defaultdict(float)  # {param_key: delta}
+        game_signals = defaultdict(float)  # 彩种信号
+        vu_signals_dict = defaultdict(float)  # 虚拟用户信号（独立，不被彩种数稀释）
         all_changes = []
         total_samples = 0
 
@@ -998,17 +1001,17 @@ class JinZhu:
             try:
                 signals, changes, n_samples = self._collect_evolve_signals(db, g)
                 for k, v in signals.items():
-                    all_signals[k] += v
+                    game_signals[k] += v
                 all_changes.extend(changes)
                 total_samples += n_samples
             except Exception as e:
                 logging.error(f"[Evolve] {g} 信号收集失败: {e}")
 
-        # 系统虚拟用户进化信号（50人按策略类型命中率加权）
+        # 系统虚拟用户进化信号（50人按策略类型命中率加权，独立不稀释）
         try:
-            vu_signals, vu_changes, vu_samples = self._collect_vuser_evolve_signals()
-            for k, v in vu_signals.items():
-                all_signals[k] += v
+            vu_sigs, vu_changes, vu_samples = self._collect_vuser_evolve_signals()
+            for k, v in vu_sigs.items():
+                vu_signals_dict[k] += v
             all_changes.extend(vu_changes)
             total_samples += vu_samples
         except Exception as e:
@@ -1024,8 +1027,13 @@ class JinZhu:
             logging.info(f"[Evolve] 策略差异不显著，跳过进化")
             return {'status': '差异不显著', 'samples': total_samples}
 
-        # 合并3彩种投票：取平均delta
-        final_signals = {k: v / len(games) for k, v in all_signals.items() if v != 0}
+        # 合并信号：彩种信号取平均delta，虚拟用户信号独立直接叠加
+        final_signals = {}
+        for k, v in game_signals.items():
+            if v != 0:
+                final_signals[k] = v / len(games)
+        for k, v in vu_signals_dict.items():
+            final_signals[k] = final_signals.get(k, 0) + v  # VU信号不被稀释
 
         # 应用delta（带边界保护）
         for k, delta in final_signals.items():
@@ -1047,11 +1055,6 @@ class JinZhu:
                     lo, hi = PARAM_BOUNDS[k]
                     self.model[k] = max(lo, min(hi, self.model[k]))
             all_changes.append(f"归一化修正: {total:.4f}→1.0")
-
-        # cold_* 三维也做归一化
-        for prefix in ['cold_miss_front', 'cold_cycle_front', 'cold_freq_front',
-                       'cold_miss_back', 'cold_cycle_back', 'cold_freq_back']:
-            pass  # 三维各自有边界保护，不做强制归一化
 
         # 更新版本号
         self.model['version'] = self.model.get('version', 1) + 1
@@ -1149,7 +1152,8 @@ class JinZhu:
         return True
 
     # ============================================================
-    #  系统虚拟用户进化信号 — 50人vu01~vu50
+    # ============================================================
+    #  Daily Loop — 每日闭环
     # ============================================================
 
     def daily_run(self, kelly_bias: float = 0.0) -> dict:
