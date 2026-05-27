@@ -1069,7 +1069,7 @@ class JinZhu:
         from algo_module import AlgoDB, ROITracker
         db = AlgoDB()
         tracker = ROITracker(db)
-        kelly_map = {'ssq': 0, 'dlt': 0, 'qxc': 0}
+        kelly_map = {'ssq': 1, 'dlt': 1, 'qxc': 1}  # 1倍=2元/注
 
         for game in ['ssq', 'dlt', 'qxc']:
             recs = result.get(game, [])
