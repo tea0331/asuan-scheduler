@@ -164,7 +164,7 @@ class JinZhu:
             fetch_map = {
                 'ssq': lambda: __import__('lottery_analyzer', fromlist=['fetch_ssq_history']).fetch_ssq_history(15),
                 'dlt': lambda: __import__('lottery_analyzer', fromlist=['fetch_dlt_history']).fetch_dlt_history(15),
-                'qxc': lambda: __import__('lottery_analyzer', fromlist=['fetch_qxc_history']).fetch_qxc_history(15),
+                'qxc': lambda: __import__('lottery_analyzer', fromlist=['fetch_qxc_history']).fetch_qxc_history(50),
             }
             return fetch_map[game]()
         except Exception as e:
