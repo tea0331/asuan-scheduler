@@ -432,7 +432,7 @@ def generate_lottery_section():
     # ===== 七星彩 =====
     try:
         qxc_data = games.qxc.fetch_qxc_history(15)
-        section += "### 🟢 七星彩\n> ℹ️ 七星彩7位独立0-9，允许重复数字，符合官方规则\n\n"
+        section += "### 🟢 七星彩\n\n"
         section += "| 期号 | 号码 |\n|------|------|\n"
         for d in qxc_data[:3]:
             digits = d.get('digits', d.get('numbers', []))
@@ -611,7 +611,7 @@ def generate_lottery_section():
     # 七星彩
     try:
         qxc_data = games.qxc.fetch_qxc_history(15)
-        section += "### 🟢 七星彩\n> ℹ️ 七星彩7位独立0-9，允许重复数字，符合官方规则\n\n"
+        section += "### 🟢 七星彩\n\n"
         section += "| 期号 | 号码 |\n|------|------|\n"
         for d in qxc_data[:3]:
             digits = d.get('digits', d.get('numbers', []))
