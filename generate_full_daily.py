@@ -50,134 +50,131 @@ def send_email(subject, body):
         logging.error(f"❌ 邮件发送失败: {e}")
         return False
 
-def _search_news(keyword, count=3):
-    """用搜索引擎抓取真实新闻"""
+def _fetch_rss(url, count=5):
+    """从RSS源获取新闻"""
     try:
-        url = "https://news.baidu.com/ns"
-        params = {
-            "word": keyword,
-            "tn": "news",
-            "from": "news",
-            "cl": "2",
-            "rn": str(count),
-        }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return []
-        
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        import feedparser
+        feed = feedparser.parse(url)
         results = []
-        for item in soup.select('div.result')[:count]:
-            title_tag = item.select_one('h3 a')
-            source_tag = item.select_one('p.c-author') or item.select_one('span.c-color-gray')
-            summary_tag = item.select_one('div.c-summary') or item.select_one('div.c-abstract')
-            
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            source = source_tag.get_text(strip=True) if source_tag else ""
-            summary = summary_tag.get_text(strip=True) if summary_tag else ""
-            
+        for entry in feed.entries[:count]:
+            title = entry.get('title', '').strip()
+            summary = entry.get('summary', '').strip()
+            # 清理HTML标签
+            if summary:
+                from bs4 import BeautifulSoup
+                summary = BeautifulSoup(summary, 'html.parser').get_text(strip=True)
             if title:
                 results.append({
                     'title': title,
-                    'source': source,
-                    'summary': summary.replace('\n', ' ').strip()
+                    'source': entry.get('author', entry.get('source', {}).get('title', '')),
+                    'summary': summary[:200]
                 })
         return results
     except Exception as e:
-        logging.warning(f"[新闻] 搜索'{keyword}'失败: {e}")
+        logging.warning(f"[新闻] RSS抓取失败({url}): {e}")
         return []
 
 
-def _search_news_multi(keyword, count=5):
-    """多源搜索新闻（百度+360），取最好的结果"""
-    results = _search_news(keyword, count)
-    if len(results) < 2:
-        # 补充：用简单API
-        try:
-            url = f"https://www.so.com/s"
-            params = {"q": keyword, "tn": "news", "count": str(count)}
-            headers = {"User-Agent": "Mozilla/5.0"}
-            resp = requests.get(url, params=params, headers=headers, timeout=10)
-            if resp.status_code == 200:
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                for item in soup.select('div.res-title')[:count]:
-                    a = item.select_one('a')
-                    if a:
-                        title = a.get_text(strip=True)
-                        if title and not any(r['title'] == title for r in results):
-                            results.append({'title': title, 'source': '', 'summary': ''})
-        except:
-            pass
-    return results[:count]
+def _fetch_baidu_hot(count=10):
+    """抓取百度热搜榜"""
+    try:
+        url = "https://top.baidu.com/board?tab=realtime"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return []
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        results = []
+        for item in soup.select('div.c-single-text-ellipsis')[:count]:
+            title = item.get_text(strip=True)
+            if title:
+                results.append({'title': title, 'source': '百度热搜', 'summary': ''})
+        return results
+    except Exception as e:
+        logging.warning(f"[新闻] 百度热搜抓取失败: {e}")
+        return []
 
 
 def generate_news_section():
-    """基于真实搜索生成新闻日报（非AI编造）"""
-    logging.info("[新闻] 开始抓取真实新闻...")
+    """基于RSS+热搜生成真实新闻日报"""
+    logging.info("[新闻] 开始抓取真实新闻(RSS+热搜)...")
+    
+    # 数据源
+    KR36_RSS = 'https://36kr.com/feed'          # 36氪：科技/商业/创业
+    ITHOME_RSS = 'https://www.ithome.com/rss/'   # IT之家：科技/AI
     
     sections = []
     
-    # 1. AI/科技资讯
+    # 1. AI/科技资讯（IT之家 + 36氪）
     sections.append("## 一、每日资讯\n")
     sections.append("### 🤖 AI/科技\n")
-    ai_news = _search_news_multi("人工智能 AI 科技 2026", 3)
-    if ai_news:
-        for n in ai_news:
-            sections.append(f"- **{n['title']}**")
-            if n['summary']:
-                sections.append(f"  > {n['summary'][:100]}")
-    else:
-        sections.append("- （今日暂未抓取到AI/科技新闻）")
+    tech_news = _fetch_rss(ITHOME_RSS, 5) + _fetch_rss(KR36_RSS, 3)
+    # 按关键词过滤AI相关
+    ai_keywords = ['AI', '人工智能', '芯片', '模型', '大模型', '英伟达', '华为', '算力', 'DeepSeek', 'GPT', 'LLM', '机器人']
+    ai_items = [n for n in tech_news if any(kw.lower() in n['title'].lower() for kw in ai_keywords)]
+    if not ai_items:
+        ai_items = tech_news[:3]  # 无精确匹配则取前3条
+    for n in ai_items[:3]:
+        sections.append(f"- **{n['title']}**")
+        if n['summary']:
+            sections.append(f"  > {n['summary'][:120]}")
     
-    # 2. 商业/金融
+    # 2. 商业/金融（36氪）
     sections.append("\n### 💰 商业/金融\n")
-    biz_news = _search_news_multi("商业 金融 投资 创业 2026", 3)
-    if biz_news:
-        for n in biz_news:
-            sections.append(f"- **{n['title']}**")
-            if n['summary']:
-                sections.append(f"  > {n['summary'][:100]}")
-    else:
-        sections.append("- （今日暂未抓取到商业/金融新闻）")
+    biz_keywords = ['融资', '上市', '投资', '营收', '商业', '创业', '市场', '消费', '经济', '公司']
+    kr36_all = _fetch_rss(KR36_RSS, 15)
+    biz_items = [n for n in kr36_all if any(kw in n['title'] for kw in biz_keywords)]
+    if not biz_items:
+        biz_items = kr36_all[3:6]  # 跳过可能的AI类，取后面的
+    for n in biz_items[:3]:
+        sections.append(f"- **{n['title']}**")
+        if n['summary']:
+            sections.append(f"  > {n['summary'][:120]}")
     
-    # 3. 热搜/时事
+    # 3. 热搜/时事（百度热搜）
     sections.append("\n### 🔥 热搜/时事\n")
-    hot_news = _search_news_multi("热搜 今日 要闻", 3)
-    if hot_news:
-        for n in hot_news:
-            sections.append(f"- **{n['title']}**")
-    else:
-        sections.append("- （今日暂未抓取到热搜新闻）")
+    hot_news = _fetch_baidu_hot(10)
+    # 过滤掉娱乐类
+    skip_keywords = ['明星', '综艺', '恋情', '离婚', '结婚', '出轨', '八卦']
+    hot_items = [n for n in hot_news if not any(kw in n['title'] for kw in skip_keywords)]
+    for n in hot_items[:5]:
+        sections.append(f"- {n['title']}")
     
-    # 4. 市场缺口扫描
+    # 4. 市场缺口扫描（基于36氪+IT之家内容推理）
     sections.append("\n## 二、市场缺口扫描\n")
     sections.append("### 固定领域缺口\n")
+    all_titles = [n['title'] for n in tech_news + kr36_all]
     for domain in ["算力芯片", "AI应用", "跨境电商"]:
-        domain_news = _search_news_multi(f"{domain} 缺口 机会 2026", 2)
-        if domain_news:
-            n = domain_news[0]
-            sections.append(f"- **{domain}**：{n['title']}")
+        domain_items = [n for n in tech_news + kr36_all if domain in n['title'] or any(kw in n['title'] for kw in {'芯片', '算力'} if domain == '算力芯片') or any(kw in n['title'] for kw in {'应用', '落地', '场景'} if domain == 'AI应用')]
+        if domain_items:
+            sections.append(f"- **{domain}**：{domain_items[0]['title']}")
         else:
             sections.append(f"- **{domain}**：暂无明显缺口信号")
     
     sections.append("\n### 动态缺口\n")
-    dynamic_news = _search_news_multi("新兴市场 供需错配 投资机会", 3)
-    for n in dynamic_news:
+    gap_keywords = ['缺口', '机会', '蓝海', '空白', '新兴', '蓝海', '下沉', '出海']
+    gap_items = [n for n in kr36_all if any(kw in n['title'] for kw in gap_keywords)]
+    for n in gap_items[:3]:
         sections.append(f"- {n['title']}")
+    if not gap_items:
+        sections.append("- 今日暂无动态缺口信号")
     
     # 5. 逆潮观察
     sections.append("\n## 三、逆潮观察\n")
-    contra_news = _search_news_multi("行业下滑 裁员 逆势", 3)
-    for n in contra_news:
+    contra_keywords = ['裁员', '关停', '下滑', '暴跌', '亏损', '倒闭', '退市', '逆势']
+    contra_items = [n for n in tech_news + kr36_all if any(kw in n['title'] for kw in contra_keywords)]
+    for n in contra_items[:3]:
         sections.append(f"- {n['title']}")
+    if not contra_items:
+        sections.append("- 今日暂无明显逆潮信号")
     
-    # 6. 用混元API做深度分析（基于真实新闻，非凭空编造）
+    # 6. 用混元API做深度分析（基于真实新闻素材）
     news_digest = "\n".join(sections)
+    if not news_digest.strip() or len(news_digest) < 50:
+        logging.warning("[新闻] 新闻素材过少，跳过深度分析")
+        return "\n".join(sections)
+    
     analysis_prompt = f"""基于以下今日真实新闻摘要，请补充深度分析：
 
 {news_digest}
@@ -217,7 +214,7 @@ def generate_news_section():
         sections.append("\n## 四、深度分析\n（今日AI分析生成失败）\n")
     
     content = "\n".join(sections)
-    logging.info(f"[新闻] ✅ 日报新闻部分完成: {len(content)}字符（基于真实搜索+AI分析）")
+    logging.info(f"[新闻] ✅ 日报新闻部分完成: {len(content)}字符")
     return content
 
 def generate_lottery_section():
