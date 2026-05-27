@@ -48,7 +48,7 @@ DEFAULT_MODEL = {
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
     'neighbor_bonus': 0.03, 'gamma': 0.88,
-    'version': 1, 'algo_version': 'v4.0-JinZhu', 'evolution_log': [],
+    'version': 1, 'algo_version': 'v8.0', 'evolution_log': [],
     'lock_config': {},
 }
 
@@ -896,7 +896,7 @@ class JinZhu:
 
         # 更新版本号
         self.model['version'] = self.model.get('version', 1) + 1
-        self.model['algo_version'] = 'v4.0-JinZhu'
+        self.model['algo_version'] = 'v8.0'
 
         # 记录进化日志
         log_entry = {
