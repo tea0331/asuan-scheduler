@@ -6,7 +6,7 @@
 2. 缓存3彩种历史数据（仅3次网络请求）
 3. 每用户每彩种用 JinZhu + model_override 生成5注推荐
 4. 写入 algo_state.db（供JinZhu结算/进化，user_id = vu01~vu50）
-5. 策略命中数据反哺JinZhu evolve（通过_collect_system_vuser_signals）
+5. 策略命中数据反哺JinZhu evolve（通过_collect_vuser_evolve_signals）
 
 策略类型分布(50人):
   - lhs(10人): 拉丁超立方采样，均匀探索参数空间
@@ -44,7 +44,7 @@ BASE = {
     'freq': 0.30, 'miss': 0.25, 'trend': 0.25, 'zone': 0.20,
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
-    'neighbor_bonus': 0.03, 'gamma': 0.85,
+    'neighbor_bonus': 0.03, 'gamma': 0.88,
 }
 
 

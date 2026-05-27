@@ -321,7 +321,7 @@ def generate_lottery_section():
 
     # ===== 双色球 =====
     try:
-        ssq_data = games.ssq.fetch_ssq_history(15)
+        ssq_data = jz._fetch_history('ssq')
         section += "### 🔴 双色球\n\n"
         section += "| 期号 | 红球 | 蓝球 |\n|------|------|------|\n"
         for d in ssq_data[:3]:
@@ -377,7 +377,7 @@ def generate_lottery_section():
 
     # ===== 大乐透 =====
     try:
-        dlt_data = games.dlt.fetch_dlt_history(15)
+        dlt_data = jz._fetch_history('dlt')
         section += "### 🟡 大乐透\n\n"
         section += "| 期号 | 前区 | 后区 |\n|------|------|------|\n"
         for d in dlt_data[:3]:
@@ -431,7 +431,7 @@ def generate_lottery_section():
 
     # ===== 七星彩 =====
     try:
-        qxc_data = games.qxc.fetch_qxc_history(15)
+        qxc_data = jz._fetch_history('qxc')
         section += "### 🟢 七星彩\n\n"
         section += "| 期号 | 号码 |\n|------|------|\n"
         for d in qxc_data[:3]:
