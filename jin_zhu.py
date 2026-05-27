@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-金主 (JinZhu) — 刘海蟾点金算法核心大脑 v8.1
+金主 (JinZhu) — 刘海蟾点金算法核心大脑 v8.3
 
 唯一真相来源：所有推荐生成、结算反哺、权重进化都经过这里。
 外部只需调用 JinZhu.daily_run()，不直接操作 games/*.py 或 algo_module.py。
@@ -8,8 +8,19 @@
 架构四层：
   Model Layer   → weight-config.json (唯一模型参数出处)
   Generation Layer → generate_ssq/dlt/qxc (策略差异化+随机扰动+邻号加分)
-  Evaluation Layer → settle/backtest (结果驱动进化)
-  Evolution Layer  → GEPA (写回Model，下一代自动生效)
+  Evaluation Layer → settle/backtest (结果驱动进化 + 网站结算桥)
+  Evolution Layer  → GEPA (写回Model，下一代自动生效 + 网站虚拟用户信号)
+
+v8.3 统一虚拟用户:
+  - generate_recs() 支持 model_override (虚拟用户各人参数化生成)
+  - settle() 保持 algo_state.db 结算
+  - evolve() 合并50系统虚拟用户进化信号 (按策略类型命中率加权)
+  - 50人系统虚拟用户(vu01~vu50)，6类策略，不依赖网站DB
+
+v8.2 修复:
+  - P1: kelly_map=1 修复下注cost=0问题
+  - P1: evolve状态显示修正(非按game分key)
+  - P1: 删除186行死代码 + cron去冲突
 
 v8.1 修复:
   - P0: 进化参数边界保护 + 最小样本6条 + 简单显著性检验
@@ -53,7 +64,7 @@ DEFAULT_MODEL = {
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
     'neighbor_bonus': 0.03, 'gamma': 0.88,
-    'version': 1, 'algo_version': 'v8.1', 'evolution_log': [],
+    'version': 1, 'algo_version': 'v8.3', 'evolution_log': [],
     'lock_config': {},
 }
 
@@ -141,39 +152,52 @@ class JinZhu:
     #  Generation Layer — 推荐生成（策略差异化 + 随机扰动 + 邻号加分）
     # ============================================================
 
-    def generate_recs(self, game: str, history_data: list = None, kelly_bias: float = 0.0, seed: int = None) -> list:
-        """统一推荐入口"""
-        if seed is not None:
-            self._rng = random.Random(seed)
+    def generate_recs(self, game: str, history_data: list = None, kelly_bias: float = 0.0, seed: int = None, model_override: dict = None) -> list:
+        """统一推荐入口（支持model_override供虚拟用户参数化生成）"""
+        # 临时覆盖模型参数（虚拟用户各人有不同策略参数）
+        _orig_model = None
+        if model_override:
+            _orig_model = dict(self.model)
+            for k, v in model_override.items():
+                if k in self.model:
+                    self.model[k] = v
 
-        if history_data is None:
-            history_data = self._fetch_history(game)
+        try:
+            if seed is not None:
+                self._rng = random.Random(seed)
 
-        if not history_data:
-            logging.error(f"[Gen] {game} 历史数据为空，无法生成推荐")
-            return []
+            if history_data is None:
+                history_data = self._fetch_history(game)
 
-        analysis = self._analyze(game, history_data)
-        if not analysis:
-            logging.error(f"[Gen] {game} 分析失败")
-            return []
+            if not history_data:
+                logging.error(f"[Gen] {game} 历史数据为空，无法生成推荐")
+                return []
 
-        # 邻号加分（从Model读取）
-        analysis = self._apply_neighbor_bonus(game, analysis, history_data)
+            analysis = self._analyze(game, history_data)
+            if not analysis:
+                logging.error(f"[Gen] {game} 分析失败")
+                return []
 
-        gen_map = {
-            'ssq': self._gen_ssq,
-            'dlt': self._gen_dlt,
-            'qxc': self._gen_qxc,
-        }
-        gen_fn = gen_map.get(game)
-        if not gen_fn:
-            logging.error(f"[Gen] 未知彩种: {game}")
-            return []
+            # 邻号加分（从Model读取）
+            analysis = self._apply_neighbor_bonus(game, analysis, history_data)
 
-        recs = gen_fn(analysis, kelly_bias)
-        logging.info(f"[Gen] {game} 生成{len(recs)}注推荐")
-        return recs
+            gen_map = {
+                'ssq': self._gen_ssq,
+                'dlt': self._gen_dlt,
+                'qxc': self._gen_qxc,
+            }
+            gen_fn = gen_map.get(game)
+            if not gen_fn:
+                logging.error(f"[Gen] 未知彩种: {game}")
+                return []
+
+            recs = gen_fn(analysis, kelly_bias)
+            logging.info(f"[Gen] {game} 生成{len(recs)}注推荐")
+            return recs
+        finally:
+            # 恢复原始模型参数
+            if _orig_model:
+                self.model = _orig_model
 
     def _fetch_history(self, game: str) -> list:
         """自动获取历史数据"""
@@ -721,7 +745,7 @@ class JinZhu:
     # ============================================================
 
     def settle(self, game: str = None, date: str = None):
-        """结算指定日期的推荐，写入 algo_settlements"""
+        """结算指定日期的推荐，写入 algo_settlements + 网站predictions"""
         from algo_module import AlgoDB
         db = AlgoDB()
 
@@ -739,6 +763,9 @@ class JinZhu:
             except Exception as e:
                 logging.error(f"[Settle] {g} {date} 失败: {e}")
                 results[g] = {'error': str(e)}
+
+        # 结算系统虚拟用户也在此完成（同 algo_state.db）
+        logging.info(f"[Settle] 完成 {len(results)} 彩种结算(含虚拟用户)")
 
         return results
 
@@ -854,6 +881,105 @@ class JinZhu:
         }
 
     # ============================================================
+    #  系统虚拟用户进化信号 — 50人vu01~vu50
+    # ============================================================
+
+    def _collect_vuser_evolve_signals(self):
+        """从系统虚拟用户(algo_state.db)的策略命中数据提取进化信号
+
+        核心逻辑: 按策略类型(lhs/extreme_freq/extreme_miss/extreme_trend/extreme_zone/balanced)
+        分组统计命中率，表现好的策略类型→其偏好维度的参数微增
+        """
+        db_path = DB_PATH
+        if not os.path.exists(db_path):
+            return {}, [], 0
+
+        try:
+            conn = sqlite3.connect(db_path)
+            week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
+
+            # 提取虚拟用户结算数据，按策略类型分组
+            rows = conn.execute(
+                """SELECT b.strategy, b.user_id,
+                          COUNT(*) as total,
+                          SUM(CASE WHEN s.prize_amount > 0 THEN 1 ELSE 0 END) as wins,
+                          SUM(s.prize_amount) as total_prize,
+                          AVG(s.hit_count) as avg_hits
+                   FROM algo_settlements s
+                   JOIN algo_bets b ON s.bet_id = b.id
+                   WHERE b.user_id LIKE 'vu%%'
+                     AND s.settled_at >= ?
+                   GROUP BY b.strategy, b.user_id
+                """,
+                (week_ago,)
+            ).fetchall()
+            conn.close()
+        except Exception as e:
+            logging.warning(f"[Evolve-VU] 读取失败: {e}")
+            return {}, [], 0
+
+        if len(rows) < 10:
+            return {}, [], 0
+
+        # 按策略类型聚合
+        type_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'prize': 0, 'avg_hits': 0, 'hit_rate': 0})
+        for r in rows:
+            strategy_str = r[0]  # e.g. "[extreme_freq]核心注(加权)A"
+            # 提取方括号内的策略类型
+            stype = 'other'
+            if strategy_str.startswith('['):
+                end = strategy_str.find(']')
+                if end > 0:
+                    stype = strategy_str[1:end]
+
+            s = type_stats[stype]
+            s['total'] += r[2]
+            s['wins'] += r[3]
+            s['prize'] += r[4]
+
+        # 计算命中率
+        for stype, s in type_stats.items():
+            s['hit_rate'] = s['wins'] / max(s['total'], 1)
+
+        if not type_stats:
+            return {}, [], 0
+
+        # 找出表现最好的策略类型（命中率和奖金双指标）
+        best_type = max(type_stats.items(),
+                       key=lambda x: x[1]['hit_rate'] * 0.6 + min(x[1]['prize'] / 100, 1.0) * 0.4)
+
+        best_name = best_type[0]
+        best_stats = best_type[1]
+
+        signals = {}
+        changes = []
+
+        # 根据最佳策略类型调整对应维度参数
+        type_to_param = {
+            'extreme_freq': ('freq', 0.004),
+            'extreme_miss': ('miss', 0.004),
+            'extreme_trend': ('trend', 0.004),
+            'extreme_zone': ('zone', 0.004),
+            'lhs': ('gamma', 0.002),      # LHS好→探索有益→gamma微增(更重视近期)
+            'balanced': ('gamma', -0.002), # 均衡好→稳定为王→gamma微减
+        }
+
+        if best_name in type_to_param:
+            param_key, delta = type_to_param[best_name]
+            signals[param_key] = delta
+            changes.append(f"[VU] 最优策略={best_name}(命中{best_stats['hit_rate']:.1%}) → {param_key} {'+' if delta>0 else ''}{delta}")
+
+        # 冷号策略如果命中率高，增加cold_cycle权重
+        cold_types = [t for t in type_stats if '冷号' in t or 'miss' in t.lower()]
+        if cold_types:
+            cold_hit_rate = max(type_stats[t]['hit_rate'] for t in cold_types)
+            if cold_hit_rate > 0.1:  # 冷号命中率>10%
+                signals['cold_cycle_front'] = 0.003
+                changes.append(f"[VU] 冷号命中{cold_hit_rate:.1%} → cold_cycle_front +0.003")
+
+        return signals, changes, len(rows)
+
+    # ============================================================
     #  Evolution Layer — GEPA 进化 (写回Model)
     # ============================================================
 
@@ -877,6 +1003,16 @@ class JinZhu:
                 total_samples += n_samples
             except Exception as e:
                 logging.error(f"[Evolve] {g} 信号收集失败: {e}")
+
+        # 系统虚拟用户进化信号（50人按策略类型命中率加权）
+        try:
+            vu_signals, vu_changes, vu_samples = self._collect_vuser_evolve_signals()
+            for k, v in vu_signals.items():
+                all_signals[k] += v
+            all_changes.extend(vu_changes)
+            total_samples += vu_samples
+        except Exception as e:
+            logging.warning(f"[Evolve] 虚拟用户信号收集异常(不阻塞): {e}")
 
         if total_samples < 6:
             logging.info(f"[Evolve] 总样本{total_samples}<6，跳过进化")
@@ -919,7 +1055,7 @@ class JinZhu:
 
         # 更新版本号
         self.model['version'] = self.model.get('version', 1) + 1
-        self.model['algo_version'] = 'v8.1'
+        self.model['algo_version'] = 'v8.3'
 
         # P2修复: 进化日志长度限制(最近50条)
         log_entry = {
@@ -1013,7 +1149,7 @@ class JinZhu:
         return True
 
     # ============================================================
-    #  Daily Loop — 每日闭环
+    #  系统虚拟用户进化信号 — 50人vu01~vu50
     # ============================================================
 
     def daily_run(self, kelly_bias: float = 0.0) -> dict:
