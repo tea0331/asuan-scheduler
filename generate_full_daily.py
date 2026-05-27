@@ -50,51 +50,175 @@ def send_email(subject, body):
         logging.error(f"❌ 邮件发送失败: {e}")
         return False
 
+def _search_news(keyword, count=3):
+    """用搜索引擎抓取真实新闻"""
+    try:
+        url = "https://news.baidu.com/ns"
+        params = {
+            "word": keyword,
+            "tn": "news",
+            "from": "news",
+            "cl": "2",
+            "rn": str(count),
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return []
+        
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        results = []
+        for item in soup.select('div.result')[:count]:
+            title_tag = item.select_one('h3 a')
+            source_tag = item.select_one('p.c-author') or item.select_one('span.c-color-gray')
+            summary_tag = item.select_one('div.c-summary') or item.select_one('div.c-abstract')
+            
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            source = source_tag.get_text(strip=True) if source_tag else ""
+            summary = summary_tag.get_text(strip=True) if summary_tag else ""
+            
+            if title:
+                results.append({
+                    'title': title,
+                    'source': source,
+                    'summary': summary.replace('\n', ' ').strip()
+                })
+        return results
+    except Exception as e:
+        logging.warning(f"[新闻] 搜索'{keyword}'失败: {e}")
+        return []
+
+
+def _search_news_multi(keyword, count=5):
+    """多源搜索新闻（百度+360），取最好的结果"""
+    results = _search_news(keyword, count)
+    if len(results) < 2:
+        # 补充：用简单API
+        try:
+            url = f"https://www.so.com/s"
+            params = {"q": keyword, "tn": "news", "count": str(count)}
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = requests.get(url, params=params, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                for item in soup.select('div.res-title')[:count]:
+                    a = item.select_one('a')
+                    if a:
+                        title = a.get_text(strip=True)
+                        if title and not any(r['title'] == title for r in results):
+                            results.append({'title': title, 'source': '', 'summary': ''})
+        except:
+            pass
+    return results[:count]
+
+
 def generate_news_section():
-    """调用混元API生成新闻分析部分"""
+    """基于真实搜索生成新闻日报（非AI编造）"""
+    logging.info("[新闻] 开始抓取真实新闻...")
+    
+    sections = []
+    
+    # 1. AI/科技资讯
+    sections.append("## 一、每日资讯\n")
+    sections.append("### 🤖 AI/科技\n")
+    ai_news = _search_news_multi("人工智能 AI 科技 2026", 3)
+    if ai_news:
+        for n in ai_news:
+            sections.append(f"- **{n['title']}**")
+            if n['summary']:
+                sections.append(f"  > {n['summary'][:100]}")
+    else:
+        sections.append("- （今日暂未抓取到AI/科技新闻）")
+    
+    # 2. 商业/金融
+    sections.append("\n### 💰 商业/金融\n")
+    biz_news = _search_news_multi("商业 金融 投资 创业 2026", 3)
+    if biz_news:
+        for n in biz_news:
+            sections.append(f"- **{n['title']}**")
+            if n['summary']:
+                sections.append(f"  > {n['summary'][:100]}")
+    else:
+        sections.append("- （今日暂未抓取到商业/金融新闻）")
+    
+    # 3. 热搜/时事
+    sections.append("\n### 🔥 热搜/时事\n")
+    hot_news = _search_news_multi("热搜 今日 要闻", 3)
+    if hot_news:
+        for n in hot_news:
+            sections.append(f"- **{n['title']}**")
+    else:
+        sections.append("- （今日暂未抓取到热搜新闻）")
+    
+    # 4. 市场缺口扫描
+    sections.append("\n## 二、市场缺口扫描\n")
+    sections.append("### 固定领域缺口\n")
+    for domain in ["算力芯片", "AI应用", "跨境电商"]:
+        domain_news = _search_news_multi(f"{domain} 缺口 机会 2026", 2)
+        if domain_news:
+            n = domain_news[0]
+            sections.append(f"- **{domain}**：{n['title']}")
+        else:
+            sections.append(f"- **{domain}**：暂无明显缺口信号")
+    
+    sections.append("\n### 动态缺口\n")
+    dynamic_news = _search_news_multi("新兴市场 供需错配 投资机会", 3)
+    for n in dynamic_news:
+        sections.append(f"- {n['title']}")
+    
+    # 5. 逆潮观察
+    sections.append("\n## 三、逆潮观察\n")
+    contra_news = _search_news_multi("行业下滑 裁员 逆势", 3)
+    for n in contra_news:
+        sections.append(f"- {n['title']}")
+    
+    # 6. 用混元API做深度分析（基于真实新闻，非凭空编造）
+    news_digest = "\n".join(sections)
+    analysis_prompt = f"""基于以下今日真实新闻摘要，请补充深度分析：
+
+{news_digest}
+
+请补充：
+1. 新闻推演：选2条最重要的新闻，做5层传导分析+天之道（损有余补不足）解读
+2. 创业机会：基于上述缺口，推荐3个创业方向（含成本/风险/回报/退出路径）
+
+直接输出markdown，从"## 四、深度分析"开始。"""
+    
     api_key = "[HUNYUAN_API_KEY]"
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
-    
-    prompt = f"""生成今日({today_str})的AI/科技/金融/创业新闻分析日报，必须包含：
-
-1. 时事新闻(3条)
-2. 科技/AI资讯(3条)  
-3. 商业/创业资讯(3条)
-4. 热搜话题(3条)
-5. 市场缺口扫描(3个固定领域+3个动态缺口)
-6. 新闻推演(2条新闻的5层传导+天之道分析)
-7. 逆潮观察(3条)
-8. 创业项目(3个，含成本/风险/回报/退出)
-
-格式参考之前的"阿算帮刘老板发财日报"，直接输出markdown格式内容（从"## 一、每日资讯"开始）。"""
-    
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    
     payload = {
         "model": "hunyuan-turbos-latest",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 4000,
+        "messages": [{"role": "user", "content": analysis_prompt}],
+        "max_tokens": 3000,
         "temperature": 0.7,
-        "timeout": 30
     }
     
     try:
-        logging.info("[API] 调用混元生成新闻分析...")
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        logging.info("[新闻] 基于真实新闻调用混元做深度分析...")
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
         if resp.status_code == 200:
             result = resp.json()
-            content = result['choices'][0]['message']['content']
-            logging.info(f"[API] ✅ 生成成功: {len(content)}字符")
-            return content
+            analysis = result['choices'][0]['message']['content']
+            logging.info(f"[新闻] ✅ 深度分析生成成功: {len(analysis)}字符")
+            sections.append("\n" + analysis)
         else:
-            logging.error(f"[API] 失败: {resp.status_code} {resp.text[:200]}")
-            return None
+            logging.warning(f"[新闻] 混元API失败: {resp.status_code}")
+            sections.append("\n## 四、深度分析\n（今日AI分析生成失败）\n")
     except Exception as e:
-        logging.error(f"[API] 异常: {e}")
-        return None
+        logging.warning(f"[新闻] 混元API超时: {e}")
+        sections.append("\n## 四、深度分析\n（今日AI分析生成失败）\n")
+    
+    content = "\n".join(sections)
+    logging.info(f"[新闻] ✅ 日报新闻部分完成: {len(content)}字符（基于真实搜索+AI分析）")
+    return content
 
 def generate_lottery_section():
     """生成彩票部分：今日推荐 + 昨日回测 + 虚拟下注记录"""
@@ -361,23 +485,8 @@ def generate_lottery_section():
 if __name__ == '__main__':
     logging.info(f"========== 生成完整日报 {today_str} ==========")
     
-    # 1. 生成新闻分析部分
+    # 1. 生成新闻分析部分（基于真实搜索，已内置fallback）
     news_content = generate_news_section()
-    if not news_content:
-        # Fallback: 用昨天的
-        logging.warning("[新闻] API失败，尝试用昨日内容")
-        try:
-            yesterday_file = os.path.join(output_dir, f"{yesterday.strftime('%Y-%m-%d')}.md")
-            with open(yesterday_file, 'r', encoding='utf-8') as f:
-                old_content = f.read()
-            # 提取新闻部分（到"---\n\n## 🎰"之前）
-            if '---\n\n## 🎰' in old_content:
-                news_content = old_content.split('---\n\n## 🎰')[0]
-            else:
-                news_content = old_content[:2000]  # 前2000字符
-        except Exception as e:
-            logging.error(f"[新闻] Fallback也失败: {e}")
-            news_content = "## 每日资讯生成失败，请稍后查看\n"
     
     # 2. 生成彩票部分
     lottery_content = generate_lottery_section()
