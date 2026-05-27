@@ -801,9 +801,9 @@ class JinZhu:
         if not rows:
             return {'error': f'无待结算推荐', 'game': game, 'date': date}
 
-        # P1修复: AlgoEngine移到循环外
-        from algo_module import AlgoEngine
-        engine = AlgoEngine()
+        # _calc_prize 在 ROITracker 类中，不是 AlgoEngine
+        from algo_module import ROITracker, AlgoDB
+        engine = ROITracker(AlgoDB())
 
         total_prize = 0
         total_cost = 0
@@ -852,8 +852,8 @@ class JinZhu:
         if not history or len(history) < 2:
             return {'error': '数据不足'}
 
-        from algo_module import AlgoEngine
-        engine = AlgoEngine()
+        from algo_module import ROITracker, AlgoDB
+        engine = ROITracker(AlgoDB())
 
         results = []
         for i in range(min(n_periods, len(history) - 1)):
