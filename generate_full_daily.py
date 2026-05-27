@@ -298,31 +298,198 @@ def generate_news_section():
 
 
 def generate_lottery_section():
-    """生成彩票部分：今日推荐 + 昨日回测 + 虚拟下注记录"""
+    """生成彩票部分：今日推荐 + 昨日回测（统一走 JinZhu 核心大脑）"""
     try:
-        import lottery_analyzer as la
-        import games.ssq
-        import games.dlt
-        import games.qxc
+        from jin_zhu import JinZhu
+        jz = JinZhu()
     except Exception as e:
-        return f"\n---\n## 🎰 彩票推荐生成失败: {e}\n---\n"
+        return f"\n---\n## 🎰 彩票推荐生成失败: JinZhu初始化异常({e})\n---\n"
 
-    # 🔴 闭环1: 外层变量收集推荐结果（供虚拟下注+推荐记录使用）
-    ssq_recs = None
-    dlt_recs = None
-    qxc_recs = None
-
-    # 🔴 v3.0: 先跑Orchestrator（大脑），产出context供推荐使用
+    # 🔴 v4.0-JinZhu: 核心大脑统一生成推荐
     try:
-        from algo_orchestrator import AlgoOrchestrator
-        orch = AlgoOrchestrator()
-        context = orch.daily_run()
-        print(f"[日报] ✅ Orchestrator运行完成: 模式={context.get('mode')}, 熵比={context.get('entropy_ratio', 0):.4f}")
+        daily_result = jz.daily_run()
+        logging.info(f"[日报] ✅ JinZhu闭环完成: settle={bool(daily_result.get('settle'))}, evolve={bool(daily_result.get('evolve'))}")
     except Exception as e:
-        print(f"[日报] ⚠️ Orchestrator运行失败(不影响推荐): {e}")
+        logging.warning(f"[日报] ⚠️ JinZhu闭环异常(不阻塞): {e}")
+        daily_result = {}
 
-    section = "\n---\n\n## 🎰 彩票号码推荐 — 刘海蟾点金（仅供娱乐参考）\n\n"
+    section = "\n---\n\n## 🎰 彩票号码推荐 — 刘海蟾点金·金主引擎（仅供娱乐参考）\n\n"
     section += "> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n\n"
+
+    yesterday_weekday = yesterday.weekday()
+    today_weekday = today.weekday()
+
+    # ===== 双色球 =====
+    try:
+        ssq_data = games.ssq.fetch_ssq_history(15)
+        section += "### 🔴 双色球\n\n"
+        section += "| 期号 | 红球 | 蓝球 |\n|------|------|------|\n"
+        for d in ssq_data[:3]:
+            reds = d.get('reds', [])
+            blue = d.get('blue', 0)
+            section += f"| {d.get('period')} | {' '.join(map(str, reds))} | {blue:02d} |\n"
+
+        # 从 JinZhu 结果取推荐
+        ssq_recs = daily_result.get('ssq', [])
+        if not ssq_recs:
+            ssq_recs = jz.generate_recs('ssq')
+        if ssq_recs:
+            section += f"\n**今日推荐({len(ssq_recs)}注)**:\n"
+            for rec in ssq_recs:
+                rec_reds = rec.get('reds', [])
+                rec_blue = rec.get('blue', 0)
+                section += f"  - {rec.get('strategy', '未知')}: 红={rec_reds} 蓝={rec_blue:02d}\n"
+
+        # 回测
+        if yesterday_weekday in [1, 3, 6]:
+            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 双色球\n"
+            if ssq_data:
+                latest = ssq_data[0]
+                section += f"第{latest.get('period')}期: 红={latest.get('reds')} 蓝={latest.get('blue')}\n"
+                try:
+                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
+                    with open(predictions_path, 'r') as f:
+                        predictions = json.load(f)
+                    yesterday_str = yesterday.strftime('%Y-%m-%d')
+                    for item in predictions:
+                        if item.get('date') == yesterday_str:
+                            y_recs = item.get('ssq_recs', [])
+                            if y_recs:
+                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
+                                for rec in y_recs:
+                                    rec_reds = rec.get('reds', [])
+                                    rec_blue = rec.get('blue', 0)
+                                    hit_reds = set(rec_reds) & set(latest.get('reds', []))
+                                    hit_blue = rec_blue == latest.get('blue', 0)
+                                    section += f"  - {rec.get('strategy', '未知')}: 红={rec_reds} 蓝={rec_blue:02d} "
+                                    if hit_reds:
+                                        section += f"✅ 中{list(hit_reds)}"
+                                    if hit_blue:
+                                        section += f" ✅ 中蓝"
+                                    section += "\n"
+                                section += f"\n💰 回测完成\n"
+                            break
+                except Exception as e:
+                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        section += "\n"
+    except Exception as e:
+        section += f"[双色球] 错误: {e}\n\n"
+
+    # ===== 大乐透 =====
+    try:
+        dlt_data = games.dlt.fetch_dlt_history(15)
+        section += "### 🟡 大乐透\n\n"
+        section += "| 期号 | 前区 | 后区 |\n|------|------|------|\n"
+        for d in dlt_data[:3]:
+            front = d.get('front', [])
+            back = d.get('back', [])
+            section += f"| {d.get('period')} | {' '.join(map(str, front))} | {' '.join(map(str, back))} |\n"
+
+        dlt_recs = daily_result.get('dlt', [])
+        if not dlt_recs:
+            dlt_recs = jz.generate_recs('dlt')
+        if dlt_recs:
+            section += f"\n**今日推荐({len(dlt_recs)}注)**:\n"
+            for rec in dlt_recs:
+                rec_front = rec.get('front', [])
+                rec_back = rec.get('back', [])
+                section += f"  - {rec.get('strategy', '未知')}: 前={rec_front} 后={rec_back}\n"
+
+        if yesterday_weekday in [0, 2, 5]:
+            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 大乐透\n"
+            if dlt_data:
+                latest = dlt_data[0]
+                section += f"第{latest.get('period')}期: 前={latest.get('front')} 后={latest.get('back')}\n"
+                try:
+                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
+                    with open(predictions_path, 'r') as f:
+                        predictions = json.load(f)
+                    yesterday_str = yesterday.strftime('%Y-%m-%d')
+                    for item in predictions:
+                        if item.get('date') == yesterday_str:
+                            y_recs = item.get('dlt_recs', [])
+                            if y_recs:
+                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
+                                for rec in y_recs:
+                                    rec_front = rec.get('front', [])
+                                    rec_back = rec.get('back', [])
+                                    hit_front = set(rec_front) & set(latest.get('front', []))
+                                    hit_back = set(rec_back) & set(latest.get('back', []))
+                                    section += f"  - {rec.get('strategy', '未知')}: 前={rec_front} 后={rec_back} "
+                                    if hit_front:
+                                        section += f"✅ 中{list(hit_front)}"
+                                    if hit_back:
+                                        section += f" ✅ 中{list(hit_back)}"
+                                    section += "\n"
+                                section += f"\n💰 回测完成\n"
+                            break
+                except Exception as e:
+                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        section += "\n"
+    except Exception as e:
+        section += f"[大乐透] 错误: {e}\n\n"
+
+    # ===== 七星彩 =====
+    try:
+        qxc_data = games.qxc.fetch_qxc_history(15)
+        section += "### 🟢 七星彩\n\n"
+        section += "| 期号 | 号码 |\n|------|------|\n"
+        for d in qxc_data[:3]:
+            digits = d.get('digits', d.get('numbers', []))
+            section += f"| {d.get('period')} | {' '.join(map(str, digits))} |\n"
+
+        qxc_recs = daily_result.get('qxc', [])
+        if not qxc_recs:
+            qxc_recs = jz.generate_recs('qxc')
+        if qxc_recs:
+            section += f"\n**今日推荐({len(qxc_recs)}注)**:\n"
+            for rec in qxc_recs:
+                section += f"  - {rec.get('strategy', '未知')}: 号码={rec.get('digits', [])}\n"
+
+        if yesterday_weekday in [1, 4, 6]:
+            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 七星彩\n"
+            if qxc_data:
+                latest = qxc_data[0]
+                latest_digits = latest.get('digits', latest.get('numbers', []))
+                section += f"第{latest.get('period')}期: 号码={latest_digits}\n"
+                try:
+                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
+                    with open(predictions_path, 'r') as f:
+                        predictions = json.load(f)
+                    yesterday_str = yesterday.strftime('%Y-%m-%d')
+                    for item in predictions:
+                        if item.get('date') == yesterday_str:
+                            y_recs = item.get('qxc_recs', [])
+                            if y_recs:
+                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
+                                for rec in y_recs:
+                                    rec_digits = rec.get('digits', rec.get('numbers', []))
+                                    hit_count = sum(1 for i in range(min(len(rec_digits), len(latest_digits))) if i < len(rec_digits) and i < len(latest_digits) and rec_digits[i] == latest_digits[i])
+                                    section += f"  - {rec.get('strategy', '未知')}: 号码={rec_digits} "
+                                    if hit_count > 0:
+                                        section += f"✅ 中{hit_count}位"
+                                    section += "\n"
+                                section += f"\n💰 回测完成\n"
+                            break
+                except Exception as e:
+                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        section += "\n"
+    except Exception as e:
+        section += f"[七星彩] 错误: {e}\n\n"
+
+    # JinZhu 闭环状态摘要
+    settle = daily_result.get('settle', {})
+    evolve = daily_result.get('evolve', {})
+    section += "\n---\n**🧠 金主引擎状态**: "
+    if settle:
+        games_settled = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and 'error' not in settle[g]]
+        section += f"结算{len(games_settled)}彩种 | "
+    if evolve:
+        games_evolved = [g for g in ['ssq', 'dlt', 'qxc'] if g in evolve and evolve[g].get('status') == '进化完成']
+        section += f"进化{len(games_evolved)}彩种(v{jz.model.get('version', '?')}) | "
+    section += f"模型参数从weight-config.json读取\n"
+
+    return section
 
     yesterday_weekday = yesterday.weekday()  # 0=周一 1=周二...
     today_weekday = today.weekday()
@@ -503,44 +670,6 @@ def generate_lottery_section():
         section += "\n"
     except Exception as e:
         section += f"[七星彩] 错误: {e}\n\n"
-
-    # 🔴 闭环1: 虚拟下注
-    try:
-        from algo_module import AlgoDB, ROITracker
-        tracker = ROITracker(AlgoDB())
-        kelly_map = {'ssq': 0, 'dlt': 0, 'qxc': 0}
-        if ssq_recs:
-            tracker.record_bets(today_str, 'ssq', ssq_recs, kelly_map)
-            logging.info(f"[彩票] ✅ SSQ虚拟下注记录: {len(ssq_recs)}注")
-        if dlt_recs:
-            tracker.record_bets(today_str, 'dlt', dlt_recs, kelly_map)
-            logging.info(f"[彩票] ✅ DLT虚拟下注记录: {len(dlt_recs)}注")
-        if qxc_recs:
-            tracker.record_bets(today_str, 'qxc', qxc_recs, kelly_map)
-            logging.info(f"[彩票] ✅ QXC虚拟下注记录: {len(qxc_recs)}注")
-    except Exception as e:
-        logging.warning(f"[彩票] 虚拟下注记录失败: {e}")
-
-    # 🔴 闭环4: 保存今日推荐
-    try:
-        predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-        predictions = []
-        if os.path.exists(predictions_path):
-            with open(predictions_path, 'r', encoding='utf-8') as f:
-                predictions = json.load(f)
-        predictions = [p for p in predictions if p.get('date') != today_str]
-        today_prediction = {
-            'date': today_str,
-            'ssq_recs': ssq_recs,
-            'dlt_recs': dlt_recs,
-            'qxc_recs': qxc_recs,
-        }
-        predictions.append(today_prediction)
-        with open(predictions_path, 'w', encoding='utf-8') as f:
-            json.dump(predictions, f, ensure_ascii=False, indent=2)
-        logging.info(f"[彩票] ✅ 今日推荐已保存(供明日回测)")
-    except Exception as e:
-        logging.warning(f"[彩票] 保存推荐记录失败: {e}")
 
     return section
 
