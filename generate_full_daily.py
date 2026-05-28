@@ -547,7 +547,7 @@ def generate_lottery_section():
         else:
             section += f"结算异常 | "
     if evolve and evolve.get('status') == '进化完成':
-        section += f"进化完成(v{jz.model.get('version', '?')}) | "
+        section += f"进化完成({jz.model.get('algo_version', 'v?')}·第{jz.model.get('version', '?')}次进化) | "
     elif evolve:
         section += f"进化跳过({evolve.get('status', '未知')}) | "
     section += f"模型参数从weight-config.json读取\n"
