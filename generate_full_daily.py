@@ -154,115 +154,113 @@ def _fetch_baidu_hot(count=10):
 
 
 def generate_news_section():
-    """基于RSS+热搜生成真实新闻日报（v2: 用户画像过滤）"""
+    """基于RSS+热搜抓取原始素材，统一由AI生成高质量分析型日报
+    
+    v3: 不再手动拼接标题+摘要，而是把原始素材喂给AI，
+    让AI按用户画像(算力/AI/创业/信息差)和分析框架输出四大板块。
+    """
     logging.info("[新闻] 开始抓取真实新闻(RSS+热搜)...")
 
     # 数据源
-    KR36_RSS = 'https://36kr.com/feed'          # 36氪：科技/商业/创业
-    ITHOME_RSS = 'https://www.ithome.com/rss/'   # IT之家：科技/AI
-
-    sections = []
+    KR36_RSS = 'https://36kr.com/feed'
+    ITHOME_RSS = 'https://www.ithome.com/rss/'
 
     # ---- 抓取原始数据 ----
     ithome_raw = _fetch_rss(ITHOME_RSS, 15)
     kr36_raw = _fetch_rss(KR36_RSS, 20)
     hot_raw = _fetch_baidu_hot(20)
 
-    # ---- 画像过滤 ----
-    tech_all = filter_by_profile(ithome_raw + kr36_raw, min_score=0)
-    biz_all = filter_by_profile(kr36_raw, min_score=0)
-    hot_filtered = filter_by_profile(hot_raw, min_score=-1, top_n=8)  # 热搜稍宽松，-1以上保留
-
-    # 统计画像效果
     total_raw = len(ithome_raw) + len(kr36_raw) + len(hot_raw)
-    total_filtered = len(tech_all) + len(biz_all) + len(hot_filtered)
-    logging.info(f"[画像] 原始{total_raw}条 → 过滤后{total_filtered}条（剔除{total_raw - total_filtered}条低价值）")
+    logging.info(f"[新闻] 抓取原始素材{total_raw}条(36氪{len(kr36_raw)}+IT之家{len(ithome_raw)}+热搜{len(hot_raw)})")
 
-    # 1. AI/科技资讯
-    sections.append("## 一、每日资讯\n")
-    sections.append("### 🤖 AI/科技\n")
+    # ---- 画像过滤 + 去重 ----
+    all_filtered = filter_by_profile(ithome_raw + kr36_raw + hot_raw, min_score=-1, top_n=30)
+    # 按标题去重
+    seen_titles = set()
+    unique = []
+    for n in all_filtered:
+        t = n['title'].strip()[:30]
+        if t not in seen_titles:
+            seen_titles.add(t)
+            unique.append(n)
 
-    # 先从画像高分中挑AI相关的
-    ai_keywords = ['AI', '人工智能', '芯片', '模型', '大模型', '英伟达', '华为', '算力', 'DeepSeek', 'GPT', 'LLM', '机器人', 'NVIDIA', 'GPU']
-    ai_items = [n for n in tech_all if any(kw.lower() in n['title'].lower() for kw in ai_keywords)]
-    if not ai_items:
-        ai_items = tech_all[:3]  # 无精确匹配则取画像高分前3
-    for n in ai_items[:4]:
+    # 构建素材文本（喂给AI）
+    material_lines = []
+    for i, n in enumerate(unique[:25], 1):
         score = score_news(n)
-        tag = '🔥' if score >= 6 else ('⭐' if score >= 3 else '')
-        sections.append(f"- {tag}**{n['title']}**")
-        if n['summary']:
-            sections.append(f"  > {n['summary'][:120]}")
+        title = n['title'].strip()
+        summary = n.get('summary', '').strip()[:150]
+        line = f"{i}. [{score}分] {title}"
+        if summary:
+            line += f"\n   摘要：{summary}"
+        material_lines.append(line)
 
-    # 2. 商业/金融
-    sections.append("\n### 💰 商业/金融\n")
-    biz_keywords = ['融资', '上市', '投资', '营收', '商业', '创业', '市场', '消费', '经济', '公司', '出海', '跨境', '供需']
-    biz_items = [n for n in biz_all if any(kw in n['title'] for kw in biz_keywords)]
-    if not biz_items:
-        biz_items = biz_all[:3]
-    for n in biz_items[:4]:
-        score = score_news(n)
-        tag = '🔥' if score >= 6 else ('⭐' if score >= 3 else '')
-        sections.append(f"- {tag}**{n['title']}**")
-        if n['summary']:
-            sections.append(f"  > {n['summary'][:120]}")
+    material = "\n".join(material_lines)
 
-    # 3. 热搜/时事（已过滤娱乐八卦）
-    sections.append("\n### 🔥 热搜/时事\n")
-    for n in hot_filtered[:5]:
-        score = score_news(n)
-        tag = '🔥' if score >= 3 else ''
-        sections.append(f"- {tag}{n['title']}")
+    if not material.strip() or len(material) < 100:
+        logging.warning("[新闻] 新闻素材过少，跳过AI生成")
+        return _fallback_news_section(ithome_raw, kr36_raw, hot_raw)
 
-    # 4. 市场缺口扫描
-    sections.append("\n## 二、市场缺口扫描\n")
-    sections.append("### 固定领域缺口\n")
+    # ---- AI生成四大板块 ----
+    prompt = f"""你是刘海蟾点金的商业分析师，为一位专注算力/AI/创业的投资人写日报。
 
-    all_news = tech_all + biz_all
-    for domain, domain_kws in [
-        ("算力芯片", ['芯片', '算力', 'GPU', '英伟达', 'NVIDIA', '半导体', '晶圆']),
-        ("AI应用", ['应用', '落地', '场景', '大模型', 'AI']),
-        ("跨境电商", ['跨境', '出海', '海外', '电商', '外贸']),
-    ]:
-        domain_items = [n for n in all_news if any(kw in n['title'] for kw in domain_kws)]
-        if domain_items:
-            top = domain_items[0]
-            sections.append(f"- **{domain}**：{top['title']}")
-        else:
-            sections.append(f"- **{domain}**：暂无明显缺口信号")
+## 用户画像
+- 核心关注：算力芯片、英伟达产业链、AI大模型、创业投资
+- 商业偏好：供需错配、政策红利、技术降维、跨境信息差、蓝海机会
+- 不关心：娱乐圈八卦、体育赛事、明星绯闻
+- 分析框架：天之道损有余补不足（关注"不足"=缺口=机会）
 
-    sections.append("\n### 动态缺口\n")
-    gap_keywords = ['缺口', '机会', '蓝海', '空白', '新兴', '下沉', '出海', '信息差', '降维']
-    gap_items = [n for n in all_news if any(kw in n['title'] for kw in gap_keywords)]
-    for n in gap_items[:3]:
-        sections.append(f"- {n['title']}")
-    if not gap_items:
-        sections.append("- 今日暂无动态缺口信号")
+## 今日原始新闻素材（已按画像打分排序）
+{material}
 
-    # 5. 逆潮观察
-    sections.append("\n## 三、逆潮观察\n")
-    contra_keywords = ['裁员', '关停', '下滑', '暴跌', '亏损', '倒闭', '退市', '逆势']
-    contra_items = [n for n in all_news if any(kw in n['title'] for kw in contra_keywords)]
-    for n in contra_items[:3]:
-        sections.append(f"- {n['title']}")
-    if not contra_items:
-        sections.append("- 今日暂无明显逆潮信号")
+## 输出要求
+直接输出markdown，包含四大板块（从"## 一、每日资讯"开始），格式如下：
 
-    # 6. 用混元API做深度分析（基于真实新闻素材）
-    news_digest = "\n".join(sections)
-    if not news_digest.strip() or len(news_digest) < 50:
-        logging.warning("[新闻] 新闻素材过少，跳过深度分析")
-        return "\n".join(sections)
+## 一、每日资讯
+分3个小节，每个小节3-4条新闻：
+### 🤖 AI/科技
+### 💰 商业/金融  
+### 🔥 热搜/时事
 
-    analysis_prompt = f"""基于以下今日真实新闻摘要，请补充深度分析：
+每条新闻格式：
+- 🔥**标题**（提炼核心，不要照搬原标题）
+  > 一句话精华点评（不是摘要，是你对这条新闻的价值判断）
 
-{news_digest}
+## 二、市场缺口扫描
+### 固定领域缺口
+- **算力芯片**：有缺口时写缺口描述+机会，无则写"供给平稳，暂无缺口"
+- **AI应用**：同上
+- **跨境电商**：同上
 
-请补充：
-1. 新闻推演：选2条最重要的新闻，做5层传导分析+天之道（损有余补不足）解读
-2. 创业机会：基于上述缺口，推荐3个创业方向（含成本/风险/回报/退出路径）
+### 动态缺口
+从新闻中挖掘2-3个隐藏的供需错配、政策红利或技术降维机会。
+不要用"暂无明显"这种废话，每条必须有具体分析。
 
-直接输出markdown，从"## 四、深度分析"开始。"""
+## 三、逆潮观察
+找出1-3个"反直觉信号"——表面利空但暗藏机会，或表面利好但隐含风险。
+每条包含：现象 + 逆潮逻辑 + 行动建议。
+不要输出万能废话（如"需警惕产能过剩"），必须结合今日具体新闻。
+
+## 四、深度分析
+### 新闻推演
+选2条最重要新闻，做5层传导分析 + 天之道解读：
+- 第1层：事件本身
+- 第2层：直接影响  
+- 第3层：市场反应
+- 第4层：中期演变(3-6个月)
+- 第5层：长期格局(1-2年)
+- 天之道：损什么(有余)？补什么(不足)？
+
+### 创业机会
+基于上述缺口，推荐3个创业方向，每个含：
+- 方向名称 + 一句话描述
+- 成本 | 风险(低/中/高) | 回报倍数 | 退出路径
+
+重要规则：
+1. 每条分析必须基于今日具体新闻，不要空谈
+2. 缺口和逆潮必须有数据或事件支撑
+3. 语言简洁有力，不要车轱辘话
+4. 不要用"值得关注""需警惕"等套话"""
 
     api_key = "sk-TjZgBJKZJA1FjrkMHIotwyBafg8gXnRdYBLDvyHNkGSkQAcq"
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
@@ -272,29 +270,87 @@ def generate_news_section():
     }
     payload = {
         "model": "hunyuan-turbos-latest",
-        "messages": [{"role": "user", "content": analysis_prompt}],
-        "max_tokens": 3000,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 4000,
         "temperature": 0.7,
     }
 
     try:
-        logging.info("[新闻] 基于真实新闻调用混元做深度分析...")
-        resp = requests.post(url, json=payload, headers=headers, timeout=60)
-        if resp.status_code == 200:
-            result = resp.json()
-            analysis = result['choices'][0]['message']['content']
-            logging.info(f"[新闻] ✅ 深度分析生成成功: {len(analysis)}字符")
-            sections.append("\n" + analysis)
-        else:
-            logging.warning(f"[新闻] 混元API失败: {resp.status_code}")
-            sections.append("\n## 四、深度分析\n（今日AI分析生成失败）\n")
-    except Exception as e:
-        logging.warning(f"[新闻] 混元API超时: {e}")
-        sections.append("\n## 四、深度分析\n（今日AI分析生成失败）\n")
+        logging.info("[新闻] 调用混元生成四大板块日报...")
+        # 最多重试2次，间隔5秒
+        content = None
+        for attempt in range(3):
+            try:
+                resp = requests.post(url, json=payload, headers=headers, timeout=90)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    content = result['choices'][0]['message']['content']
+                    break
+                elif resp.status_code == 429:
+                    logging.warning(f"[新闻] 混元API限流(尝试{attempt+1}/3)，等待5秒...")
+                    import time; time.sleep(5)
+                else:
+                    logging.warning(f"[新闻] 混元API失败: {resp.status_code}")
+                    break
+            except requests.exceptions.Timeout:
+                logging.warning(f"[新闻] 混元API超时(尝试{attempt+1}/3)")
+                if attempt < 2:
+                    import time; time.sleep(3)
 
-    content = "\n".join(sections)
-    logging.info(f"[新闻] ✅ 日报新闻部分完成: {len(content)}字符")
-    return content
+        if content:
+            # 清理可能的markdown代码块包裹
+            content = content.strip()
+            if content.startswith('```markdown'):
+                content = content[len('```markdown'):]
+            if content.startswith('```'):
+                content = content[len('```'):]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            logging.info(f"[新闻] ✅ AI日报生成成功: {len(content)}字符")
+            return content
+        else:
+            logging.warning("[新闻] AI日报生成失败，使用降级模式")
+            return _fallback_news_section(ithome_raw, kr36_raw, hot_raw)
+    except Exception as e:
+        logging.warning(f"[新闻] 混元API异常: {e}")
+        return _fallback_news_section(ithome_raw, kr36_raw, hot_raw)
+
+
+def _fallback_news_section(ithome_raw, kr36_raw, hot_raw):
+    """API失败时的降级方案：用画像过滤的原始标题兜底"""
+    logging.info("[新闻] 降级模式：用画像过滤原始标题")
+    sections = ["## 一、每日资讯\n"]
+
+    all_items = filter_by_profile(ithome_raw + kr36_raw, min_score=0, top_n=15)
+    hot_filtered = filter_by_profile(hot_raw, min_score=-1, top_n=5)
+
+    # AI/科技：优先匹配AI关键词
+    ai_keywords = ['AI', '人工智能', '芯片', '模型', '大模型', '英伟达', '华为', '算力', 'DeepSeek', 'GPT', 'NVIDIA', 'GPU', '机器人']
+    ai_items = [n for n in all_items if any(kw.lower() in n['title'].lower() for kw in ai_keywords)]
+    if not ai_items:
+        ai_items = all_items[:4]
+    used_titles = set(n['title'][:30] for n in ai_items)
+
+    sections.append("### 🤖 AI/科技\n")
+    for n in ai_items[:4]:
+        sections.append(f"- **{n['title']}**")
+
+    # 商业/金融：排除已用的
+    biz_items = [n for n in all_items if n['title'][:30] not in used_titles]
+    sections.append("\n### 💰 商业/金融\n")
+    for n in biz_items[:4]:
+        sections.append(f"- **{n['title']}**")
+
+    sections.append("\n### 🔥 热搜/时事\n")
+    for n in hot_filtered[:5]:
+        sections.append(f"- {n['title']}")
+
+    sections.append("\n## 二、市场缺口扫描\n（AI分析生成失败，今日暂无缺口分析）\n")
+    sections.append("\n## 三、逆潮观察\n（AI分析生成失败，今日暂无逆潮分析）\n")
+    sections.append("\n## 四、深度分析\n（今日AI分析生成失败，下次自动恢复）\n")
+
+    return "\n".join(sections)
 
 
 def generate_lottery_section():
@@ -483,7 +539,13 @@ def generate_lottery_section():
     section += "\n---\n**🧠 金主引擎状态**: "
     if settle:
         games_settled = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and 'error' not in settle[g]]
-        section += f"结算{len(games_settled)}彩种 | "
+        games_no_pending = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and settle[g].get('error') == '无待结算推荐']
+        if games_settled:
+            section += f"结算{len(games_settled)}彩种 | "
+        elif games_no_pending:
+            section += f"昨日已结算({len(games_no_pending)}彩种无待结算) | "
+        else:
+            section += f"结算异常 | "
     if evolve and evolve.get('status') == '进化完成':
         section += f"进化完成(v{jz.model.get('version', '?')}) | "
     elif evolve:
