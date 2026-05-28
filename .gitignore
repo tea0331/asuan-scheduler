@@ -17,3 +17,15 @@ toku-daily-report.md
 daemon.pid
 scheduler.pid
 output/
+
+# 摆设文件/工具脚本（不入库）
+audit.py
+toku_agent.py
+diagnose_git_push.sh
+FIX_REPORT.md
+TEST_CHECKLIST.md
+orchestrator_notice_for_ace.md
+orchestrator_ops_guide_for_ace.md
+scheduler.py
+send-lottery-email.py
+virtual_users.json
