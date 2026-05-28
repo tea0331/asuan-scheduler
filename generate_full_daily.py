@@ -536,21 +536,60 @@ def generate_lottery_section():
     # JinZhu 闭环状态摘要
     settle = daily_result.get('settle', {})
     evolve = daily_result.get('evolve', {})
-    section += "\n---\n**🧠 金主引擎状态**: "
-    if settle:
+    
+    # 从algo_settlements读取昨日结算数据（即使settle返回"无待结算"也能展示）
+    settle_summary_parts = []
+    yesterday = (_now_cst() - timedelta(days=1)).strftime('%Y-%m-%d')
+    try:
+        from algo_module import AlgoDB
+        _db = AlgoDB()
+        _conn = _db._get_conn()
+        for g in ['ssq', 'dlt', 'qxc']:
+            gname = {'ssq': '双色球', 'dlt': '大乐透', 'qxc': '七星彩'}[g]
+            # 查昨日该彩种的bets
+            bet_rows = _conn.execute(
+                "SELECT id, cost FROM algo_bets WHERE date=? AND game=? AND status='settled'",
+                (yesterday, g)
+            ).fetchall()
+            if not bet_rows:
+                continue
+            bet_ids = [r['id'] for r in bet_rows]
+            total_cost = sum(r['cost'] or 2 for r in bet_rows)
+            # 查settlements
+            placeholders = ','.join(['?'] * len(bet_ids))
+            s_rows = _conn.execute(
+                f"SELECT prize_amount, prize_name FROM algo_settlements WHERE bet_id IN ({placeholders})",
+                bet_ids
+            ).fetchall()
+            total_prize = sum(r['prize_amount'] for r in s_rows)
+            wins = [r['prize_name'] for r in s_rows if r['prize_amount'] > 0]
+            roi = ((total_prize - total_cost) / max(total_cost, 1)) * 100
+            win_str = f"中{len(wins)}注" if wins else "未中奖"
+            settle_summary_parts.append(f"{gname}: 投{total_cost}元/{win_str}/中{total_prize}元/ROI={roi:.1f}%")
+        _conn.close()
+    except Exception as e:
+        logging.warning(f"[日报] 读取结算数据异常: {e}")
+    
+    section += "\n---\n**🧠 金主引擎状态**\n"
+    if settle_summary_parts:
+        section += "**昨日结算**: " + " | ".join(settle_summary_parts) + "\n"
+    elif settle:
         games_settled = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and 'error' not in settle[g]]
-        games_no_pending = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and settle[g].get('error') == '无待结算推荐']
         if games_settled:
-            section += f"结算{len(games_settled)}彩种 | "
-        elif games_no_pending:
-            section += f"昨日已结算({len(games_no_pending)}彩种无待结算) | "
+            section += f"**昨日结算**: 结算{len(games_settled)}彩种\n"
         else:
-            section += f"结算异常 | "
+            section += "**昨日结算**: 暂无\n"
+    else:
+        section += "**昨日结算**: 暂无\n"
+    
+    section += "**进化**: "
     if evolve and evolve.get('status') == '进化完成':
-        section += f"进化完成({jz.model.get('algo_version', 'v?')}·第{jz.model.get('version', '?')}次进化) | "
+        section += f"进化完成({jz.model.get('algo_version', 'v?')}·第{jz.model.get('version', '?')}次进化)\n"
     elif evolve:
-        section += f"进化跳过({evolve.get('status', '未知')}) | "
-    section += f"模型参数从weight-config.json读取\n"
+        section += f"进化跳过({evolve.get('status', '未知')})\n"
+    else:
+        section += "未执行\n"
+    section += "**模型**: 参数从weight-config.json读取\n"
 
     return section
 
