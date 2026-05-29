@@ -38,29 +38,34 @@ os.makedirs(output_dir, exist_ok=True)
 # 用户画像：关键词权重（正=感兴趣，负=不感兴趣）
 # ============================================================
 USER_PROFILE = {
-    # 算力/芯片/英伟达产业链（核心关注，权重最高）
-    '算力': 4, 'GPU': 4, '英伟达': 4, 'NVIDIA': 4, '黄仁勋': 3,
-    '芯片': 3, '半导体': 3, '台积电': 3, '光刻': 3, '晶圆': 3,
-    '显卡': 2, 'CUDA': 2, 'H100': 3, 'H200': 3, 'B200': 3,
-    # AI/大模型
-    '大模型': 3, '人工智能': 3, 'AI': 2, 'LLM': 2, 'DeepSeek': 3,
-    'GPT': 2, 'Claude': 2, '开源模型': 2, 'AGI': 2,
-    # 商业/创业/投资
-    '融资': 3, '创业': 3, '上市': 2, '投资': 2, '营收': 2,
-    '供需': 3, '缺口': 3, '蓝海': 3, '出海': 3, '跨境': 3,
-    '下沉市场': 2, '独角兽': 2, '商业': 2,
-    # 信息差/技术降维
-    '信息差': 3, '降维': 2, '政策红利': 3, '补贴': 2, '关税': 2,
-    # 电子/信息产业
-    '电子': 2, '通信': 2, '5G': 2, '消费电子': 2, '供应链': 2,
-    # 市场异动
-    '裁员': 2, '暴跌': 2, '亏损': 2, '关停': 2, '逆势': 2,  # 逆潮=机会
-    # 普通科技（中性偏好）
-    '科技': 1, '互联网': 1, '数字化': 1, '云': 1,
+    # ===== 民生/接地气（核心关注，权重最高）=====
+    '房价': 4, '房贷': 4, '楼市': 3, '公积金': 3, '限购': 3,
+    '就业': 4, '招聘': 3, '裁员': 3, '涨薪': 3, '社保': 3, '医保': 3, '退休': 3,
+    '物价': 4, '通胀': 3, '涨价新': 3, '降价': 3, '补贴': 3, '消费券': 3,
+    '教育': 3, '高考': 3, '考研': 2, '学区': 3, '双减': 2,
+    '新规': 3, '政策': 3, '改革': 2, '免税': 3, '减税': 3,
+    '养老': 3, '生育': 3, '三胎': 2, '育儿': 2,
+    # ===== 赚钱/副业/搞钱（普通人最关心）=====
+    '副业': 4, '兼职': 3, '搞钱': 3, '赚钱': 3, '省钱': 3,
+    '创业': 3, '融资': 2, '上市': 2, '投资': 2, '营收': 2,
+    '蓝海': 3, '出海': 3, '跨境': 3, '信息差': 3, '供需': 2,
+    # ===== 科技/AI（保留但降低权重，面向普通人）=====
+    'AI': 2, '人工智能': 2, '大模型': 2, 'DeepSeek': 2,
+    '芯片': 2, '算力': 2, '英伟达': 1, 'NVIDIA': 1,
+    '手机': 2, '华为': 2, '小米': 2, '苹果': 2,
+    '新能源': 2, '电动车': 3, '充电桩': 2, '电池': 2,
+    # ===== 消费/生活（普通人日常）=====
+    '汽车': 2, '油价': 3, '油价调整': 3,
+    '旅游': 2, '机票': 2, '酒店': 2,
+    '食品': 2, '外卖': 2, '电商': 2,
+    '保险': 2, '理财': 2, '存款': 3, '利率': 3,
+    '装修': 1, '家电': 1, '家具': 1,
+    # ===== 市场异动 =====
+    '暴跌': 2, '亏损': 2, '关停': 2, '逆势': 2,
     # ---- 负面：不感兴趣 ----
     '明星': -3, '综艺': -3, '恋情': -3, '离婚': -3, '出轨': -3,
     '八卦': -4, '饭圈': -4, '偶像': -3, '选秀': -3, '粉丝': -2,
-    '娱乐圈': -4, '网红': -2, '直播带货': -2,
+    '娱乐圈': -4, '网红': -2, '直播带货': -1,
     '体育': -1, '足球': -1, '篮球': -1, 'NBA': -1, '世界杯': -1,
     '彩票': -2, '赌博': -3,
     '剧情': -2, '电视剧': -2, '电影': -1, '追剧': -2,
@@ -205,13 +210,14 @@ def generate_news_section():
         return _fallback_news_section(ithome_raw, kr36_raw, hot_raw)
 
     # ---- AI生成四大板块 ----
-    prompt = f"""你是刘海蟾点金的商业分析师，为一位专注算力/AI/创业的投资人写日报。
+    prompt = f"""你是刘海蟾点金的日报编辑，为一位关心钱袋子的普通人写日报。
 
-## 用户画像
-- 核心关注：算力芯片、英伟达产业链、AI大模型、创业投资
-- 商业偏好：供需错配、政策红利、技术降维、跨境信息差、蓝海机会
+## 读者画像
+- 身份：普通打工人/小老板，关心怎么省钱、怎么搞钱、政策对自己有什么影响
+- 最关心：房价/就业/物价/社保/副业/省钱攻略/政策变化对钱包的影响
+- 也关注：AI怎么改变工作、新能源车值不值得买、什么行业在招人
 - 不关心：娱乐圈八卦、体育赛事、明星绯闻
-- 分析框架：天之道损有余补不足（关注"不足"=缺口=机会）
+- 语言风格：说人话，不用术语，让大妈都能看懂。不要"赋能""抓手""闭环"这种词
 
 ## 今日原始新闻素材（已按画像打分排序）
 {material}
@@ -221,49 +227,43 @@ def generate_news_section():
 
 ## 一、每日资讯
 分3个小节，每个小节3-4条新闻：
-### 🤖 AI/科技
-### 💰 商业/金融  
-### 🔥 热搜/时事
+### 🏠 民生/政策（房价/就业/社保/新规/补贴——跟钱袋子直接相关的）
+### 💡 科技/产业（AI/新能源/手机/汽车——跟生活和工作相关的）
+### 🔥 热搜/时事（今日大家都在聊什么）
 
 每条新闻格式：
-- 🔥**标题**（提炼核心，不要照搬原标题）
-  > 一句话精华点评（不是摘要，是你对这条新闻的价值判断）
+- **标题**（提炼核心，不要照搬原标题，让人一看就知道跟自己有什么关系）
+  > 一句话点评：这条新闻对你有什么影响？能省钱？能赚钱？还是得避坑？
 
-## 二、市场缺口扫描
-### 固定领域缺口
-- **算力芯片**：有缺口时写缺口描述+机会，无则写"供给平稳，暂无缺口"
-- **AI应用**：同上
-- **跨境电商**：同上
+## 二、搞钱雷达
+扫出2-3个普通人能抓住的机会，每个含：
+- **机会名称**
+- 具体是什么：用大白话说清楚
+- 怎么入手：给一个普通人今天就能开始的第一步
+- 投入（时间/金钱）| 风险（低/中/高）| 预期回报
 
-### 动态缺口
-从新闻中挖掘2-3个隐藏的供需错配、政策红利或技术降维机会。
-不要用"暂无明显"这种废话，每条必须有具体分析。
+如果没有好机会就说"今天没发现靠谱机会"，别硬编。
 
-## 三、逆潮观察
-找出1-3个"反直觉信号"——表面利空但暗藏机会，或表面利好但隐含风险。
-每条包含：现象 + 逆潮逻辑 + 行动建议。
-不要输出万能废话（如"需警惕产能过剩"），必须结合今日具体新闻。
+## 三、避坑提醒
+找出1-3个表面光鲜但暗藏风险的信号，每个含：
+- 现象：什么看起来很好
+- 真相：为什么可能是坑
+- 怎么办：普通人该怎么保护自己
+
+如果没有明显风险信号就说"今天暂无明显风险预警"。
 
 ## 四、深度分析
-### 新闻推演
-选2条最重要新闻，做5层传导分析 + 天之道解读：
-- 第1层：事件本身
-- 第2层：直接影响  
-- 第3层：市场反应
-- 第4层：中期演变(3-6个月)
-- 第5层：长期格局(1-2年)
-- 天之道：损什么(有余)？补什么(不足)？
-
-### 创业机会
-基于上述缺口，推荐3个创业方向，每个含：
-- 方向名称 + 一句话描述
-- 成本 | 风险(低/中/高) | 回报倍数 | 退出路径
+选1条今天最重要的新闻，用大白话讲清楚：
+- 发生了什么（一句话）
+- 对你有什么影响（省钱/花钱/赚钱/就业/房价）
+- 接下来会怎么发展（3-6个月内）
+- 你现在该做什么（具体行动，别写"持续关注"这种废话）
 
 重要规则：
-1. 每条分析必须基于今日具体新闻，不要空谈
-2. 缺口和逆潮必须有数据或事件支撑
-3. 语言简洁有力，不要车轱辘话
-4. 不要用"值得关注""需警惕"等套话"""
+1. 必须基于今日具体新闻，不要空谈
+2. 说人话！不要"值得关注""需警惕""赋能""生态"等套话
+3. 每条分析必须回答"跟我有什么关系"
+4. 没有好机会就直说，不要硬编"""
 
     api_key = "sk-TjZgBJKZJA1FjrkMHIotwyBafg8gXnRdYBLDvyHNkGSkQAcq"
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
@@ -328,29 +328,29 @@ def _fallback_news_section(ithome_raw, kr36_raw, hot_raw):
     all_items = filter_by_profile(ithome_raw + kr36_raw, min_score=0, top_n=15)
     hot_filtered = filter_by_profile(hot_raw, min_score=-1, top_n=5)
 
-    # AI/科技：优先匹配AI关键词
-    ai_keywords = ['AI', '人工智能', '芯片', '模型', '大模型', '英伟达', '华为', '算力', 'DeepSeek', 'GPT', 'NVIDIA', 'GPU', '机器人']
-    ai_items = [n for n in all_items if any(kw.lower() in n['title'].lower() for kw in ai_keywords)]
-    if not ai_items:
-        ai_items = all_items[:4]
-    used_titles = set(n['title'][:30] for n in ai_items)
+    # 民生/政策：优先匹配民生关键词
+    minsheng_keywords = ['房价', '房贷', '就业', '社保', '医保', '物价', '补贴', '新规', '政策', '利率', '存款', '退休', '教育', '高考', '养老', '油价']
+    minsheng_items = [n for n in all_items if any(kw in n['title'] for kw in minsheng_keywords)]
+    if not minsheng_items:
+        minsheng_items = all_items[:4]
+    used_titles = set(n['title'][:30] for n in minsheng_items)
 
-    sections.append("### 🤖 AI/科技\n")
-    for n in ai_items[:4]:
+    sections.append("### 🏠 民生/政策\n")
+    for n in minsheng_items[:4]:
         sections.append(f"- **{n['title']}**")
 
-    # 商业/金融：排除已用的
-    biz_items = [n for n in all_items if n['title'][:30] not in used_titles]
-    sections.append("\n### 💰 商业/金融\n")
-    for n in biz_items[:4]:
+    # 科技/产业：排除已用的
+    tech_items = [n for n in all_items if n['title'][:30] not in used_titles]
+    sections.append("\n### 💡 科技/产业\n")
+    for n in tech_items[:4]:
         sections.append(f"- **{n['title']}**")
 
     sections.append("\n### 🔥 热搜/时事\n")
     for n in hot_filtered[:5]:
         sections.append(f"- {n['title']}")
 
-    sections.append("\n## 二、市场缺口扫描\n（AI分析生成失败，今日暂无缺口分析）\n")
-    sections.append("\n## 三、逆潮观察\n（AI分析生成失败，今日暂无逆潮分析）\n")
+    sections.append("\n## 二、搞钱雷达\n（AI分析生成失败，今日暂无搞钱机会分析）\n")
+    sections.append("\n## 三、避坑提醒\n（AI分析生成失败，今日暂无风险预警）\n")
     sections.append("\n## 四、深度分析\n（今日AI分析生成失败，下次自动恢复）\n")
 
     return "\n".join(sections)
@@ -379,17 +379,64 @@ def generate_lottery_section():
     yesterday_weekday = yesterday.weekday()
     today_weekday = today.weekday()
 
+    # 开奖日历（周几开什么奖）
+    ssq_days = {1, 3, 6}   # 二四日
+    dlt_days = {0, 2, 5}   # 一三五
+    qxc_days = {1, 4, 6}   # 二五日
+
+    # ===== 辅助：从algo_bets读取昨日推荐记录 =====
+    def _read_yesterday_recs(game):
+        """从lottery-predictions.json或algo_bets读取昨日推荐"""
+        yesterday_str = yesterday.strftime('%Y-%m-%d')
+        recs = []
+        # 优先从predictions文件读
+        try:
+            predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
+            if os.path.exists(predictions_path):
+                with open(predictions_path, 'r', encoding='utf-8') as f:
+                    predictions = json.load(f)
+                for item in predictions:
+                    if item.get('date') == yesterday_str:
+                        recs = item.get(f'{game}_recs', [])
+                        break
+        except Exception:
+            pass
+        # fallback从algo_bets读
+        if not recs:
+            try:
+                from algo_module import AlgoDB
+                _db = AlgoDB()
+                _conn = _db._get_conn()
+                rows = _conn.execute(
+                    "SELECT rec_data FROM algo_bets WHERE date=? AND game=?",
+                    (yesterday_str, game)
+                ).fetchall()
+                _conn.close()
+                for row in rows:
+                    try:
+                        data = json.loads(row['rec_data']) if isinstance(row['rec_data'], str) else row['rec_data']
+                        if data:
+                            recs.append(data)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        return recs
+
     # ===== 双色球 =====
     try:
         ssq_data = jz._fetch_history('ssq')
         section += "### 🔴 双色球\n\n"
+
+        # 最近开奖
+        section += "**最近开奖**:\n\n"
         section += "| 期号 | 红球 | 蓝球 |\n|------|------|------|\n"
         for d in ssq_data[:3]:
             reds = d.get('reds', [])
             blue = d.get('blue', 0)
             section += f"| {d.get('period')} | {' '.join(map(str, reds))} | {blue:02d} |\n"
 
-        # 从 JinZhu 结果取推荐
+        # 今日推荐
         ssq_recs = daily_result.get('ssq', [])
         if not ssq_recs:
             ssq_recs = jz.generate_recs('ssq')
@@ -398,39 +445,33 @@ def generate_lottery_section():
             for rec in ssq_recs:
                 rec_reds = rec.get('reds', [])
                 rec_blue = rec.get('blue', 0)
-                section += f"  - {rec.get('strategy', '未知')}: 红={rec_reds} 蓝={rec_blue:02d}\n"
+                section += f"  - {rec.get('strategy', '未知')}: 红={' '.join(f'{x:02d}' for x in rec_reds)} + 蓝={rec_blue:02d}\n"
 
-        # 回测
-        if yesterday_weekday in [1, 3, 6]:
-            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 双色球\n"
-            if ssq_data:
-                latest = ssq_data[0]
-                section += f"第{latest.get('period')}期: 红={latest.get('reds')} 蓝={latest.get('blue')}\n"
-                try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
-                        predictions = json.load(f)
-                    yesterday_str = yesterday.strftime('%Y-%m-%d')
-                    for item in predictions:
-                        if item.get('date') == yesterday_str:
-                            y_recs = item.get('ssq_recs', [])
-                            if y_recs:
-                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
-                                for rec in y_recs:
-                                    rec_reds = rec.get('reds', [])
-                                    rec_blue = rec.get('blue', 0)
-                                    hit_reds = set(rec_reds) & set(latest.get('reds', []))
-                                    hit_blue = rec_blue == latest.get('blue', 0)
-                                    section += f"  - {rec.get('strategy', '未知')}: 红={rec_reds} 蓝={rec_blue:02d} "
-                                    if hit_reds:
-                                        section += f"✅ 中{list(hit_reds)}"
-                                    if hit_blue:
-                                        section += f" ✅ 中蓝"
-                                    section += "\n"
-                                section += f"\n💰 回测完成\n"
-                            break
-                except Exception as e:
-                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        # 回测（昨日有开奖时展示）
+        if yesterday_weekday in ssq_days and ssq_data:
+            latest = ssq_data[0]
+            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
+            section += f"开奖号码: 红={' '.join(f'{x:02d}' for x in latest.get('reds', []))} + 蓝={latest.get('blue', 0):02d}\n"
+            y_recs = _read_yesterday_recs('ssq')
+            if y_recs:
+                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
+                for rec in y_recs:
+                    rec_reds = rec.get('reds', [])
+                    rec_blue = rec.get('blue', 0)
+                    hit_reds = set(rec_reds) & set(latest.get('reds', []))
+                    hit_blue = rec_blue == latest.get('blue', 0)
+                    hit_count = len(hit_reds) + (1 if hit_blue else 0)
+                    section += f"  - {rec.get('strategy', '未知')}: 红={' '.join(f'{x:02d}' for x in rec_reds)} + 蓝={rec_blue:02d} "
+                    if hit_count > 0:
+                        section += f"→ 中{len(hit_reds)}红"
+                        if hit_blue:
+                            section += "+1蓝"
+                        section += f"({hit_count}码)"
+                    else:
+                        section += "→ 未中"
+                    section += "\n"
+            else:
+                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
         section += "\n"
     except Exception as e:
         section += f"[双色球] 错误: {e}\n\n"
@@ -439,11 +480,13 @@ def generate_lottery_section():
     try:
         dlt_data = jz._fetch_history('dlt')
         section += "### 🟡 大乐透\n\n"
+
+        section += "**最近开奖**:\n\n"
         section += "| 期号 | 前区 | 后区 |\n|------|------|------|\n"
         for d in dlt_data[:3]:
             front = d.get('front', [])
             back = d.get('back', [])
-            section += f"| {d.get('period')} | {' '.join(map(str, front))} | {' '.join(map(str, back))} |\n"
+            section += f"| {d.get('period')} | {' '.join(f'{x:02d}' for x in front)} | {' '.join(f'{x:02d}' for x in back)} |\n"
 
         dlt_recs = daily_result.get('dlt', [])
         if not dlt_recs:
@@ -453,38 +496,29 @@ def generate_lottery_section():
             for rec in dlt_recs:
                 rec_front = rec.get('front', [])
                 rec_back = rec.get('back', [])
-                section += f"  - {rec.get('strategy', '未知')}: 前={rec_front} 后={rec_back}\n"
+                section += f"  - {rec.get('strategy', '未知')}: 前={' '.join(f'{x:02d}' for x in rec_front)} + 后={' '.join(f'{x:02d}' for x in rec_back)}\n"
 
-        if yesterday_weekday in [0, 2, 5]:
-            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 大乐透\n"
-            if dlt_data:
-                latest = dlt_data[0]
-                section += f"第{latest.get('period')}期: 前={latest.get('front')} 后={latest.get('back')}\n"
-                try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
-                        predictions = json.load(f)
-                    yesterday_str = yesterday.strftime('%Y-%m-%d')
-                    for item in predictions:
-                        if item.get('date') == yesterday_str:
-                            y_recs = item.get('dlt_recs', [])
-                            if y_recs:
-                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
-                                for rec in y_recs:
-                                    rec_front = rec.get('front', [])
-                                    rec_back = rec.get('back', [])
-                                    hit_front = set(rec_front) & set(latest.get('front', []))
-                                    hit_back = set(rec_back) & set(latest.get('back', []))
-                                    section += f"  - {rec.get('strategy', '未知')}: 前={rec_front} 后={rec_back} "
-                                    if hit_front:
-                                        section += f"✅ 中{list(hit_front)}"
-                                    if hit_back:
-                                        section += f" ✅ 中{list(hit_back)}"
-                                    section += "\n"
-                                section += f"\n💰 回测完成\n"
-                            break
-                except Exception as e:
-                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        if yesterday_weekday in dlt_days and dlt_data:
+            latest = dlt_data[0]
+            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
+            section += f"开奖号码: 前={' '.join(f'{x:02d}' for x in latest.get('front', []))} + 后={' '.join(f'{x:02d}' for x in latest.get('back', []))}\n"
+            y_recs = _read_yesterday_recs('dlt')
+            if y_recs:
+                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
+                for rec in y_recs:
+                    rec_front = rec.get('front', [])
+                    rec_back = rec.get('back', [])
+                    hit_front = set(rec_front) & set(latest.get('front', []))
+                    hit_back = set(rec_back) & set(latest.get('back', []))
+                    hit_count = len(hit_front) + len(hit_back)
+                    section += f"  - {rec.get('strategy', '未知')}: 前={' '.join(f'{x:02d}' for x in rec_front)} + 后={' '.join(f'{x:02d}' for x in rec_back)} "
+                    if hit_count > 0:
+                        section += f"→ 中{len(hit_front)}前+{len(hit_back)}后({hit_count}码)"
+                    else:
+                        section += "→ 未中"
+                    section += "\n"
+            else:
+                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
         section += "\n"
     except Exception as e:
         section += f"[大乐透] 错误: {e}\n\n"
@@ -493,6 +527,8 @@ def generate_lottery_section():
     try:
         qxc_data = jz._fetch_history('qxc')
         section += "### 🟢 七星彩\n\n"
+
+        section += "**最近开奖**:\n\n"
         section += "| 期号 | 号码 |\n|------|------|\n"
         for d in qxc_data[:3]:
             digits = d.get('digits', d.get('numbers', []))
@@ -504,35 +540,27 @@ def generate_lottery_section():
         if qxc_recs:
             section += f"\n**今日推荐({len(qxc_recs)}注)**:\n"
             for rec in qxc_recs:
-                section += f"  - {rec.get('strategy', '未知')}: 号码={rec.get('digits', [])}\n"
+                section += f"  - {rec.get('strategy', '未知')}: 号码={' '.join(map(str, rec.get('digits', [])))}\n"
 
-        if yesterday_weekday in [1, 4, 6]:
-            section += f"\n**昨日({yesterday.strftime('%Y-%m-%d')})开奖回测**: 七星彩\n"
-            if qxc_data:
-                latest = qxc_data[0]
-                latest_digits = latest.get('digits', latest.get('numbers', []))
-                section += f"第{latest.get('period')}期: 号码={latest_digits}\n"
-                try:
-                    predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-                    with open(predictions_path, 'r') as f:
-                        predictions = json.load(f)
-                    yesterday_str = yesterday.strftime('%Y-%m-%d')
-                    for item in predictions:
-                        if item.get('date') == yesterday_str:
-                            y_recs = item.get('qxc_recs', [])
-                            if y_recs:
-                                section += f"\n刘海蟾推荐({len(y_recs)}注):\n"
-                                for rec in y_recs:
-                                    rec_digits = rec.get('digits', rec.get('numbers', []))
-                                    hit_count = sum(1 for i in range(min(len(rec_digits), len(latest_digits))) if i < len(rec_digits) and i < len(latest_digits) and rec_digits[i] == latest_digits[i])
-                                    section += f"  - {rec.get('strategy', '未知')}: 号码={rec_digits} "
-                                    if hit_count > 0:
-                                        section += f"✅ 中{hit_count}位"
-                                    section += "\n"
-                                section += f"\n💰 回测完成\n"
-                            break
-                except Exception as e:
-                    section += f"\n(未找到昨日推荐记录: {e})\n"
+        if yesterday_weekday in qxc_days and qxc_data:
+            latest = qxc_data[0]
+            latest_digits = latest.get('digits', latest.get('numbers', []))
+            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
+            section += f"开奖号码: {' '.join(map(str, latest_digits))}\n"
+            y_recs = _read_yesterday_recs('qxc')
+            if y_recs:
+                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
+                for rec in y_recs:
+                    rec_digits = rec.get('digits', rec.get('numbers', []))
+                    hit_count = sum(1 for i in range(min(len(rec_digits), len(latest_digits))) if rec_digits[i] == latest_digits[i])
+                    section += f"  - {rec.get('strategy', '未知')}: 号码={' '.join(map(str, rec_digits))} "
+                    if hit_count > 0:
+                        section += f"→ 中{hit_count}位"
+                    else:
+                        section += "→ 未中"
+                    section += "\n"
+            else:
+                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
         section += "\n"
     except Exception as e:
         section += f"[七星彩] 错误: {e}\n\n"
