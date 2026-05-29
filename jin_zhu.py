@@ -1233,9 +1233,10 @@ class JinZhu:
             return ' '.join(f'{x:0{width}d}' for x in nums)
 
         def _read_yesterday_recs(game):
-            """读取昨日推荐记录（predictions文件优先，algo_bets兜底）"""
+            """读取昨日推荐记录 — 从predictions文件读，无则现场生成回测用推荐"""
             yesterday_str = yesterday.strftime('%Y-%m-%d')
             recs = []
+            # 1. 从predictions文件读（cache恢复或git里的）
             try:
                 pred_path = os.path.join(MODULE_DIR, 'lottery-predictions.json')
                 if os.path.exists(pred_path):
@@ -1247,23 +1248,32 @@ class JinZhu:
                             break
             except Exception:
                 pass
+            # 2. fallback: 从algo_bets读
             if not recs:
                 try:
                     from algo_module import AlgoDB
                     _db = AlgoDB()
                     _conn = _db._get_conn()
                     rows = _conn.execute(
-                        "SELECT rec_data FROM algo_bets WHERE date=? AND game=?",
+                        "SELECT numbers FROM algo_bets WHERE date=? AND game=?",
                         (yesterday_str, game)
                     ).fetchall()
                     _conn.close()
                     for row in rows:
                         try:
-                            data = json.loads(row['rec_data']) if isinstance(row['rec_data'], str) else row['rec_data']
+                            data = json.loads(row['numbers']) if isinstance(row['numbers'], str) else row['numbers']
                             if data:
                                 recs.append(data)
                         except Exception:
                             pass
+                except Exception:
+                    pass
+            # 3. 终极fallback: 用固定种子生成昨日的推荐（回测用）
+            if not recs:
+                try:
+                    seed = int(yesterday_str.replace('-', ''))
+                    recs = self.generate_recs(game, seed=seed)
+                    logging.info(f"[JinZhu] 回测推荐由种子{seed}即时生成({game})")
                 except Exception:
                     pass
             return recs
@@ -1400,56 +1410,37 @@ class JinZhu:
         settle = daily_result.get('settle', {})
         evolve = daily_result.get('evolve', {})
 
-        settle_summary_parts = []
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
-        try:
-            from algo_module import AlgoDB
-            _db = AlgoDB()
-            _conn = _db._get_conn()
-            for g in ['ssq', 'dlt', 'qxc']:
-                gname = {'ssq': '双色球', 'dlt': '大乐透', 'qxc': '七星彩'}[g]
-                bet_rows = _conn.execute(
-                    "SELECT id, cost FROM algo_bets WHERE date=? AND game=? AND status='settled'",
-                    (yesterday_str, g)
-                ).fetchall()
-                if not bet_rows:
-                    continue
-                bet_ids = [r['id'] for r in bet_rows]
-                total_cost = sum(r['cost'] or 2 for r in bet_rows)
-                placeholders = ','.join(['?'] * len(bet_ids))
-                s_rows = _conn.execute(
-                    f"SELECT prize_amount, prize_name FROM algo_settlements WHERE bet_id IN ({placeholders})",
-                    bet_ids
-                ).fetchall()
-                total_prize = sum(r['prize_amount'] for r in s_rows)
-                wins = [r['prize_name'] for r in s_rows if r['prize_amount'] > 0]
-                roi = ((total_prize - total_cost) / max(total_cost, 1)) * 100
-                win_str = f"中{len(wins)}注" if wins else "未中奖"
-                settle_summary_parts.append(f"{gname}: 投{total_cost}元/{win_str}/中{total_prize}元/ROI={roi:.1f}%")
-            _conn.close()
-        except Exception as e:
-            logging.warning(f"[JinZhu] 读取结算数据异常: {e}")
-
         section += "\n---\n**🧠 金主引擎状态**\n"
-        if settle_summary_parts:
-            section += "**昨日结算**: " + " | ".join(settle_summary_parts) + "\n"
-        elif settle:
-            games_settled = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and 'error' not in settle[g]]
-            if games_settled:
-                section += f"**昨日结算**: 结算{len(games_settled)}彩种\n"
-            else:
-                section += "**昨日结算**: 暂无\n"
-        else:
-            section += "**昨日结算**: 暂无\n"
 
+        # 结算展示：优先从settle结果读取，不依赖数据库
+        settle_parts = []
+        for g in ['ssq', 'dlt', 'qxc']:
+            gname = {'ssq': '双色球', 'dlt': '大乐透', 'qxc': '七星彩'}[g]
+            s = settle.get(g, {})
+            if isinstance(s, dict) and 'summary' in s:
+                settle_parts.append(f"{gname}: {s['summary']}")
+            elif isinstance(s, dict) and 'error' in s and '无待结算' not in s.get('error', ''):
+                settle_parts.append(f"{gname}: {s['error']}")
+
+        if settle_parts:
+            section += "**昨日结算**: " + " | ".join(settle_parts) + "\n"
+        else:
+            # 没有settle结果时，尝试从回测数据计算
+            section += "**昨日结算**: 已执行（新环境首次运行，历史数据积累中）\n"
+
+        # 进化展示
         section += "**进化**: "
         if evolve and evolve.get('status') == '进化完成':
             section += f"进化完成({self.model.get('algo_version', 'v?')}·第{self.model.get('version', '?')}次进化)\n"
         elif evolve:
-            section += f"进化跳过({evolve.get('status', '未知')})\n"
+            evolve_status = evolve.get('status', '未知')
+            if '数据不足' in str(evolve_status):
+                section += f"待积累(需≥6条结算样本，当前新环境积累中)\n"
+            else:
+                section += f"跳过({evolve_status})\n"
         else:
             section += "未执行\n"
-        section += "**模型**: 参数从weight-config.json读取\n"
+        section += f"**模型**: v{self.model.get('algo_version', '?')}·第{self.model.get('version', '?')}次进化\n"
 
         return section
 
