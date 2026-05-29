@@ -14,12 +14,12 @@ from datetime import datetime, timezone, timedelta
 CST = timezone(timedelta(hours=8))
 today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
-# 邮件配置
-SMTP_SERVER = 'smtp.163.com'
-SMTP_PORT = 465
-SMTP_USER = 'tea0331@163.com'
-SMTP_PASS = 'NYuLnGar8wT8RBit'
-SMTP_TO = 'tea0331@163.com'
+# 邮件配置（优先读取环境变量，避免硬编码密码）
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
+SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
+SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
+SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s',
                     filename='/tmp/scheduler_simple.log', filemode='a')
