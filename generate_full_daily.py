@@ -209,21 +209,21 @@ def generate_news_section():
         logging.warning("[新闻] 新闻素材过少，跳过AI生成")
         return _fallback_news_section(ithome_raw, kr36_raw, hot_raw)
 
-    # ---- AI生成四大板块 ----
-    prompt = f"""你是刘海蟾点金的日报编辑，为一位关心钱袋子的普通人写日报。
+    # ---- AI生成六大板块 ----
+    prompt = f"""你是刘海蟾点金的日报编辑，同时具备商业分析能力和接地气的表达力。
 
 ## 读者画像
-- 身份：普通打工人/小老板，关心怎么省钱、怎么搞钱、政策对自己有什么影响
-- 最关心：房价/就业/物价/社保/副业/省钱攻略/政策变化对钱包的影响
-- 也关注：AI怎么改变工作、新能源车值不值得买、什么行业在招人
+- 身份：关注钱袋子的普通人，同时也有投资和创业视野
+- 民生层面：房价/就业/物价/社保/副业/省钱攻略/政策变化对钱包的影响
+- 投资层面：供需错配、逆势机会、5层传导思维、天之道损有余补不足
 - 不关心：娱乐圈八卦、体育赛事、明星绯闻
-- 语言风格：说人话，不用术语，让大妈都能看懂。不要"赋能""抓手""闭环"这种词
+- 语言风格：说人话为主，深度分析时可以用框架，但必须让普通人也能看懂
 
 ## 今日原始新闻素材（已按画像打分排序）
 {material}
 
 ## 输出要求
-直接输出markdown，包含四大板块（从"## 一、每日资讯"开始），格式如下：
+直接输出markdown，包含六大板块（从"## 一、每日资讯"开始），格式如下：
 
 ## 一、每日资讯
 分3个小节，每个小节3-4条新闻：
@@ -239,31 +239,40 @@ def generate_news_section():
 扫出2-3个普通人能抓住的机会，每个含：
 - **机会名称**
 - 具体是什么：用大白话说清楚
-- 怎么入手：给一个普通人今天就能开始的第一步
+- 怎么入手：给一个今天就能开始的第一步
 - 投入（时间/金钱）| 风险（低/中/高）| 预期回报
 
 如果没有好机会就说"今天没发现靠谱机会"，别硬编。
 
-## 三、避坑提醒
-找出1-3个表面光鲜但暗藏风险的信号，每个含：
+## 三、逆潮观察
+找出1-3个"反直觉信号"——表面利空但暗藏机会，或表面利好但隐含风险。
+每条包含：现象 + 逆潮逻辑 + 行动建议。
+必须结合今日具体新闻，不要输出万能废话。
+
+## 四、深度分析（5层传导 + 天之道解读）
+选1-2条最重要的新闻，做5层传导分析：
+- 第1层：事件本身（一句话）
+- 第2层：直接影响
+- 第3层：市场反应
+- 第4层：中期演变(3-6个月)
+- 第5层：长期格局(1-2年)
+- 🔮 天之道：损什么(有余)？补什么(不足)？——用"天之道损有余补不足"的哲学框架，指出这条新闻中什么正在过剩被削减，什么正在短缺被填补
+
+## 五、避坑提醒
+找出1-2个表面光鲜但暗藏风险的信号，每个含：
 - 现象：什么看起来很好
 - 真相：为什么可能是坑
 - 怎么办：普通人该怎么保护自己
 
-如果没有明显风险信号就说"今天暂无明显风险预警"。
-
-## 四、深度分析
-选1条今天最重要的新闻，用大白话讲清楚：
-- 发生了什么（一句话）
-- 对你有什么影响（省钱/花钱/赚钱/就业/房价）
-- 接下来会怎么发展（3-6个月内）
-- 你现在该做什么（具体行动，别写"持续关注"这种废话）
+## 六、今日金句
+用一句话总结今天的核心洞察，让人看完就记住。格式：💭 一句话
 
 重要规则：
 1. 必须基于今日具体新闻，不要空谈
-2. 说人话！不要"值得关注""需警惕""赋能""生态"等套话
+2. 说人话为主，分析框架用但必须解释清楚
 3. 每条分析必须回答"跟我有什么关系"
-4. 没有好机会就直说，不要硬编"""
+4. 没有好机会就直说，不要硬编
+5. 不要用"值得关注""需警惕""赋能""生态"等套话"""
 
     api_key = "[HUNYUAN_API_KEY]"
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
@@ -274,7 +283,7 @@ def generate_news_section():
     payload = {
         "model": "hunyuan-turbos-latest",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 4000,
+        "max_tokens": 6000,
         "temperature": 0.7,
     }
 
@@ -350,14 +359,16 @@ def _fallback_news_section(ithome_raw, kr36_raw, hot_raw):
         sections.append(f"- {n['title']}")
 
     sections.append("\n## 二、搞钱雷达\n（AI分析生成失败，今日暂无搞钱机会分析）\n")
-    sections.append("\n## 三、避坑提醒\n（AI分析生成失败，今日暂无风险预警）\n")
-    sections.append("\n## 四、深度分析\n（今日AI分析生成失败，下次自动恢复）\n")
+    sections.append("\n## 三、逆潮观察\n（AI分析生成失败，今日暂无逆潮分析）\n")
+    sections.append("\n## 四、深度分析\n（AI分析生成失败，今日暂无深度分析）\n")
+    sections.append("\n## 五、避坑提醒\n（AI分析生成失败，今日暂无风险预警）\n")
+    sections.append("\n## 六、今日金句\n💭 明天继续\n")
 
     return "\n".join(sections)
 
 
 def generate_lottery_section():
-    """生成彩票部分：今日推荐 + 昨日回测（统一走 JinZhu 核心大脑）"""
+    """生成彩票部分：由JinZhu核心大脑统一生成展示内容"""
     global yesterday, today
     try:
         from jin_zhu import JinZhu
@@ -365,7 +376,7 @@ def generate_lottery_section():
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: JinZhu初始化异常({e})\n---\n"
 
-    # 🔴 v4.0-JinZhu: 核心大脑统一生成推荐
+    # v9.0-JinZhu: 核心大脑闭环+展示一体化
     try:
         daily_result = jz.daily_run()
         logging.info(f"[日报] ✅ JinZhu闭环完成: settle={bool(daily_result.get('settle'))}, evolve={bool(daily_result.get('evolve'))}")
@@ -373,257 +384,12 @@ def generate_lottery_section():
         logging.warning(f"[日报] ⚠️ JinZhu闭环异常(不阻塞): {e}")
         daily_result = {}
 
-    section = "\n---\n\n## 🎰 彩票号码推荐 — 刘海蟾点金·金主引擎（仅供娱乐参考）\n\n"
-    section += "> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n\n"
-
-    yesterday_weekday = yesterday.weekday()
-    today_weekday = today.weekday()
-
-    # 开奖日历（周几开什么奖）
-    ssq_days = {1, 3, 6}   # 二四日
-    dlt_days = {0, 2, 5}   # 一三五
-    qxc_days = {1, 4, 6}   # 二五日
-
-    # ===== 辅助：从algo_bets读取昨日推荐记录 =====
-    def _read_yesterday_recs(game):
-        """从lottery-predictions.json或algo_bets读取昨日推荐"""
-        yesterday_str = yesterday.strftime('%Y-%m-%d')
-        recs = []
-        # 优先从predictions文件读
-        try:
-            predictions_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lottery-predictions.json')
-            if os.path.exists(predictions_path):
-                with open(predictions_path, 'r', encoding='utf-8') as f:
-                    predictions = json.load(f)
-                for item in predictions:
-                    if item.get('date') == yesterday_str:
-                        recs = item.get(f'{game}_recs', [])
-                        break
-        except Exception:
-            pass
-        # fallback从algo_bets读
-        if not recs:
-            try:
-                from algo_module import AlgoDB
-                _db = AlgoDB()
-                _conn = _db._get_conn()
-                rows = _conn.execute(
-                    "SELECT rec_data FROM algo_bets WHERE date=? AND game=?",
-                    (yesterday_str, game)
-                ).fetchall()
-                _conn.close()
-                for row in rows:
-                    try:
-                        data = json.loads(row['rec_data']) if isinstance(row['rec_data'], str) else row['rec_data']
-                        if data:
-                            recs.append(data)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-        return recs
-
-    # ===== 双色球 =====
+    # 由JinZhu核心大脑统一生成展示内容
     try:
-        ssq_data = jz._fetch_history('ssq')
-        section += "### 🔴 双色球\n\n"
-
-        # 最近开奖
-        section += "**最近开奖**:\n\n"
-        section += "| 期号 | 红球 | 蓝球 |\n|------|------|------|\n"
-        for d in ssq_data[:3]:
-            reds = d.get('reds', [])
-            blue = d.get('blue', 0)
-            section += f"| {d.get('period')} | {' '.join(map(str, reds))} | {blue:02d} |\n"
-
-        # 今日推荐
-        ssq_recs = daily_result.get('ssq', [])
-        if not ssq_recs:
-            ssq_recs = jz.generate_recs('ssq')
-        if ssq_recs:
-            section += f"\n**今日推荐({len(ssq_recs)}注)**:\n"
-            for rec in ssq_recs:
-                rec_reds = rec.get('reds', [])
-                rec_blue = rec.get('blue', 0)
-                section += f"  - {rec.get('strategy', '未知')}: 红={' '.join(f'{x:02d}' for x in rec_reds)} + 蓝={rec_blue:02d}\n"
-
-        # 回测（昨日有开奖时展示）
-        if yesterday_weekday in ssq_days and ssq_data:
-            latest = ssq_data[0]
-            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
-            section += f"开奖号码: 红={' '.join(f'{x:02d}' for x in latest.get('reds', []))} + 蓝={latest.get('blue', 0):02d}\n"
-            y_recs = _read_yesterday_recs('ssq')
-            if y_recs:
-                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
-                for rec in y_recs:
-                    rec_reds = rec.get('reds', [])
-                    rec_blue = rec.get('blue', 0)
-                    hit_reds = set(rec_reds) & set(latest.get('reds', []))
-                    hit_blue = rec_blue == latest.get('blue', 0)
-                    hit_count = len(hit_reds) + (1 if hit_blue else 0)
-                    section += f"  - {rec.get('strategy', '未知')}: 红={' '.join(f'{x:02d}' for x in rec_reds)} + 蓝={rec_blue:02d} "
-                    if hit_count > 0:
-                        section += f"→ 中{len(hit_reds)}红"
-                        if hit_blue:
-                            section += "+1蓝"
-                        section += f"({hit_count}码)"
-                    else:
-                        section += "→ 未中"
-                    section += "\n"
-            else:
-                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
-        section += "\n"
+        return jz.generate_daily_section(daily_result)
     except Exception as e:
-        section += f"[双色球] 错误: {e}\n\n"
-
-    # ===== 大乐透 =====
-    try:
-        dlt_data = jz._fetch_history('dlt')
-        section += "### 🟡 大乐透\n\n"
-
-        section += "**最近开奖**:\n\n"
-        section += "| 期号 | 前区 | 后区 |\n|------|------|------|\n"
-        for d in dlt_data[:3]:
-            front = d.get('front', [])
-            back = d.get('back', [])
-            section += f"| {d.get('period')} | {' '.join(f'{x:02d}' for x in front)} | {' '.join(f'{x:02d}' for x in back)} |\n"
-
-        dlt_recs = daily_result.get('dlt', [])
-        if not dlt_recs:
-            dlt_recs = jz.generate_recs('dlt')
-        if dlt_recs:
-            section += f"\n**今日推荐({len(dlt_recs)}注)**:\n"
-            for rec in dlt_recs:
-                rec_front = rec.get('front', [])
-                rec_back = rec.get('back', [])
-                section += f"  - {rec.get('strategy', '未知')}: 前={' '.join(f'{x:02d}' for x in rec_front)} + 后={' '.join(f'{x:02d}' for x in rec_back)}\n"
-
-        if yesterday_weekday in dlt_days and dlt_data:
-            latest = dlt_data[0]
-            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
-            section += f"开奖号码: 前={' '.join(f'{x:02d}' for x in latest.get('front', []))} + 后={' '.join(f'{x:02d}' for x in latest.get('back', []))}\n"
-            y_recs = _read_yesterday_recs('dlt')
-            if y_recs:
-                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
-                for rec in y_recs:
-                    rec_front = rec.get('front', [])
-                    rec_back = rec.get('back', [])
-                    hit_front = set(rec_front) & set(latest.get('front', []))
-                    hit_back = set(rec_back) & set(latest.get('back', []))
-                    hit_count = len(hit_front) + len(hit_back)
-                    section += f"  - {rec.get('strategy', '未知')}: 前={' '.join(f'{x:02d}' for x in rec_front)} + 后={' '.join(f'{x:02d}' for x in rec_back)} "
-                    if hit_count > 0:
-                        section += f"→ 中{len(hit_front)}前+{len(hit_back)}后({hit_count}码)"
-                    else:
-                        section += "→ 未中"
-                    section += "\n"
-            else:
-                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
-        section += "\n"
-    except Exception as e:
-        section += f"[大乐透] 错误: {e}\n\n"
-
-    # ===== 七星彩 =====
-    try:
-        qxc_data = jz._fetch_history('qxc')
-        section += "### 🟢 七星彩\n\n"
-
-        section += "**最近开奖**:\n\n"
-        section += "| 期号 | 号码 |\n|------|------|\n"
-        for d in qxc_data[:3]:
-            digits = d.get('digits', d.get('numbers', []))
-            section += f"| {d.get('period')} | {' '.join(map(str, digits))} |\n"
-
-        qxc_recs = daily_result.get('qxc', [])
-        if not qxc_recs:
-            qxc_recs = jz.generate_recs('qxc')
-        if qxc_recs:
-            section += f"\n**今日推荐({len(qxc_recs)}注)**:\n"
-            for rec in qxc_recs:
-                section += f"  - {rec.get('strategy', '未知')}: 号码={' '.join(map(str, rec.get('digits', [])))}\n"
-
-        if yesterday_weekday in qxc_days and qxc_data:
-            latest = qxc_data[0]
-            latest_digits = latest.get('digits', latest.get('numbers', []))
-            section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
-            section += f"开奖号码: {' '.join(map(str, latest_digits))}\n"
-            y_recs = _read_yesterday_recs('qxc')
-            if y_recs:
-                section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
-                for rec in y_recs:
-                    rec_digits = rec.get('digits', rec.get('numbers', []))
-                    hit_count = sum(1 for i in range(min(len(rec_digits), len(latest_digits))) if rec_digits[i] == latest_digits[i])
-                    section += f"  - {rec.get('strategy', '未知')}: 号码={' '.join(map(str, rec_digits))} "
-                    if hit_count > 0:
-                        section += f"→ 中{hit_count}位"
-                    else:
-                        section += "→ 未中"
-                    section += "\n"
-            else:
-                section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
-        section += "\n"
-    except Exception as e:
-        section += f"[七星彩] 错误: {e}\n\n"
-
-    # JinZhu 闭环状态摘要
-    settle = daily_result.get('settle', {})
-    evolve = daily_result.get('evolve', {})
-    
-    # 从algo_settlements读取昨日结算数据（即使settle返回"无待结算"也能展示）
-    settle_summary_parts = []
-    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
-    try:
-        from algo_module import AlgoDB
-        _db = AlgoDB()
-        _conn = _db._get_conn()
-        for g in ['ssq', 'dlt', 'qxc']:
-            gname = {'ssq': '双色球', 'dlt': '大乐透', 'qxc': '七星彩'}[g]
-            # 查昨日该彩种的bets
-            bet_rows = _conn.execute(
-                "SELECT id, cost FROM algo_bets WHERE date=? AND game=? AND status='settled'",
-                (yesterday, g)
-            ).fetchall()
-            if not bet_rows:
-                continue
-            bet_ids = [r['id'] for r in bet_rows]
-            total_cost = sum(r['cost'] or 2 for r in bet_rows)
-            # 查settlements
-            placeholders = ','.join(['?'] * len(bet_ids))
-            s_rows = _conn.execute(
-                f"SELECT prize_amount, prize_name FROM algo_settlements WHERE bet_id IN ({placeholders})",
-                bet_ids
-            ).fetchall()
-            total_prize = sum(r['prize_amount'] for r in s_rows)
-            wins = [r['prize_name'] for r in s_rows if r['prize_amount'] > 0]
-            roi = ((total_prize - total_cost) / max(total_cost, 1)) * 100
-            win_str = f"中{len(wins)}注" if wins else "未中奖"
-            settle_summary_parts.append(f"{gname}: 投{total_cost}元/{win_str}/中{total_prize}元/ROI={roi:.1f}%")
-        _conn.close()
-    except Exception as e:
-        logging.warning(f"[日报] 读取结算数据异常: {e}")
-    
-    section += "\n---\n**🧠 金主引擎状态**\n"
-    if settle_summary_parts:
-        section += "**昨日结算**: " + " | ".join(settle_summary_parts) + "\n"
-    elif settle:
-        games_settled = [g for g in ['ssq', 'dlt', 'qxc'] if g in settle and 'error' not in settle[g]]
-        if games_settled:
-            section += f"**昨日结算**: 结算{len(games_settled)}彩种\n"
-        else:
-            section += "**昨日结算**: 暂无\n"
-    else:
-        section += "**昨日结算**: 暂无\n"
-    
-    section += "**进化**: "
-    if evolve and evolve.get('status') == '进化完成':
-        section += f"进化完成({jz.model.get('algo_version', 'v?')}·第{jz.model.get('version', '?')}次进化)\n"
-    elif evolve:
-        section += f"进化跳过({evolve.get('status', '未知')})\n"
-    else:
-        section += "未执行\n"
-    section += "**模型**: 参数从weight-config.json读取\n"
-
-    return section
+        logging.error(f"[日报] ⚠️ JinZhu展示生成异常: {e}")
+        return f"\n---\n## 🎰 彩票推荐\n（展示生成异常: {e}，推荐数据已正常生成）\n---\n"
 
 
 if __name__ == '__main__':
