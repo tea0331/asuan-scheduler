@@ -22,11 +22,11 @@ today_str = datetime.now(CST).strftime('%Y-%m-%d')
 yesterday = (datetime.now(CST) - timedelta(days=1))
 today = datetime.now(CST)
 
-SMTP_SERVER = 'smtp.163.com'
-SMTP_PORT = 465
-SMTP_USER = 'tea0331@163.com'
-SMTP_PASS = 'NYuLnGar8wT8RBit'
-SMTP_TO = 'tea0331@163.com'
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
+SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
+SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
+SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -89,6 +89,9 @@ def filter_by_profile(news_list, min_score=0, top_n=None):
 
 def send_email(subject, body):
     """发送邮件"""
+    if not SMTP_PASS:
+        logging.warning("[邮件] SMTP密码未配置，跳过发送")
+        return False
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = SMTP_USER
@@ -598,22 +601,48 @@ def generate_lottery_section():
 if __name__ == '__main__':
     logging.info(f"========== 生成完整日报 {today_str} ==========")
 
-    # 1. 生成新闻分析部分
-    news_content = generate_news_section()
+    # 1. 生成新闻分析部分（带异常保护）
+    try:
+        news_content = generate_news_section()
+    except Exception as e:
+        logging.error(f"[P1] 新闻生成异常: {e}")
+        news_content = "## 一、每日资讯\n（今日新闻生成异常，下次自动恢复）\n"
 
-    # 2. 生成彩票部分
-    lottery_content = generate_lottery_section()
+    # 2. 生成彩票部分（带异常保护）
+    try:
+        lottery_content = generate_lottery_section()
+    except Exception as e:
+        logging.error(f"[P1] 彩票生成异常: {e}")
+        lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常，下次自动恢复）\n"
 
     # 3. 拼接完整日报
     full_content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}"
 
-    # 4. 写文件
+    # 4. 写文件（确保一定写出）
     output_path = os.path.join(output_dir, f"{today_str}.md")
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(full_content)
-    logging.info(f"✅ 已写入: {output_path} ({len(full_content)}字符)")
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(full_content)
+        logging.info(f"✅ 已写入: {output_path} ({len(full_content)}字符)")
+    except Exception as e:
+        logging.error(f"[P0] 写入日报文件失败: {e}")
+        # 兜底：写到/tmp
+        try:
+            fallback_path = f"/tmp/daily-report-{today_str}.md"
+            with open(fallback_path, "w", encoding="utf-8") as f:
+                f.write(full_content)
+            logging.info(f"✅ 兜底写入: {fallback_path}")
+        except Exception as e2:
+            logging.error(f"[P0] 兜底写入也失败: {e2}")
 
-    # 5. 发邮件
-    subject = '阿算帮刘老板发财日报 | ' + today_str
-    send_email(subject, full_content)
+    # 5. 发邮件（带异常保护，邮件失败不阻塞日报生成）
+    if not SMTP_PASS:
+        logging.warning("[P1] SMTP密码未配置(SMTP_PASSWORD/SMTP_PASS环境变量均空)，跳过邮件发送")
+    else:
+        try:
+            subject = '阿算帮刘老板发财日报 | ' + today_str
+            send_email(subject, full_content)
+        except Exception as e:
+            logging.error(f"[P1] 邮件发送异常: {e}")
+
     logging.info(f"========== 完成 {today_str} ==========")

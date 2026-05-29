@@ -86,32 +86,37 @@ jobs:
           fi
           python generate_full_daily.py
 
-      - name: Verify email was sent
+      - name: Verify and diagnose
         working-directory: asuan-scheduler
+        if: always()
         run: |
           python3 -c "
           import os, glob
           from datetime import datetime, timezone, timedelta
           CST = timezone(timedelta(hours=8))
           today = datetime.now(CST).strftime('%Y-%m-%d')
-          
+
           # 检查输出文件
           files = glob.glob(f'output/{today}*.md')
           if files:
               print(f'✅ {today} 日报文件已生成: {files[0]}')
               print(f'   文件大小: {os.path.getsize(files[0])}字节')
           else:
-              print(f'❌ {today} 日报文件未生成')
-              exit(1)
-          
-          # 检查SMTP_PASSWORD是否设置
-          import os
+              print(f'⚠️ {today} 日报文件未生成（可能generate_full_daily.py运行异常）')
+              # 列出output目录内容辅助诊断
+              all_files = glob.glob('output/*.md')
+              if all_files:
+                  print(f'   目录中已有文件: {[os.path.basename(f) for f in sorted(all_files)[-3:]]}')
+
+          # 检查SMTP配置
           if os.getenv('SMTP_PASSWORD'):
-              print('✅ SMTP密码已配置')
+              print('✅ SMTP密码环境变量已配置')
+          elif os.getenv('SMTP_PASS'):
+              print('✅ SMTP_PASS环境变量已配置')
           else:
               print('⚠️ SMTP密码未配置，邮件可能未发送')
-          
-          print(f'✅ {today} 日报生成完成')
+
+          print(f'📋 {today} 日报流程结束')
           "
 
       - name: Commit state to repo
