@@ -84,7 +84,7 @@ jobs:
           if [ "${{ github.event.inputs.force_rerun }}" = "true" ]; then
             FORCE_FLAG="--force"
           fi
-          python scheduler.py --once $FORCE_FLAG
+          python generate_full_daily.py
 
       - name: Verify email was sent
         working-directory: asuan-scheduler

@@ -355,6 +355,7 @@ def _fallback_news_section(ithome_raw, kr36_raw, hot_raw):
 
 def generate_lottery_section():
     """生成彩票部分：今日推荐 + 昨日回测（统一走 JinZhu 核心大脑）"""
+    global yesterday, today
     try:
         from jin_zhu import JinZhu
         jz = JinZhu()
@@ -539,7 +540,7 @@ def generate_lottery_section():
     
     # 从algo_settlements读取昨日结算数据（即使settle返回"无待结算"也能展示）
     settle_summary_parts = []
-    yesterday = (_now_cst() - timedelta(days=1)).strftime('%Y-%m-%d')
+    yesterday = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
     try:
         from algo_module import AlgoDB
         _db = AlgoDB()
