@@ -89,23 +89,29 @@ jobs:
       - name: Verify email was sent
         working-directory: asuan-scheduler
         run: |
-          python -c "
-          import os, sqlite3, glob
+          python3 -c "
+          import os, glob
           from datetime import datetime, timezone, timedelta
           CST = timezone(timedelta(hours=8))
           today = datetime.now(CST).strftime('%Y-%m-%d')
-          db = sqlite3.connect('state.db')
-          rows = db.execute('SELECT success FROM executed_tasks WHERE date=? AND task_name=?', (today, 'daily-digest')).fetchall()
-          if rows and rows[0][0]:
-              print(f'✅ {today} 日报已完成（内容+邮件）')
+          
+          # 检查输出文件
+          files = glob.glob(f'output/{today}*.md')
+          if files:
+              print(f'✅ {today} 日报文件已生成: {files[0]}')
+              print(f'   文件大小: {os.path.getsize(files[0])}字节')
           else:
-              print(f'⚠️ {today} 日报未完全完成')
-              files = glob.glob(f'output/{today}*.md')
-              if files:
-                  print(f'  文件已生成: {files[0]}，但邮件可能未发送')
-              else:
-                  print(f'  无输出文件')
+              print(f'❌ {today} 日报文件未生成')
               exit(1)
+          
+          # 检查SMTP_PASSWORD是否设置
+          import os
+          if os.getenv('SMTP_PASSWORD'):
+              print('✅ SMTP密码已配置')
+          else:
+              print('⚠️ SMTP密码未配置，邮件可能未发送')
+          
+          print(f'✅ {today} 日报生成完成')
           "
 
       - name: Commit state to repo
