@@ -102,7 +102,7 @@ def filter_by_profile(news_list, min_score=0, top_n=None):
 
 
 def send_email(subject, body):
-    """发送邮件"""
+    """发送邮件：Markdown正文+HTML渲染双格式"""
     if not SMTP_PASS:
         logging.warning("[邮件] SMTP密码未配置，跳过发送")
         return False
@@ -110,8 +110,20 @@ def send_email(subject, body):
     msg['Subject'] = subject
     msg['From'] = SMTP_USER
     msg['To'] = SMTP_TO
-    html = body.replace('\n', '<br>')
-    msg.attach(MIMEText(html, 'html', 'utf-8'))
+    # 纯文本版（Markdown原文，邮件客户端无法渲染HTML时的后备）
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    # HTML版（Markdown→HTML渲染，正常显示）
+    try:
+        import markdown as md
+        html_body = md.markdown(body, extensions=['extra', 'nl2br'])
+        # 内联样式让邮件更好看
+        html_wrapped = f"""<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+            font-size:15px;line-height:1.7;color:#333;max-width:680px;margin:0 auto;padding:20px;">
+            {html_body}</body></html>"""
+        msg.attach(MIMEText(html_wrapped, 'html', 'utf-8'))
+    except Exception as e:
+        logging.warning(f"[邮件] Markdown渲染失败，降级纯文本: {e}")
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30)
         server.login(SMTP_USER, SMTP_PASS)
