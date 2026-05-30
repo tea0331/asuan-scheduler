@@ -19,7 +19,7 @@ today_str = datetime.now(CST).strftime('%Y-%m-%d')
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
 SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
-SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
+SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', 'WNpyg7vTPx4KTQ9s'))
 SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s',
@@ -54,16 +54,15 @@ def send_email(subject, body):
         msg.attach(MIMEText(html_wrapped, 'html', 'utf-8'))
     except Exception as e:
         logging.warning(f"[邮件] Markdown渲染失败，降级纯文本: {e}")
-        # 已attach了plain版，不需要再添加
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30)
         server.login(SMTP_USER, SMTP_PASS)
         server.sendmail(SMTP_USER, [SMTP_TO], msg.as_string())
         server.quit()
-        logging.info(f"✅ 邮件发送成功: {subject}")
+        logging.info(f"[邮件] ✅ 发送成功: {subject}")
         return True
     except Exception as e:
-        logging.error(f"❌ 邮件发送失败: {e}")
+        logging.error(f"[邮件] ❌ 发送失败: {e}")
         return False
 
 
@@ -74,16 +73,15 @@ def main():
     content = None
     try:
         from generate_full_daily import generate_news_section, generate_lottery_section
-        from generate_full_daily import _run_with_timeout
 
         logging.info("[生成] 开始生成完整日报（新闻AI+彩票推荐）...")
 
-        # 新闻部分（150秒超时兜底）
+        # 新闻部分（API内部60秒超时，不卡死）
         try:
-            news_content = _run_with_timeout(generate_news_section, timeout=150)
+            news_content = generate_news_section()
         except Exception as e:
             logging.warning(f"[P1] 新闻生成异常: {e}")
-            news_content = "## 一、每日资讯\n（今日新闻生成超时，下次自动恢复）\n"
+            news_content = "## 一、每日资讯\n（今日新闻生成异常，下次自动恢复）\n"
 
         # 彩票部分
         try:
@@ -92,7 +90,7 @@ def main():
             logging.error(f"[P1] 彩票生成异常: {e}")
             lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常，下次自动恢复）\n"
 
-        content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}"
+        content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}\n{lottery_content}"
 
     except Exception as e:
         logging.error(f"[生成] 完整日报生成失败: {e}")
@@ -122,11 +120,8 @@ def main():
         logging.error(f"[P0] 写入日报文件失败: {e}")
 
     # 4. 发邮件
-    if SMTP_PASS:
-        subject = f'阿算帮刘老板发财日报 | {today_str}'
-        send_email(subject, content)
-    else:
-        logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
+    subject = f'阿算帮刘老板发财日报 | {today_str}'
+    send_email(subject, content)
 
     logging.info(f"========== 日报任务完成 {today_str} ==========")
 
