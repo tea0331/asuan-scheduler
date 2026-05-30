@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 import json
 import requests
 import random
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 # 添加项目根目录到path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -111,6 +112,9 @@ def send_email(subject, body):
         server.quit()
         logging.info(f"✅ 邮件发送成功: {subject}")
         return True
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.error(f"❌ 邮件发送失败: {e}")
         return False
@@ -136,6 +140,9 @@ def _fetch_rss(url, count=5):
                     'summary': summary[:200]
                 })
         return results
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.warning(f"[新闻] RSS抓取失败({url}): {e}")
         return []
@@ -157,11 +164,20 @@ def _fetch_baidu_hot(count=10):
             if title:
                 results.append({'title': title, 'source': '百度热搜', 'summary': ''})
         return results
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.warning(f"[新闻] 百度热搜抓取失败: {e}")
         return []
 
 
+
+def _run_with_timeout(func, timeout=60):
+    """用线程池执行func，超时则跳过"""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(func)
+        return future.result(timeout=timeout)
 def generate_news_section():
     """基于RSS+热搜抓取原始素材，统一由AI生成高质量分析型日报
     
@@ -356,6 +372,9 @@ def generate_news_section():
         else:
             logging.warning("[新闻] AI日报生成失败，使用降级模式")
             return _fallback_news_section(all_raw)
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.warning(f"[新闻] 混元API异常: {e}")
         return _fallback_news_section(all_raw)
@@ -408,6 +427,9 @@ def generate_lottery_section():
     try:
         from jin_zhu import JinZhu
         jz = JinZhu()
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: JinZhu初始化异常({e})\n---\n"
 
@@ -415,6 +437,9 @@ def generate_lottery_section():
     try:
         daily_result = jz.daily_run()
         logging.info(f"[日报] ✅ JinZhu闭环完成: settle={bool(daily_result.get('settle'))}, evolve={bool(daily_result.get('evolve'))}")
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.warning(f"[日报] ⚠️ JinZhu闭环异常(不阻塞): {e}")
         daily_result = {}
@@ -422,6 +447,9 @@ def generate_lottery_section():
     # 由JinZhu核心大脑统一生成展示内容
     try:
         return jz.generate_daily_section(daily_result)
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.error(f"[日报] ⚠️ JinZhu展示生成异常: {e}")
         return f"\n---\n## 🎰 彩票推荐\n（展示生成异常: {e}，推荐数据已正常生成）\n---\n"
@@ -432,7 +460,10 @@ if __name__ == '__main__':
 
     # 1. 生成新闻分析部分（带异常保护）
     try:
-        news_content = generate_news_section()
+        news_content = _run_with_timeout(generate_news_section, timeout=60)
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.error(f"[P1] 新闻生成异常: {e}")
         news_content = "## 一、每日资讯\n（今日新闻生成异常，下次自动恢复）\n"
@@ -440,6 +471,9 @@ if __name__ == '__main__':
     # 2. 生成彩票部分（带异常保护）
     try:
         lottery_content = generate_lottery_section()
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.error(f"[P1] 彩票生成异常: {e}")
         lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常，下次自动恢复）\n"
@@ -453,6 +487,9 @@ if __name__ == '__main__':
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(full_content)
         logging.info(f"✅ 已写入: {output_path} ({len(full_content)}字符)")
+    except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
     except Exception as e:
         logging.error(f"[P0] 写入日报文件失败: {e}")
         # 兜底：写到/tmp
@@ -471,7 +508,10 @@ if __name__ == '__main__':
         try:
             subject = '阿算帮刘老板发财日报 | ' + today_str
             send_email(subject, full_content)
-        except Exception as e:
+        except TimeoutError:
+        logging.warning("新闻生成超时(60秒)，跳过")
+        news_content = ""
+    except Exception as e:
             logging.error(f"[P1] 邮件发送异常: {e}")
 
     logging.info(f"========== 完成 {today_str} ==========")
