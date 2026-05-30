@@ -15,6 +15,13 @@ import requests
 import random
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
+def _run_with_timeout(func, timeout=60):
+    """用线程池执行func，超时则跳过"""
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(func)
+        return future.result(timeout=timeout)
+
+
 # 添加项目根目录到path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -112,9 +119,6 @@ def send_email(subject, body):
         server.quit()
         logging.info(f"✅ 邮件发送成功: {subject}")
         return True
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.error(f"❌ 邮件发送失败: {e}")
         return False
@@ -140,9 +144,6 @@ def _fetch_rss(url, count=5):
                     'summary': summary[:200]
                 })
         return results
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.warning(f"[新闻] RSS抓取失败({url}): {e}")
         return []
@@ -164,25 +165,69 @@ def _fetch_baidu_hot(count=10):
             if title:
                 results.append({'title': title, 'source': '百度热搜', 'summary': ''})
         return results
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.warning(f"[新闻] 百度热搜抓取失败: {e}")
         return []
 
 
+def _call_hunyuan_api(system_msg, user_msg, timeout=45):
+    """调用混元API，单次调用带timeout，返回生成内容或None"""
+    api_key = os.getenv('HUNYUAN_API_KEY', '[HUNYUAN_API_KEY]')
+    url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "hunyuan-turbos-latest",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg}
+        ],
+        "max_tokens": 6000,
+        "temperature": 0.75,
+    }
 
-def _run_with_timeout(func, timeout=60):
-    """用线程池执行func，超时则跳过"""
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(func)
-        return future.result(timeout=timeout)
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        if resp.status_code == 200:
+            result = resp.json()
+            content = result['choices'][0]['message']['content']
+            # 清理可能的markdown代码块包裹
+            content = content.strip()
+            if content.startswith('```markdown'):
+                content = content[len('```markdown'):]
+            if content.startswith('```'):
+                content = content[len('```'):]
+            if content.endswith('```'):
+                content = content[:-3]
+            return content.strip()
+        elif resp.status_code == 429:
+            logging.warning("[新闻] 混元API限流，等待5秒重试...")
+            import time; time.sleep(5)
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+            if resp.status_code == 200:
+                result = resp.json()
+                return result['choices'][0]['message']['content'].strip()
+            else:
+                logging.warning(f"[新闻] 重试仍失败: {resp.status_code}")
+                return None
+        else:
+            logging.warning(f"[新闻] 混元API失败: {resp.status_code} {resp.text[:200]}")
+            return None
+    except requests.exceptions.Timeout:
+        logging.warning(f"[新闻] 混元API超时({timeout}秒)")
+        return None
+    except Exception as e:
+        logging.warning(f"[新闻] 混元API异常: {e}")
+        return None
+
+
 def generate_news_section():
     """基于RSS+热搜抓取原始素材，统一由AI生成高质量分析型日报
-    
-    v3: 不再手动拼接标题+摘要，而是把原始素材喂给AI，
-    让AI按用户画像(算力/AI/创业/信息差)和分析框架输出四大板块。
+
+    v4: 恢复AI生成，外层超时兜底(90秒)，API内部timeout(45秒)，
+    失败自动降级到fallback。不再无限卡死。
     """
     logging.info("[新闻] 开始抓取真实新闻(RSS+热搜)...")
 
@@ -210,7 +255,6 @@ def generate_news_section():
 
     # ---- 画像过滤 + 去重 ----
     all_filtered = filter_by_profile(all_raw, min_score=-1, top_n=35)
-    # 按标题去重
     seen_titles = set()
     unique = []
     for n in all_filtered:
@@ -237,16 +281,8 @@ def generate_news_section():
         return _fallback_news_section(all_raw)
 
     # ---- AI生成六大板块 ----
-    # system消息：人设+铁律+范例（固定不变，告诉AI什么level的内容是读者要的）
     system_msg = """你是刘海蟾点金的邪修分析师——专门做中间人流水生意的操盘手，不是摆地摊的。
 你的生意模式：不碰货、不碰生产、只站在资金流和信息流中间收过路费。你经手的项目，流水以百万计，你抽3-8个点就是几十万。
-
-你懂的生意长这样（范例，不是让你照搬，是让你知道什么level）：
-- 🟡 资金过桥：企业贷款批了但还没放款，你垫资7天收日息0.15%，月流水3000万，你赚40万。合同签"财务顾问费"，用有限合伙做通道，资金不过你个人账
-- 🟡 资质挂靠：有资质的建筑公司闲着，没资质的施工队要接项目，你做挂靠中介收3-5%/年管理费。主体用工程咨询公司签"管理服务合同"，发票开"咨询费"
-- 🔴 跨境资金通道：跨境电商要结汇但额度不够，你用多个个人账户拆单走款收1.5%手续费。红线是《外汇管理条例》第39条"非法买卖外汇"，规避：走第三方支付机构通道而非私人对敲
-- 🟡 数据掮客：A公司有行业数据想变现，B公司愿花钱买，你做撮合抽20%。红线是《数据安全法》第32条，规避：只做数据供需撮合不碰数据本身，合同签"数据咨询服务"
-- 🟡 AI算力转租：你有海外GPU资源渠道，国内AI公司租不起英伟达官方价格，你做转租赚30%差价。合同签"云计算资源服务"，用香港公司签约
 
 底层OS：
 1. 真正的中间人赚的是"结构差"——信息不对称+资质不对等+资金不匹配，三项占一项就能吃
@@ -263,7 +299,6 @@ def generate_news_section():
 - 灰度诚实🟢🟡🔴不混淆
 - 禁用废话：值得关注/需警惕/赋能/生态/数字化转型——出现一个扣10分"""
 
-    # user消息：素材+格式要求
     user_msg = f"""## 今日新闻素材（已按画像打分排序）
 {material}
 
@@ -319,66 +354,24 @@ def generate_news_section():
 ## 六、今日邪修金句
 💭 一句话，有攻击性和行动力"""
 
-    api_key = "[HUNYUAN_API_KEY]"
-    url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "hunyuan-turbos-latest",
-        "messages": [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg}
-        ],
-        "max_tokens": 9000,
-        "temperature": 0.75,
-    }
-
+    # ---- 调用AI（外层120秒超时兜底，API内部60秒）----
     try:
-        logging.info("[新闻] 调用混元生成六大板块日报...")
-        # 最多重试2次，间隔5秒
-        content = None
-        for attempt in range(3):
-            try:
-                resp = requests.post(url, json=payload, headers=headers, timeout=90)
-                if resp.status_code == 200:
-                    result = resp.json()
-                    content = result['choices'][0]['message']['content']
-                    break
-                elif resp.status_code == 429:
-                    logging.warning(f"[新闻] 混元API限流(尝试{attempt+1}/3)，等待5秒...")
-                    import time; time.sleep(5)
-                else:
-                    logging.warning(f"[新闻] 混元API失败: {resp.status_code}")
-                    break
-            except requests.exceptions.Timeout:
-                logging.warning(f"[新闻] 混元API超时(尝试{attempt+1}/3)")
-                if attempt < 2:
-                    import time; time.sleep(3)
-
+        content = _run_with_timeout(
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=60),
+            timeout=120
+        )
         if content:
-            # 清理可能的markdown代码块包裹
-            content = content.strip()
-            if content.startswith('```markdown'):
-                content = content[len('```markdown'):]
-            if content.startswith('```'):
-                content = content[len('```'):]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
             logging.info(f"[新闻] ✅ AI日报生成成功: {len(content)}字符")
             return content
         else:
-            logging.warning("[新闻] AI日报生成失败，使用降级模式")
+            logging.warning("[新闻] AI日报生成返回空，使用降级模式")
             return _fallback_news_section(all_raw)
     except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
-    except Exception as e:
-        logging.warning(f"[新闻] 混元API异常: {e}")
+        logging.warning("[新闻] AI日报生成超时(120秒)，使用降级模式")
         return _fallback_news_section(all_raw)
-
+    except Exception as e:
+        logging.warning(f"[新闻] AI日报生成异常: {e}，使用降级模式")
+        return _fallback_news_section(all_raw)
 
 def _fallback_news_section(all_raw_items):
     """API失败时的降级方案：用画像过滤的原始标题兜底"""
@@ -427,9 +420,6 @@ def generate_lottery_section():
     try:
         from jin_zhu import JinZhu
         jz = JinZhu()
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         return f"\n---\n## 🎰 彩票推荐生成失败: JinZhu初始化异常({e})\n---\n"
 
@@ -437,9 +427,6 @@ def generate_lottery_section():
     try:
         daily_result = jz.daily_run()
         logging.info(f"[日报] ✅ JinZhu闭环完成: settle={bool(daily_result.get('settle'))}, evolve={bool(daily_result.get('evolve'))}")
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.warning(f"[日报] ⚠️ JinZhu闭环异常(不阻塞): {e}")
         daily_result = {}
@@ -447,9 +434,6 @@ def generate_lottery_section():
     # 由JinZhu核心大脑统一生成展示内容
     try:
         return jz.generate_daily_section(daily_result)
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.error(f"[日报] ⚠️ JinZhu展示生成异常: {e}")
         return f"\n---\n## 🎰 彩票推荐\n（展示生成异常: {e}，推荐数据已正常生成）\n---\n"
@@ -458,22 +442,19 @@ def generate_lottery_section():
 if __name__ == '__main__':
     logging.info(f"========== 生成完整日报 {today_str} ==========")
 
-    # 1. 生成新闻分析部分（带异常保护）
+    # 1. 生成新闻分析部分（带异常保护+超时兜底，外层150秒=内部120秒+缓冲）
     try:
-        news_content = _run_with_timeout(generate_news_section, timeout=60)
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
+        news_content = _run_with_timeout(generate_news_section, timeout=150)
     except Exception as e:
-        logging.error(f"[P1] 新闻生成异常: {e}")
-        news_content = "## 一、每日资讯\n（今日新闻生成异常，下次自动恢复）\n"
+        if 'timed out' in str(e).lower() or 'timeout' in str(e).lower():
+            logging.warning("[P1] 新闻生成超时(150秒)，跳过")
+        else:
+            logging.error(f"[P1] 新闻生成异常: {e}")
+        news_content = "## 一、每日资讯\n（今日新闻生成超时，下次自动恢复）\n"
 
     # 2. 生成彩票部分（带异常保护）
     try:
         lottery_content = generate_lottery_section()
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.error(f"[P1] 彩票生成异常: {e}")
         lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常，下次自动恢复）\n"
@@ -487,9 +468,6 @@ if __name__ == '__main__':
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(full_content)
         logging.info(f"✅ 已写入: {output_path} ({len(full_content)}字符)")
-    except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
     except Exception as e:
         logging.error(f"[P0] 写入日报文件失败: {e}")
         # 兜底：写到/tmp
@@ -508,10 +486,7 @@ if __name__ == '__main__':
         try:
             subject = '阿算帮刘老板发财日报 | ' + today_str
             send_email(subject, full_content)
-        except TimeoutError:
-        logging.warning("新闻生成超时(60秒)，跳过")
-        news_content = ""
-    except Exception as e:
+        except Exception as e:
             logging.error(f"[P1] 邮件发送异常: {e}")
 
     logging.info(f"========== 完成 {today_str} ==========")
