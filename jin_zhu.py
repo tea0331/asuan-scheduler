@@ -270,8 +270,6 @@ class JinZhu:
                 'ssq': wa.analyze_ssq,
                 'dlt': wa.analyze_dlt,
                 'qxc': wa.analyze_qxc,
-                'pln': wa.analyze_pln,
-                'ltn': wa.analyze_ltn,
             }
             return analyze_map[game]()
         except Exception as e:
