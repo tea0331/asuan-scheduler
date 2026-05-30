@@ -11,7 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 import json
-import requests
+import json
 import random
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
@@ -183,30 +183,49 @@ def _fetch_baidu_hot(count=10):
 
 
 def _call_hunyuan_api(system_msg, user_msg, timeout=45):
-    """调用混元API，单次调用带timeout，返回生成内容或None"""
+    """调用混元API，用curl避免requests库卡死问题"""
+    import subprocess, json, tempfile, os
+    
     api_key = os.getenv('HUNYUAN_API_KEY', 'sk-TjZgBJKZJA1FjrkMHIotwyBafg8gXnRdYBLDvyHNkGSkQAcq')
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    
     payload = {
         "model": "hunyuan-turbos-latest",
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
         ],
-        "max_tokens": 6000,
+        "max_tokens": 1000,
         "temperature": 0.75,
     }
-
+    
+    # 写入临时JSON文件
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False)
+        temp_file = f.name
+    
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            result = resp.json()
-            content = result['choices'][0]['message']['content']
-            # 清理可能的markdown代码块包裹
+        # 用curl调用
+        cmd = [
+            'curl', '-s', '-X', 'POST', url,
+            '-H', f'Authorization: Bearer {api_key}',
+            '-H', 'Content-Type: application/json',
+            '--max-time', str(timeout),
+            '-d', f'@{temp_file}'
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+5)
+        
+        if result.returncode != 0:
+            logging.warning(f"[新闻] curl失败: {result.stderr}")
+            return None
+        
+        resp_data = json.loads(result.stdout)
+        
+        if 'choices' in resp_data and len(resp_data['choices']) > 0:
+            content = resp_data['choices'][0]['message']['content']
             content = content.strip()
+            # 清理markdown包裹
             if content.startswith('```markdown'):
                 content = content[len('```markdown'):]
             if content.startswith('```'):
@@ -214,26 +233,23 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=45):
             if content.endswith('```'):
                 content = content[:-3]
             return content.strip()
-        elif resp.status_code == 429:
-            logging.warning("[新闻] 混元API限流，等待5秒重试...")
-            import time; time.sleep(5)
-            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-            if resp.status_code == 200:
-                result = resp.json()
-                return result['choices'][0]['message']['content'].strip()
-            else:
-                logging.warning(f"[新闻] 重试仍失败: {resp.status_code}")
-                return None
-        else:
-            logging.warning(f"[新闻] 混元API失败: {resp.status_code} {resp.text[:200]}")
+        elif 'error' in resp_data:
+            error_msg = resp_data['error'].get('message', '未知错误')
+            logging.warning(f"[新闻] 混元API错误: {error_msg}")
             return None
-    except requests.exceptions.Timeout:
-        logging.warning(f"[新闻] 混元API超时({timeout}秒)")
+        else:
+            logging.warning(f"[新闻] 混元API返回异常: {result.stdout[:200]}")
+            return None
+            
+    except subprocess.TimeoutExpired:
+        logging.warning(f"[新闻] curl超时({timeout}秒)")
         return None
     except Exception as e:
         logging.warning(f"[新闻] 混元API异常: {e}")
         return None
-
+    finally:
+        if os.path.exists(temp_file):
+            os.unlink(temp_file)
 
 def generate_news_section():
     """基于RSS+热搜抓取原始素材，统一由AI生成高质量分析型日报
