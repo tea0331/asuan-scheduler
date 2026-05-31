@@ -208,7 +208,7 @@ class JinZhu:
                 # 台湾威力彩：从CSV读取
                 import csv
                 try:
-                    with open('data/taiwan_pln.csv', 'r', encoding='utf-8') as f:
+                    with open('data/pln_history.csv', 'r', encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         rows = list(reader)
                         if len(rows) >= 15:
@@ -232,7 +232,7 @@ class JinZhu:
                 # 台湾大乐透：从CSV读取
                 import csv
                 try:
-                    with open('data/taiwan_ltn.csv', 'r', encoding='utf-8') as f:
+                    with open('data/ltn_history.csv', 'r', encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         rows = list(reader)
                         if len(rows) >= 15:
@@ -271,6 +271,11 @@ class JinZhu:
                 'dlt': wa.analyze_dlt,
                 'qxc': wa.analyze_qxc,
             }
+            # PLN/LTN需要特殊处理（因为历史数据格式不同）
+            if game == 'pln':
+                return wa.analyze_pln()
+            elif game == 'ltn':
+                return wa.analyze_ltn()
             return analyze_map[game]()
         except Exception as e:
             logging.error(f"[Gen] {game} 分析失败: {e}")
@@ -486,84 +491,12 @@ class JinZhu:
             {'digits': cold, 'strategy': Strategy.COLD},
         ]
         
-    def _gen_pln(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾威力彩推荐（6/38 + 1/8）"""
-        import csv, random
-        try:
-            with open('data/taiwan_pln.csv', 'r') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            if len(rows) >= 5:
-                latest = rows[-1]
-                base = [int(x) for x in latest['numbers'].split()] + [int(latest['special'])]
-                strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-                recs = []
-                for i in range(5):
-                    new = base.copy()
-                    for j in range(random.randint(1, 3)):
-                        idx = random.randint(0, 6)
-                        new[idx] = random.randint(1, 38) if idx < 6 else random.randint(1, 8)
-                    recs.append({
-                        'numbers': new[:7],
-                        'type': f'P{i}',
-                        'strategy': strategies[i]
-                    })
-                return recs
-        except:
-            pass
-        # mock
-        recs = []
-        for i in range(5):
-            main = sorted(random.sample(range(1, 39), 6))
-            special = random.randint(1, 8)
-            recs.append({
-                'numbers': main + [special],
-                'type': f'P{i}',
-                'strategy': ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold'][i]
-            })
-        return recs
-
-    def _gen_ltn(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾大乐透推荐（6/49）"""
-        import csv, random
-        try:
-            with open('data/taiwan_ltn.csv', 'r') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            if len(rows) >= 5:
-                latest = rows[-1]
-                base = [int(x) for x in latest['numbers'].split()]
-                recs = []
-                for i in range(5):
-                    new = base.copy()
-                    for j in range(random.randint(1, 3)):
-                        idx = random.randint(0, 5)
-                        new[idx] = random.randint(1, 49)
-                    recs.append({
-                        'numbers': new,
-                        'type': f'P{i}',
-                        'strategy': ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold'][i]
-                    })
-                return recs
-        except:
-            pass
-        # mock
-        recs = []
-        for i in range(5):
-            main = sorted(random.sample(range(1, 50), 6))
-            recs.append({
-                'numbers': main,
-                'type': f'P{i}',
-                'strategy': ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold'][i]
-            })
-        return recs
-
 
     def _gen_pln(self, analysis: dict, kelly_bias: float = 0.0) -> list:
         """台湾威力彩5注推荐（6/38 + 1/8）"""
         import csv, random
         try:
-            with open('data/taiwan_pln.csv', 'r') as f:
+            with open('data/pln_history.csv', 'r') as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
             if len(rows) >= 5:
@@ -603,7 +536,7 @@ class JinZhu:
         """台湾大乐透5注推荐（6/49）"""
         import csv, random
         try:
-            with open('data/taiwan_ltn.csv', 'r') as f:
+            with open('data/ltn_history.csv', 'r') as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
             if len(rows) >= 5:
