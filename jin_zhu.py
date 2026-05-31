@@ -886,7 +886,7 @@ class JinZhu:
         if date is None:
             date = (_now_cst() - timedelta(days=1)).strftime('%Y-%m-%d')
 
-        games = [game] if game else ['ssq', 'dlt', 'qxc']
+        games = [game] if game else ['ssq', 'dlt', 'qxc', 'pln', 'ltn']
         results = {}
 
         for g in games:
@@ -1123,7 +1123,7 @@ class JinZhu:
         """GEPA进化 — 结算数据驱动权重调整，写回Model（P0修复: 合并3彩种投票+边界保护+最小样本6）"""
         from algo_module import AlgoDB
         db = AlgoDB()
-        games = [game] if game else ['ssq', 'dlt', 'qxc']
+        games = [game] if game else ['ssq', 'dlt', 'qxc', 'pln', 'ltn']
 
         # P0修复: 收集所有彩种的进化信号，最后合并投票
         game_signals = defaultdict(float)  # 彩种信号
@@ -1314,7 +1314,7 @@ class JinZhu:
             logging.warning(f"[Daily] 进化异常(不阻塞): {e}")
 
         # 3. 生成推荐
-        for game in ['ssq', 'dlt', 'qxc']:
+        for game in ['ssq', 'dlt', 'qxc', 'pln', 'ltn']:
             try:
                 recs = self.generate_recs(game, kelly_bias=kelly_bias)
                 result[game] = recs
