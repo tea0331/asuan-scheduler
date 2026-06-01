@@ -459,50 +459,143 @@ class JinZhu:
         
 
     def _gen_pln(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾威力彩5注推荐（读CSV）"""
-        import csv, random
-        try:
-            with open('data/pln_history.csv', 'r') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            if len(rows) >= 5:
-                latest = rows[-1]
-                # 兼容两种格式
-                if 'num1' in latest:
-                    nums = [int(latest[f'num{i}']) for i in range(1, 7)]
-                    special = int(latest.get('special', latest.get('num7', 0)))
-                else:
-                    nums = [int(x) for x in latest.get('numbers', '').split(',')]
-                    special = int(latest.get('special', 0))
-                
-                strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-                recs = []
-                for i in range(5):
-                    new = nums.copy()
-                    for j in range(random.randint(1, 3)):
-                        idx = random.randint(0, 5)
-                        new[idx] = random.randint(1, 38)
-                    recs.append({
-                        'numbers': sorted(new) + [special],
-                        'type': f'P{i}',
-                        'strategy': strategies[i]
-                    })
-                return recs
-        except Exception as e:
-            logging.warning(f"PLN CSV读取失败: {e}，使用mock")
-        
-        # mock数据
-        strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-        recs = []
-        for i in range(5):
-            nums = sorted(random.sample(range(1, 39), 6))
-            special = random.randint(1, 8)
-            recs.append({
-                'numbers': nums + [special],
-                'type': f'P{i}',
-                'strategy': strategies[i]
-            })
-        return recs
+        """台湾威力彩5注推荐（使用analysis参数加权选号）"""
+        main_weight_dict = dict(analysis['main_weights'])
+        all_pool = []
+        for n in range(1, 39):
+            w = main_weight_dict.get(n, 0)
+            f = analysis['main_freq'].get(n, 0)
+            m = analysis['main_miss'].get(n, 0)
+            all_pool.append((n, w, f, m))
+
+        all_pool = self._kelly_sort(all_pool, kelly_bias)
+        strategy_tag = self._kelly_tag(kelly_bias)
+
+        # 核心注A: main_weights[:6]
+        core_A = sorted([n for n, w, f, m in all_pool[:6]])
+        # 核心注B: 从剩余池选独立6个
+        core_B = self._select_independent_pool(all_pool, core_A, 6)
+
+        # 扩展1: top20选6个，形态优化
+        top20 = [n for n, w, f, m in all_pool[:20]]
+        must_keep = sorted([n for n, w, f, m in all_pool[:2]])
+        target_sum = analysis.get('avg_sum', 117)  # PLN 6/38 和值约117
+        ext1 = self._shape_optimized_select(top20, 6, target_sum, target_odd=3, target_big=3, must_include=must_keep)
+
+        # 扩展2: 回补池选6个
+        ext2 = self._select_recovery_pool(analysis, all_pool, set(core_A) | set(core_B) | set(ext1), n_select=6)
+
+        # 冷号注: 冷号选6个（PLN范围1-38）
+        used = set(core_A) | set(core_B) | set(ext1) | set(ext2)
+        cold = self._select_cold_pln(analysis, used)
+
+        # 特号选择: 从 special_weights 选5个
+        specials = self._select_specials(analysis, n_specials=5)
+
+        # 随机扰动
+        core_A = self._perturb(core_A, all_pool, max_swaps=1)
+        core_B = self._perturb(core_B, all_pool, max_swaps=1)
+
+        return [
+            {'numbers': core_A + [specials[0]], 'strategy': f'{strategy_tag}A'},
+            {'numbers': core_B + [specials[1]], 'strategy': f'{strategy_tag}B'},
+            {'numbers': ext1 + [specials[2]], 'strategy': Strategy.EXT1},
+            {'numbers': ext2 + [specials[3]], 'strategy': Strategy.EXT2},
+            {'numbers': cold + [specials[4]], 'strategy': Strategy.COLD},
+        ]
+
+    def _select_cold_pln(self, analysis, used_set):
+        """PLN冷号注主号（1-38）— 多维评分"""
+        cold_miss_w = self.get_param('cold_miss_front', 0.40)
+        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
+        cold_freq_w = self.get_param('cold_freq_front', 0.30)
+
+        miss_key = 'main_miss'
+        freq_key = 'main_freq'
+        avg_interval = analysis.get('main_avg_interval', {})
+
+        scores = []
+        for n in range(1, 39):
+            if n in used_set:
+                continue
+            miss_val = analysis[miss_key].get(n, 0)
+            miss_score = min(miss_val / 10.0, 3.0)
+            avg_i = avg_interval.get(n, 15)
+            cycle_signal = min(miss_val / max(avg_i, 1), 2.0)
+            f = analysis[freq_key].get(n, 0)
+            f_score = min(f / 3.0, 1.5)
+            score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
+            scores.append((n, score))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return sorted([n for n, s in scores[:6]])
+
+    def _select_specials(self, analysis, n_specials=5):
+        """PLN特号智能选择（1-8）— 权重+遗漏+奇偶+互斥"""
+        special_weight_dict = dict(analysis.get('special_weights', []))
+        special_miss = analysis.get('special_miss', {})
+        special_freq = analysis.get('special_freq', {})
+        special_avg_interval = analysis.get('special_avg_interval', {})
+
+        cold_miss_w = self.get_param('cold_miss_back', 0.30)
+        cold_cycle_w = self.get_param('cold_cycle_back', 0.40)
+        cold_freq_w = self.get_param('cold_freq_back', 0.30)
+
+        scores = {}
+        for n in range(1, 9):
+            w = special_weight_dict.get(n, 0)
+            m = special_miss.get(n, 0)
+            f = special_freq.get(n, 0)
+
+            if m >= 5:
+                miss_score = 3.0
+            elif m >= 3:
+                miss_score = 2.0
+            elif m == 0:
+                miss_score = 1.0
+            else:
+                miss_score = 0.8
+
+            freq_score = min(f, 4) / 2.0
+            scores[n] = w * 0.4 + freq_score * 0.3 + miss_score * 0.3
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        selected = []
+        used_odd_even = {'odd': 0, 'even': 0}
+        for n, s in ranked:
+            if len(selected) >= n_specials:
+                break
+            parity = 'odd' if n % 2 == 1 else 'even'
+            if used_odd_even[parity] >= 3 and used_odd_even['odd'] + used_odd_even['even'] < n_specials:
+                continue
+            selected.append(n)
+            used_odd_even[parity] += 1
+
+        if len(selected) < n_specials:
+            for n, s in ranked:
+                if n not in selected:
+                    selected.append(n)
+                if len(selected) >= n_specials:
+                    break
+
+        # 最后一个给冷号
+        if len(selected) >= n_specials:
+            cold_scores = {}
+            for n in range(1, 9):
+                if n in selected[:n_specials - 1]:
+                    continue
+                m = special_miss.get(n, 0)
+                avg_i = special_avg_interval.get(n, 5)
+                cycle = min(m / max(avg_i, 1), 2.0)
+                f = special_freq.get(n, 0)
+                freq_s = min(f, 4) / 2.0
+                miss_s = min(m / 5.0, 3.0)
+                cold_scores[n] = miss_s * cold_miss_w + cycle * cold_cycle_w + freq_s * cold_freq_w
+            cold_ranked = sorted(cold_scores.items(), key=lambda x: x[1], reverse=True)
+            if cold_ranked:
+                selected[n_specials - 1] = cold_ranked[0][0]
+
+        return selected[:n_specials]
 
     def _gen_ltn(self, analysis: dict, kelly_bias: float = 0.0) -> list:
         """台湾大乐透5注推荐（读CSV）"""
