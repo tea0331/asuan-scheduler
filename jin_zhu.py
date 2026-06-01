@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-金主 (JinZhu) — 刘海蟾点金算法核心大脑 v8.3
+金主 (JinZhu) - 刘海蟾点金算法核心大脑 v8.3
 
-唯一真相来源：所有推荐生成、结算反哺、权重进化都经过这里。
-外部只需调用 JinZhu.daily_run()，不直接操作 games/*.py 或 algo_module.py。
+唯一真相来源:所有推荐生成、结算反哺、权重进化都经过这里。
+外部只需调用 JinZhu.daily_run(),不直接操作 games/*.py 或 algo_module.py。
 
-架构四层：
+架构四层:
   Model Layer   → weight-config.json (唯一模型参数出处)
   Generation Layer → generate_ssq/dlt/qxc (策略差异化+随机扰动+邻号加分)
   Evaluation Layer → settle/backtest (结果驱动进化 + 系统结算)
-  Evolution Layer  → GEPA (写回Model，下一代自动生效 + 系统虚拟用户信号)
+  Evolution Layer  → GEPA (写回Model,下一代自动生效 + 系统虚拟用户信号)
 
 v8.3 统一虚拟用户:
   - generate_recs() 支持 model_override (虚拟用户各人参数化生成)
   - settle() 保持 algo_state.db 结算
   - evolve() 合并50系统虚拟用户进化信号 (按策略类型命中率加权)
-  - 50人系统虚拟用户(vu01~vu50)，6类策略，不依赖网站DB
+  - 50人系统虚拟用户(vu01~vu50),6类策略,不依赖网站DB
 
 v8.2 修复:
   - P1: kelly_map=1 修复下注cost=0问题
@@ -58,7 +58,7 @@ def _now_cst():
     return datetime.utcnow() + CST_OFFSET
 
 
-# ===== 默认模型参数（首次运行或config损坏时使用）=====
+# ===== 默认模型参数(首次运行或config损坏时使用)=====
 DEFAULT_MODEL = {
     'freq': 0.30, 'miss': 0.25, 'trend': 0.25, 'zone': 0.20,
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
@@ -68,7 +68,7 @@ DEFAULT_MODEL = {
     'lock_config': {},
 }
 
-# ===== 进化参数边界（防止失控）=====
+# ===== 进化参数边界(防止失控)=====
 PARAM_BOUNDS = {
     'freq':  (0.15, 0.50),
     'miss':  (0.10, 0.40),
@@ -94,19 +94,19 @@ class Strategy:
 
 
 # ============================================================
-#  JinZhu — 算法核心大脑
+#  JinZhu - 算法核心大脑
 # ============================================================
 
 class JinZhu:
-    """金主 — 算法核心大脑，唯一真相来源"""
+    """金主 - 算法核心大脑,唯一真相来源"""
 
     def __init__(self, config_path=None):
         self.config_path = config_path or CONFIG_PATH
         self.model = self._load_model()
-        self._rng = random.Random()  # 独立随机数生成器，可设种子复现
+        self._rng = random.Random()  # 独立随机数生成器,可设种子复现
 
     # ============================================================
-    #  Model Layer — 唯一真相来源
+    #  Model Layer - 唯一真相来源
     # ============================================================
 
     def _load_model(self) -> dict:
@@ -119,7 +119,7 @@ class JinZhu:
                 logging.info(f"[Model] 加载成功: v{merged.get('version', '?')} {merged.get('algo_version', '?')}")
                 return merged
             except Exception as e:
-                logging.error(f"[Model] 加载失败: {e}，使用默认参数")
+                logging.error(f"[Model] 加载失败: {e},使用默认参数")
         return dict(DEFAULT_MODEL)
 
     def _save_model(self):
@@ -136,7 +136,7 @@ class JinZhu:
         return self.model.get(key, default)
 
     def set_param(self, key: str, value, evolve_log_entry=None):
-        """更新单个模型参数（带边界保护）"""
+        """更新单个模型参数(带边界保护)"""
         old = self.model.get(key)
         # 边界保护
         if key in PARAM_BOUNDS:
@@ -149,12 +149,12 @@ class JinZhu:
         return old
 
     # ============================================================
-    #  Generation Layer — 推荐生成（策略差异化 + 随机扰动 + 邻号加分）
+    #  Generation Layer - 推荐生成(策略差异化 + 随机扰动 + 邻号加分)
     # ============================================================
 
     def generate_recs(self, game: str, history_data: list = None, kelly_bias: float = 0.0, seed: int = None, model_override: dict = None) -> list:
-        """统一推荐入口（支持model_override供虚拟用户参数化生成）"""
-        # 临时覆盖模型参数（虚拟用户各人有不同策略参数）
+        """统一推荐入口(支持model_override供虚拟用户参数化生成)"""
+        # 临时覆盖模型参数(虚拟用户各人有不同策略参数)
         _orig_model = None
         if model_override:
             _orig_model = json.loads(json.dumps(self.model))  # 深拷贝防污染
@@ -170,12 +170,12 @@ class JinZhu:
                 history_data = self._fetch_history(game)
 
             if not history_data:
-                logging.error(f"[Gen] {game} 历史数据为空，无法生成推荐")
+                logging.error(f"[Gen] {game} 历史数据为空,无法生成推荐")
                 return []
 
             analysis = self._analyze(game, history_data)
             if not analysis:
-                # PLN/LTN简化处理：直接返回历史数据
+                # PLN/LTN简化处理:直接返回历史数据
                 if game in ('pln', 'ltn'):
                     analysis = {'history': history_data}
                 else:
@@ -185,7 +185,7 @@ class JinZhu:
                 logging.error(f"[Gen] {game} 分析失败")
                 return []
 
-            # 邻号加分（从Model读取）
+            # 邻号加分(从Model读取)
             analysis = self._apply_neighbor_bonus(game, analysis, history_data)
 
             gen_map = {
@@ -224,10 +224,10 @@ class JinZhu:
             return []
 
     def _analyze(self, game: str, history_data: list) -> dict:
-        """调用 WeightedAnalyzer 分析，pln/ltn用专用分析"""
+        """调用 WeightedAnalyzer 分析,pln/ltn用专用分析"""
         try:
             import lottery_analyzer as la
-            
+
             # pln/ltn 用专用分析函数
             if game == 'pln':
                 from games.pln import analyze_pln
@@ -235,7 +235,7 @@ class JinZhu:
             elif game == 'ltn':
                 from games.ltn import analyze_ltn
                 return analyze_ltn(history_data)
-            
+
             wa = la.WeightedAnalyzer(history_data)
             analyze_map = {
                 'ssq': wa.analyze_ssq,
@@ -248,7 +248,7 @@ class JinZhu:
             return {}
 
     def _apply_neighbor_bonus(self, game: str, analysis: dict, history_data: list) -> dict:
-        """P2修复: 邻号加分 — 上期开出号码±1获得bonus（球机机械偏差）"""
+        """P2修复: 邻号加分 - 上期开出号码±1获得bonus(球机机械偏差)"""
         if not history_data:
             return analysis
         bonus = self.get_param('neighbor_bonus', 0.03)
@@ -280,7 +280,7 @@ class JinZhu:
     # ------ 双色球推荐 ------
 
     def _gen_ssq(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """双色球5注推荐（策略差异化 + 随机扰动）"""
+        """双色球5注推荐(策略差异化 + 随机扰动)"""
         red_weight_dict = dict(analysis['red_weights'])
         all_pool = []
         for n in range(1, 34):
@@ -362,10 +362,10 @@ class JinZhu:
     # ------ 七星彩推荐 ------
 
     def _gen_qxc(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """七星彩5注推荐（逐位选号 + 策略差异化 + kelly_bias接入）"""
+        """七星彩5注推荐(逐位选号 + 策略差异化 + kelly_bias接入)"""
         positions = analysis['positions']
 
-        # 每位候选池（0-9按权重排序）
+        # 每位候选池(0-9按权重排序)
         pos_pools = []
         for pos_data in positions:
             weights = pos_data['weights']
@@ -374,10 +374,10 @@ class JinZhu:
         # 核心注A: 每位权重TOP1
         core_A = [pool[0] if pool else 0 for pool in pos_pools]
 
-        # P1修复: 核心注B改为次优(权重TOP3-5)而非最差，避免纯反统计
+        # P1修复: 核心注B改为次优(权重TOP3-5)而非最差,避免纯反统计
         core_B = []
         for i, pool in enumerate(pos_pools):
-            # 从TOP3-5区间选（和A不同但仍是有效号码）
+            # 从TOP3-5区间选(和A不同但仍是有效号码)
             chosen = None
             for n in pool[2:6] if len(pool) > 2 else pool[1:]:
                 if n != core_A[i]:
@@ -422,7 +422,7 @@ class JinZhu:
                     best_n = n
             ext2[i] = best_n if best_n is not None else core_A[i]
 
-        # 冷号注: 每位遗漏最高 + 周期信号（从Model读权重）
+        # 冷号注: 每位遗漏最高 + 周期信号(从Model读权重)
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -456,10 +456,10 @@ class JinZhu:
             {'digits': ext2, 'strategy': Strategy.EXT2},
             {'digits': cold, 'strategy': Strategy.COLD},
         ]
-        
+
 
     def _gen_pln(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾威力彩5注推荐（使用analysis参数加权选号）"""
+        """台湾威力彩5注推荐(使用analysis参数加权选号)"""
         main_weight_dict = dict(analysis['main_weights'])
         all_pool = []
         for n in range(1, 39):
@@ -476,7 +476,7 @@ class JinZhu:
         # 核心注B: 从剩余池选独立6个
         core_B = self._select_independent_pool(all_pool, core_A, 6)
 
-        # 扩展1: top20选6个，形态优化
+        # 扩展1: top20选6个,形态优化
         top20 = [n for n, w, f, m in all_pool[:20]]
         must_keep = sorted([n for n, w, f, m in all_pool[:2]])
         target_sum = analysis.get('avg_sum', 117)  # PLN 6/38 和值约117
@@ -485,7 +485,7 @@ class JinZhu:
         # 扩展2: 回补池选6个
         ext2 = self._select_recovery_pool(analysis, all_pool, set(core_A) | set(core_B) | set(ext1), n_select=6)
 
-        # 冷号注: 冷号选6个（PLN范围1-38）
+        # 冷号注: 冷号选6个(PLN范围1-38)
         used = set(core_A) | set(core_B) | set(ext1) | set(ext2)
         cold = self._select_cold_pln(analysis, used)
 
@@ -505,7 +505,7 @@ class JinZhu:
         ]
 
     def _select_cold_pln(self, analysis, used_set):
-        """PLN冷号注主号（1-38）— 多维评分"""
+        """PLN冷号注主号(1-38)- 多维评分"""
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -530,7 +530,7 @@ class JinZhu:
         return sorted([n for n, s in scores[:6]])
 
     def _select_specials(self, analysis, n_specials=5):
-        """PLN特号智能选择（1-8）— 权重+遗漏+奇偶+互斥"""
+        """PLN特号智能选择(1-8)- 权重+遗漏+奇偶+互斥"""
         special_weight_dict = dict(analysis.get('special_weights', []))
         special_miss = analysis.get('special_miss', {})
         special_freq = analysis.get('special_freq', {})
@@ -598,78 +598,86 @@ class JinZhu:
         return selected[:n_specials]
 
     def _gen_ltn(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾大乐透5注推荐（读CSV）"""
-        import csv, random
-        try:
-            with open('data/ltn_history.csv', 'r') as f:
-                reader = csv.DictReader(f)
-                rows = list(reader)
-            if len(rows) >= 5:
-                # 兼容两种格式
-                latest = rows[-1]
-                if 'front1' in latest:
-                    front = [int(latest[f'front{i}']) for i in range(1, 6)]
-                    back = [int(latest[f'back{i}']) for i in range(1, 3)]
-                else:
-                    front = [int(x) for x in latest.get('front', '').split(',')]
-                    back = [int(x) for x in latest.get('back', '').split(',')]
-                
-                strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-                recs = []
-                for i in range(5):
-                    new_front = front.copy()
-                    for j in range(random.randint(1, 3)):
-                        idx = random.randint(0, 4)
-                        new_front[idx] = random.randint(1, 47)
-                    new_back = [random.randint(1, 38) for _ in range(2)]
-                    recs.append({
-                        'front': sorted(new_front),
-                        'back': sorted(new_back),
-                        'type': f'P{i}',
-                        'strategy': strategies[i]
-                    })
-                return recs
-        except Exception as e:
-            logging.warning(f"LTN CSV读取失败: {e}，使用mock")
-        
-        # mock数据
-        strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-        recs = []
-        for i in range(5):
-            recs.append({
-                'front': sorted(random.sample(range(1, 48), 5)),
-                'back': sorted(random.sample(range(1, 39), 2)),
-                'type': f'P{i}',
-                'strategy': strategies[i]
-            })
-        return recs
-        strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
-        recs = []
-        for i in range(5):
-            main = sorted(random.sample(range(1, 50), 6))
-            recs.append({
-                'numbers': main,
-                'type': f'P{i}',
-                'strategy': strategies[i]
-            })
-        return recs
+        """台湾大乐透5注推荐(用analysis参数做加权选号)"""
+        import random
 
+        # 构建候选池
+        front_weight_dict = dict(analysis.get('front_weights', []))
+        back_weight_dict = dict(analysis.get('back_weights', []))
 
-    def _qxc_cold_select(self, positions):
-        """七星彩冷号选择（每位遗漏最高）"""
-        result = []
-        for pos_data in positions:
-            miss = pos_data.get('miss', {})
-            if miss:
-                best_n = max(miss.keys(), key=lambda n: miss.get(n, 0))
-            else:
-                weights = pos_data.get('weights', [])
-                best_n = weights[-1][0] if weights else 0
-            result.append(best_n)
+        all_front_pool = []
+        for n in range(1, 48):
+            w = front_weight_dict.get(n, 0)
+            f = analysis.get('front_freq', {}).get(n, 0)
+            m = analysis.get('front_miss', {}).get(n, 0)
+            all_front_pool.append((n, w, f, m))
+
+        all_back_pool = []
+        for n in range(1, 39):
+            w = back_weight_dict.get(n, 0)
+            f = analysis.get('back_freq', {}).get(n, 0)
+            m = analysis.get('back_miss', {}).get(n, 0)
+            all_back_pool.append((n, w, f, m))
+
+        all_front_pool = self._kelly_sort(all_front_pool, kelly_bias)
+        all_back_pool = self._kelly_sort(all_back_pool, kelly_bias)
+        strategy_tag = self._kelly_tag(kelly_bias)
+
+        # 核心注A: 前区TOP5 + 后区TOP2
+        core_front_A = sorted([n for n, w, f, m in all_front_pool[:5]])
+        core_back_A = [n for n, w, f, m in all_back_pool[:2]]
+
+        # 核心注B: 独立池
+        core_front_B = self._select_independent_pool(all_front_pool, core_front_A, 5)
+        core_back_B = self._select_independent_pool(all_back_pool, core_back_A, 2)
+
+        # 扩展1: 形态优化
+        target_sum = analysis.get('avg_sum', 90)
+        top20 = [n for n, w, f, m in all_front_pool[:20]]
+        must_keep = sorted([n for n, w, f, m in all_front_pool[:3]])
+        ext1_front = self._shape_optimized_select(top20, 5, target_sum, target_odd=3, target_big=3, must_include=must_keep, big_threshold=24)
+        # ext1_back: 独立选1对后区
+        ext1_back_pair = self._select_backs(analysis, n_pairs=1)
+        ext1_back = ext1_back_pair[0] if ext1_back_pair else [1, 2]
+
+        # 扩展2: 回补池（前区用回补逻辑，后区独立选）
+        ext2_front = self._select_recovery_pool(analysis, all_front_pool, set(core_front_A) | set(core_front_B) | set(ext1_front), n_select=5)
+        # ext2_back: 独立选1对后区（与前面不重叠）
+        used_back_set = set(core_back_A) | set(ext1_back)
+        ext2_back_pair = self._select_backs(analysis, n_pairs=1)
+        # 过滤掉已用的后区号码
+        ext2_back = None
+        for pair in ext2_back_pair:
+            if not set(pair) & used_back_set:
+                ext2_back = pair
+                break
+        if ext2_back is None:
+            # 如果所有pair都冲突，选一个不冲突的号码组合
+            candidates = [n for n in range(1, 13) if n not in used_back_set]
+            ext2_back = sorted(candidates[:2]) if len(candidates) >= 2 else [1, 2]
+
+        # 冷号注
+        used = set(core_front_A) | set(core_front_B) | set(ext1_front) | set(ext2_front)
+        cold_front = self._select_cold_front(analysis, all_front_pool, used)
+        cold_back = self._select_cold_back(analysis, set(core_back_A) | set(core_back_B) | set(ext1_back) | set(ext2_back))
+
+        # 随机扰动
+        core_front_A = self._perturb(core_front_A, all_front_pool, max_swaps=1)
+        core_front_B = self._perturb(core_front_B, all_front_pool, max_swaps=1)
+
+        return [
+            {'front': core_front_A, 'back': core_back_A, 'strategy': f'{strategy_tag}A'},
+            {'front': core_front_B, 'back': core_back_B, 'strategy': f'{strategy_tag}B'},
+            {'front': ext1_front, 'back': ext1_back, 'strategy': Strategy.EXT1},
+            {'front': ext2_front, 'back': ext2_back, 'strategy': Strategy.EXT2},
+            {'front': cold_front, 'back': cold_back, 'strategy': Strategy.COLD},
+        ]
+
+    # ------ 七星彩推荐 ------
         return result
 
     # ============================================================
-    #  Smart Selection Tools — 智能选号工具方法
+    #  Smart Selection Tools - 智能选号工具方法
     # ============================================================
 
     def _kelly_sort(self, all_pool: list, kelly_bias: float) -> list:
@@ -705,7 +713,7 @@ class JinZhu:
 
     def _shape_optimized_select(self, candidates, n_select, target_sum, target_odd, target_big,
                                 must_include=None, big_threshold=17):
-        """形态优化选号 — 贪心搜索（和值/奇偶/大小约束）"""
+        """形态优化选号 - 贪心搜索(和值/奇偶/大小约束)"""
         must_include = must_include or []
         result = list(must_include)
         remaining = [n for n in candidates if n not in result]
@@ -734,7 +742,7 @@ class JinZhu:
         return sorted(result)
 
     def _select_recovery_pool(self, analysis, all_pool, used_set, n_select):
-        """回补注选号：中等频率 + 遗漏回补"""
+        """回补注选号:中等频率 + 遗漏回补"""
         scores = []
         for n, w, f, m in all_pool:
             if n in used_set:
@@ -748,7 +756,7 @@ class JinZhu:
         return sorted([n for n, s in scores[:n_select]])
 
     def _select_cold_reds(self, analysis, used_set, game='ssq'):
-        """冷号注红球 — 多维评分，权重从Model读取"""
+        """冷号注红球 - 多维评分,权重从Model读取"""
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -778,8 +786,50 @@ class JinZhu:
         """大乐透冷号注前区"""
         return self._select_cold_reds(analysis, used_set, game='dlt')
 
+    def _select_cold_back(self, analysis, used_set):
+        """大乐透冷号注后区 - 2个号码"""
+        back_weight_dict = dict(analysis.get('back_weights', []))
+        back_miss = analysis.get('back_miss', {})
+        back_freq = analysis.get('back_freq', {})
+        back_avg_interval = analysis.get('back_avg_interval', {})
+
+        cold_miss_w = self.get_param('cold_miss_back', 0.30)
+        cold_cycle_w = self.get_param('cold_cycle_back', 0.40)
+        cold_freq_w = self.get_param('cold_freq_back', 0.30)
+
+        scores = {}
+        for n in range(1, 13):
+            if n in used_set:
+                continue
+            w = back_weight_dict.get(n, 0)
+            m = back_miss.get(n, 0)
+            f = back_freq.get(n, 0)
+            avg_i = back_avg_interval.get(n, 10)
+
+            cycle = min(m / max(avg_i, 1), 2.0)
+            miss_s = min(m / 5.0, 3.0)
+            freq_s = min(f, 4) / 2.0
+            scores[n] = w * 0.3 + miss_s * cold_miss_w + cycle * cold_cycle_w + freq_s * cold_freq_w
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        selected = []
+        for n, s in ranked:
+            if n not in selected:
+                selected.append(n)
+            if len(selected) >= 2:
+                break
+
+        if len(selected) < 2:
+            for n in range(1, 13):
+                if n not in selected and n not in used_set:
+                    selected.append(n)
+                if len(selected) >= 2:
+                    break
+
+        return sorted(selected)
+
     def _select_blues(self, analysis, n_blues=5):
-        """双色球蓝球智能选择 — 综合权重+遗漏+奇偶+互斥"""
+        """双色球蓝球智能选择 - 综合权重+遗漏+奇偶+互斥"""
         blue_weight_dict = dict(analysis['blue_weights'])
         blue_miss = analysis.get('blue_miss', {})
         blue_freq = analysis.get('blue_freq', {})
@@ -844,7 +894,7 @@ class JinZhu:
         return selected[:n_blues]
 
     def _select_backs(self, analysis, n_pairs=5):
-        """大乐透后区智能选择 — 权重+遗漏+奇偶+互斥"""
+        """大乐透后区智能选择 - 权重+遗漏+奇偶+互斥"""
         back_weight_dict = dict(analysis.get('back_weights', []))
         if isinstance(back_weight_dict, list):
             back_weight_dict = dict(back_weight_dict)
@@ -937,7 +987,7 @@ class JinZhu:
             current_n = result[idx]
             current_w = pool_dict.get(current_n, (0, 0, 0))[0]
 
-            # P1修复: 排除已在结果中的号码，防止重复
+            # P1修复: 排除已在结果中的号码,防止重复
             similar = [n for n, w, f, m in all_pool
                        if n not in result and abs(w - current_w) <= max(current_w * 0.1, 0.01)]
             if similar:
@@ -959,11 +1009,11 @@ class JinZhu:
         return result
 
     # ============================================================
-    #  Evaluation Layer — 结算反哺
+    #  Evaluation Layer - 结算反哺
     # ============================================================
 
     def settle(self, game: str = None, date: str = None):
-        """结算指定日期的推荐，写入 algo_settlements（含default和虚拟用户）"""
+        """结算指定日期的推荐,写入 algo_settlements(含default和虚拟用户)"""
         from algo_module import AlgoDB
         db = AlgoDB()
 
@@ -982,7 +1032,7 @@ class JinZhu:
                 logging.error(f"[Settle] {g} {date} 失败: {e}")
                 results[g] = {'error': str(e)}
 
-        # 结算系统虚拟用户也在此完成（同 algo_state.db）
+        # 结算系统虚拟用户也在此完成(同 algo_state.db)
         logging.info(f"[Settle] 完成 {len(results)} 彩种结算(含虚拟用户)")
 
         return results
@@ -994,7 +1044,7 @@ class JinZhu:
             return {'error': '无法获取开奖数据'}
 
         # P1修复: 按开奖日期匹配而非取latest
-        # 检查历史数据中是否有该日期对应的开奖（通过日期或期号匹配）
+        # 检查历史数据中是否有该日期对应的开奖(通过日期或期号匹配)
         actual = None
         for draw in history[:3]:  # 只看最近3期
             # 尝试多种方式匹配
@@ -1004,7 +1054,7 @@ class JinZhu:
                 actual = draw
                 break
         if actual is None:
-            # fallback: 如果历史第1期的日期比settle日期新或等于，说明该期就是昨天开的
+            # fallback: 如果历史第1期的日期比settle日期新或等于,说明该期就是昨天开的
             actual = history[0]
 
         actual_period = actual.get('period', '')
@@ -1019,7 +1069,7 @@ class JinZhu:
         if not rows:
             return {'error': f'无待结算推荐', 'game': game, 'date': date}
 
-        # _calc_prize 在 ROITracker 类中，不是 AlgoEngine
+        # _calc_prize 在 ROITracker 类中,不是 AlgoEngine
         from algo_module import ROITracker, AlgoDB
         engine = ROITracker(AlgoDB())
 
@@ -1101,14 +1151,14 @@ class JinZhu:
         }
 
     # ============================================================
-    #  系统虚拟用户进化信号 — 50人vu01~vu50
+    #  系统虚拟用户进化信号 - 50人vu01~vu50
     # ============================================================
 
     def _collect_vuser_evolve_signals(self):
         """从系统虚拟用户(algo_state.db)的策略命中数据提取进化信号
 
         核心逻辑: 按策略类型(lhs/extreme_freq/extreme_miss/extreme_trend/extreme_zone/balanced)
-        分组统计命中率，表现好的策略类型→其偏好维度的参数微增
+        分组统计命中率,表现好的策略类型→其偏好维度的参数微增
         """
         db_path = DB_PATH
         if not os.path.exists(db_path):
@@ -1118,7 +1168,7 @@ class JinZhu:
             conn = sqlite3.connect(db_path)
             week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
 
-            # 提取虚拟用户结算数据，按策略类型分组
+            # 提取虚拟用户结算数据,按策略类型分组
             rows = conn.execute(
                 """SELECT b.strategy, b.user_id,
                           COUNT(*) as total,
@@ -1164,7 +1214,7 @@ class JinZhu:
         if not type_stats:
             return {}, [], 0
 
-        # 找出表现最好的策略类型（命中率和奖金双指标）
+        # 找出表现最好的策略类型(命中率和奖金双指标)
         best_type = max(type_stats.items(),
                        key=lambda x: x[1]['hit_rate'] * 0.6 + min(x[1]['prize'] / 100, 1.0) * 0.4)
 
@@ -1189,7 +1239,7 @@ class JinZhu:
             signals[param_key] = delta
             changes.append(f"[VU] 最优策略={best_name}(命中{best_stats['hit_rate']:.1%}) → {param_key} {'+' if delta>0 else ''}{delta}")
 
-        # 冷号策略如果命中率高，增加cold_cycle权重
+        # 冷号策略如果命中率高,增加cold_cycle权重
         cold_types = [t for t in type_stats if '冷号' in t or 'miss' in t.lower()]
         if cold_types:
             cold_hit_rate = max(type_stats[t]['hit_rate'] for t in cold_types)
@@ -1200,18 +1250,18 @@ class JinZhu:
         return signals, changes, len(rows)
 
     # ============================================================
-    #  Evolution Layer — GEPA 进化 (写回Model)
+    #  Evolution Layer - GEPA 进化 (写回Model)
     # ============================================================
 
     def evolve(self, game: str = None):
-        """GEPA进化 — 结算数据驱动权重调整，写回Model（P0修复: 合并3彩种投票+边界保护+最小样本6）"""
+        """GEPA进化 - 结算数据驱动权重调整,写回Model(P0修复: 合并3彩种投票+边界保护+最小样本6)"""
         from algo_module import AlgoDB
         db = AlgoDB()
         games = [game] if game else ['ssq', 'dlt', 'qxc', 'pln', 'ltn']
 
-        # P0修复: 收集所有彩种的进化信号，最后合并投票
+        # P0修复: 收集所有彩种的进化信号,最后合并投票
         game_signals = defaultdict(float)  # 彩种信号
-        vu_signals_dict = defaultdict(float)  # 虚拟用户信号（独立，不被彩种数稀释）
+        vu_signals_dict = defaultdict(float)  # 虚拟用户信号(独立,不被彩种数稀释)
         all_changes = []
         total_samples = 0
 
@@ -1225,7 +1275,7 @@ class JinZhu:
             except Exception as e:
                 logging.error(f"[Evolve] {g} 信号收集失败: {e}")
 
-        # 系统虚拟用户进化信号（50人按策略类型命中率加权，独立不稀释）
+        # 系统虚拟用户进化信号(50人按策略类型命中率加权,独立不稀释)
         try:
             vu_sigs, vu_changes, vu_samples = self._collect_vuser_evolve_signals()
             for k, v in vu_sigs.items():
@@ -1236,16 +1286,16 @@ class JinZhu:
             logging.warning(f"[Evolve] 虚拟用户信号收集异常(不阻塞): {e}")
 
         if total_samples < 6:
-            logging.info(f"[Evolve] 总样本{total_samples}<6，跳过进化")
+            logging.info(f"[Evolve] 总样本{total_samples}<6,跳过进化")
             return {'status': '数据不足', 'samples': total_samples}
 
-        # P0修复: 显著性检验 — 最优策略奖金需超过平均值20%以上才调整
-        # (简单版：如果所有策略奖金差异<20%，视为噪声，不调参)
+        # P0修复: 显著性检验 - 最优策略奖金需超过平均值20%以上才调整
+        # (简单版:如果所有策略奖金差异<20%,视为噪声,不调参)
         if not self._is_significant(db, games):
-            logging.info(f"[Evolve] 策略差异不显著，跳过进化")
+            logging.info(f"[Evolve] 策略差异不显著,跳过进化")
             return {'status': '差异不显著', 'samples': total_samples}
 
-        # 合并信号：彩种信号取平均delta，虚拟用户信号独立直接叠加
+        # 合并信号:彩种信号取平均delta,虚拟用户信号独立直接叠加
         final_signals = {}
         for k, v in game_signals.items():
             if v != 0:
@@ -1253,7 +1303,7 @@ class JinZhu:
         for k, v in vu_signals_dict.items():
             final_signals[k] = final_signals.get(k, 0) + v  # VU信号不被稀释
 
-        # 应用delta（带边界保护）
+        # 应用delta(带边界保护)
         for k, delta in final_signals.items():
             old_val = self.model.get(k, 0)
             new_val = round(old_val + delta, 4)
@@ -1301,7 +1351,7 @@ class JinZhu:
         }
 
     def _collect_evolve_signals(self, db, game):
-        """收集单彩种进化信号（不直接修改Model，返回delta字典）"""
+        """收集单彩种进化信号(不直接修改Model,返回delta字典)"""
         conn = db._get_conn()
         week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
         rows = conn.execute(
@@ -1327,7 +1377,7 @@ class JinZhu:
         signals = {}
         changes = []
 
-        # 热号领先 → freq 微增, miss 微减 (step减半为0.005，更保守)
+        # 热号领先 → freq 微增, miss 微减 (step减半为0.005,更保守)
         if '追热' in best_strategy[0] or '核心' in best_strategy[0]:
             signals['freq'] = 0.005
             signals['miss'] = -0.005
@@ -1341,7 +1391,7 @@ class JinZhu:
         return signals, changes, len(rows)
 
     def _is_significant(self, db, games):
-        """P0修复: 简单显著性检验 — 最优策略奖金需超过均值20%以上"""
+        """P0修复: 简单显著性检验 - 最优策略奖金需超过均值20%以上"""
         conn = db._get_conn()
         week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
 
@@ -1363,7 +1413,7 @@ class JinZhu:
         avg_prize = sum(all_prizes) / len(all_prizes)
         max_prize = max(all_prizes)
 
-        # 如果最大奖金不超过均值的1.2倍，差异不显著
+        # 如果最大奖金不超过均值的1.2倍,差异不显著
         if avg_prize > 0 and max_prize < avg_prize * 1.2:
             return False
 
@@ -1371,7 +1421,7 @@ class JinZhu:
 
     # ============================================================
     # ============================================================
-    #  Daily Loop — 每日闭环
+    #  Daily Loop - 每日闭环
     # ============================================================
 
     def daily_run(self, kelly_bias: float = 0.0) -> dict:
@@ -1423,10 +1473,10 @@ class JinZhu:
         return result
 
     def generate_daily_section(self, daily_result: dict = None) -> str:
-        """生成日报彩票展示部分 — 由JinZhu核心大脑统一控制展示
+        """生成日报彩票展示部分 - 由JinZhu核心大脑统一控制展示
 
         Args:
-            daily_result: daily_run()的返回值，若为None则现场生成推荐
+            daily_result: daily_run()的返回值,若为None则现场生成推荐
         Returns:
             markdown格式的彩票展示内容
         """
@@ -1437,8 +1487,8 @@ class JinZhu:
         if daily_result is None:
             daily_result = {}
 
-        section = "\n---\n\n## 🎰 彩票号码推荐 — 刘海蟾点金·金主引擎（仅供娱乐参考）\n\n"
-        section += "> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n\n"
+        section = "\n---\n\n## 🎰 彩票号码推荐 - 刘海蟾点金·金主引擎(仅供娱乐参考)\n\n"
+        section += "> ⚠️ 彩票本质是随机事件,以下由刘海蟾点金算法基于历史数据规律推算,不构成任何投注建议。理性购彩,量力而行。\n\n"
 
         yesterday_weekday = yesterday.weekday()
         # 开奖日历
@@ -1447,14 +1497,14 @@ class JinZhu:
         qxc_days = {1, 4, 6}   # 二五日
 
         def _fmt_nums(nums, width=2):
-            """格式化号码：补零"""
+            """格式化号码:补零"""
             return ' '.join(f'{x:0{width}d}' for x in nums)
 
         def _read_yesterday_recs(game):
-            """读取昨日推荐记录 — 从predictions文件读，无则现场生成回测用推荐"""
+            """读取昨日推荐记录 - 从predictions文件读,无则现场生成回测用推荐"""
             yesterday_str = yesterday.strftime('%Y-%m-%d')
             recs = []
-            # 1. 从predictions文件读（cache恢复或git里的）
+            # 1. 从predictions文件读(cache恢复或git里的)
             try:
                 pred_path = os.path.join(MODULE_DIR, 'lottery-predictions.json')
                 if os.path.exists(pred_path):
@@ -1486,7 +1536,7 @@ class JinZhu:
                             pass
                 except Exception:
                     pass
-            # 3. 终极fallback: 用固定种子生成昨日的推荐（回测用）
+            # 3. 终极fallback: 用固定种子生成昨日的推荐(回测用)
             if not recs:
                 try:
                     seed = int(yesterday_str.replace('-', ''))
@@ -1536,7 +1586,7 @@ class JinZhu:
                             section += "→ 未中"
                         section += "\n"
                 else:
-                    section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
+                    section += "\n(昨日推荐记录暂未同步,回测数据下期补全)\n"
             section += "\n"
         except Exception as e:
             section += f"[双色球] 错误: {e}\n\n"
@@ -1578,7 +1628,7 @@ class JinZhu:
                             section += "→ 未中"
                         section += "\n"
                 else:
-                    section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
+                    section += "\n(昨日推荐记录暂未同步,回测数据下期补全)\n"
             section += "\n"
         except Exception as e:
             section += f"[大乐透] 错误: {e}\n\n"
@@ -1619,7 +1669,7 @@ class JinZhu:
                             section += "→ 未中"
                         section += "\n"
                 else:
-                    section += "\n（昨日推荐记录暂未同步，回测数据下期补全）\n"
+                    section += "\n(昨日推荐记录暂未同步,回测数据下期补全)\n"
             section += "\n"
         except Exception as e:
             section += f"[七星彩] 错误: {e}\n\n"
@@ -1630,7 +1680,7 @@ class JinZhu:
 
         section += "\n---\n**🧠 金主引擎状态**\n"
 
-        # 结算展示：优先从settle结果读取，不依赖数据库
+        # 结算展示:优先从settle结果读取,不依赖数据库
         settle_parts = []
         for g in ['ssq', 'dlt', 'qxc']:
             gname = {'ssq': '双色球', 'dlt': '大乐透', 'qxc': '七星彩'}[g]
@@ -1643,8 +1693,8 @@ class JinZhu:
         if settle_parts:
             section += "**昨日结算**: " + " | ".join(settle_parts) + "\n"
         else:
-            # 没有settle结果时，尝试从回测数据计算
-            section += "**昨日结算**: 已执行（新环境首次运行，历史数据积累中）\n"
+            # 没有settle结果时,尝试从回测数据计算
+            section += "**昨日结算**: 已执行(新环境首次运行,历史数据积累中)\n"
 
         # 进化展示
         section += "**进化**: "
@@ -1653,7 +1703,7 @@ class JinZhu:
         elif evolve:
             evolve_status = evolve.get('status', '未知')
             if '数据不足' in str(evolve_status):
-                section += f"待积累(需≥6条结算样本，当前新环境积累中)\n"
+                section += f"待积累(需≥6条结算样本,当前新环境积累中)\n"
             else:
                 section += f"跳过({evolve_status})\n"
         else:
