@@ -224,18 +224,24 @@ class JinZhu:
             return []
 
     def _analyze(self, game: str, history_data: list) -> dict:
-        """调用 WeightedAnalyzer 分析"""
+        """调用 WeightedAnalyzer 分析，pln/ltn用专用分析"""
         try:
             import lottery_analyzer as la
+            
+            # pln/ltn 用专用分析函数
+            if game == 'pln':
+                from games.pln import analyze_pln
+                return analyze_pln(history_data)
+            elif game == 'ltn':
+                from games.ltn import analyze_ltn
+                return analyze_ltn(history_data)
+            
             wa = la.WeightedAnalyzer(history_data)
             analyze_map = {
                 'ssq': wa.analyze_ssq,
                 'dlt': wa.analyze_dlt,
                 'qxc': wa.analyze_qxc,
             }
-            # PLN/LTN简化处理：直接返回历史数据（不需要复杂分析）
-            if game in ('pln', 'ltn'):
-                return {'history': history_data}
             return analyze_map[game]()
         except Exception as e:
             logging.error(f"[Gen] {game} 分析失败: {e}")
@@ -453,7 +459,7 @@ class JinZhu:
         
 
     def _gen_pln(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾威力彩5注推荐（6/38 + 1/8）"""
+        """台湾威力彩5注推荐（读CSV）"""
         import csv, random
         try:
             with open('data/pln_history.csv', 'r') as f:
@@ -461,12 +467,18 @@ class JinZhu:
                 rows = list(reader)
             if len(rows) >= 5:
                 latest = rows[-1]
-                base = [int(x) for x in latest['numbers'].split()]
-                special = int(latest['special'])
+                # 兼容两种格式
+                if 'num1' in latest:
+                    nums = [int(latest[f'num{i}']) for i in range(1, 7)]
+                    special = int(latest.get('special', latest.get('num7', 0)))
+                else:
+                    nums = [int(x) for x in latest.get('numbers', '').split(',')]
+                    special = int(latest.get('special', 0))
+                
                 strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
                 recs = []
                 for i in range(5):
-                    new = base.copy()
+                    new = nums.copy()
                     for j in range(random.randint(1, 3)):
                         idx = random.randint(0, 5)
                         new[idx] = random.randint(1, 38)
@@ -483,10 +495,10 @@ class JinZhu:
         strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
         recs = []
         for i in range(5):
-            main = sorted(random.sample(range(1, 39), 6))
+            nums = sorted(random.sample(range(1, 39), 6))
             special = random.randint(1, 8)
             recs.append({
-                'numbers': main + [special],
+                'numbers': nums + [special],
                 'type': f'P{i}',
                 'strategy': strategies[i]
             })
@@ -515,8 +527,8 @@ class JinZhu:
                     new_front = front.copy()
                     for j in range(random.randint(1, 3)):
                         idx = random.randint(0, 4)
-                        new_front[idx] = random.randint(1, 35)
-                    new_back = [random.randint(1, 12) for _ in range(2)]
+                        new_front[idx] = random.randint(1, 47)
+                    new_back = [random.randint(1, 38) for _ in range(2)]
                     recs.append({
                         'front': sorted(new_front),
                         'back': sorted(new_back),
@@ -532,8 +544,8 @@ class JinZhu:
         recs = []
         for i in range(5):
             recs.append({
-                'front': sorted(random.sample(range(1, 36), 5)),
-                'back': sorted(random.sample(range(1, 13), 2)),
+                'front': sorted(random.sample(range(1, 48), 5)),
+                'back': sorted(random.sample(range(1, 39), 2)),
                 'type': f'P{i}',
                 'strategy': strategies[i]
             })
