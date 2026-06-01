@@ -426,10 +426,15 @@ def fetch_pln_history(periods=15):
             reader = csv.DictReader(f)
             result = []
             for row in reader:
+                # 兼容两种格式: num1-num6 或 numbers
+                if 'numbers' in row:
+                    nums = [int(x) for x in row['numbers'].split(',')]
+                else:
+                    nums = [int(row.get(f'num{i}', 0)) for i in range(1, 7)]
                 result.append({
                     'period': row['period'],
-                    'numbers': [int(row.get(f'num{i}', row.get(f'number{i}', 0))) for i in range(1, 7)],
-                    'special': int(row['special'])
+                    'numbers': nums,
+                    'special': int(row.get('special', row.get('num7', 0)))
                 })
             result.sort(key=lambda x: x['period'], reverse=True)
             return result[:periods]

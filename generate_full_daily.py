@@ -231,7 +231,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=45):
             if content.endswith('```'):
                 content = content[:-3]
             return content.strip()
-        elif resp.status_code == 429:
+        elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
             logging.warning("[新闻] 混元API限流，等待5秒重试...")
             import time; time.sleep(5)
             resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
@@ -239,7 +239,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=45):
                 result = resp.json()
                 return result['choices'][0]['message']['content'].strip()
             else:
-                logging.warning(f"[新闻] 重试仍失败: {resp.status_code}")
+                logging.warning(f"[新闻] 重试仍失败: {resp.status_code} {resp.text[:200]}")
                 return None
         else:
             logging.warning(f"[新闻] 混元API失败: {resp.status_code} {resp.text[:200]}")
@@ -259,6 +259,98 @@ def generate_news_section():
     失败自动降级到fallback。不再无限卡死。
     """
     logging.info("[新闻] 开始抓取真实新闻(RSS+热搜)...")
+
+    # 数据源（多源增加素材量）
+    RSS_SOURCES = {
+        '36氪': 'https://36kr.com/feed',
+        'IT之家': 'https://www.ithome.com/rss/',
+        '虎嗅': 'https://www.huxiu.com/rss/0.xml',
+        '钛媒体': 'https://www.tmtpost.com/rss.xml',
+    }
+
+    # ---- 抓取原始数据（并发，4个RSS+百度热搜同时抓）----
+    all_raw = []
+    source_stats = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        # 并发抓取所有RSS
+        rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
+        # 并发抓百度热搜
+        hot_future = pool.submit(_fetch_baidu_hot, 20)
+        # 收集RSS结果
+        for name, future in rss_futures.items():
+            raw = future.result(timeout=15)
+            all_raw.extend(raw)
+            source_stats[name] = len(raw)
+        # 收集热搜结果
+        hot_raw = hot_future.result(timeout=15)
+        all_raw.extend(hot_raw)
+        source_stats['百度热搜'] = len(hot_raw)
+
+    logging.info(f"[新闻] RSS+热搜抓取完成: {source_stats}, 共{len(all_raw)}条")
+
+    # 按画像过滤并排序
+    scored = [(item, score_news(item)) for item in all_raw]
+    filtered = [(item, sc) for item, sc in scored if sc >= 1]  # 门槛分1
+    filtered.sort(key=lambda x: x[1], reverse=True)
+    top_items = [item for item, sc in filtered[:20]]  # 取TOP20
+
+    logging.info(f"[新闻] 画像过滤后TOP20: {[item['title'][:30] for item, sc in filtered[:5]]}")
+
+    # ---- 构造AI提示词 ----
+    system_msg = """你是有10年投研经验的分析师，专注"搞钱机会识别"。
+
+**任务**：基于新闻素材，生成"每日资讯"板块（约800字）。
+
+**输出格式**：
+## 一、每日资讯
+
+### 🤖 AI/算力
+- **标题**
+  > 💰 落地动作：（具体可执行的搞钱动作，含数字/仓位/止损）
+
+### 🏦 金融/政策
+...
+
+### 🚀 创业/商业
+...
+
+### 🌐 出海/跨境
+...
+
+### 🔥 热搜/时事
+...
+
+**要求**：
+1. 每条新闻后必须跟"💰 落地动作"（具体可执行，含数字）
+2. 优先AI/科技/金融/创业，过滤体育/娱乐/社会
+3. 从"搞钱角度"分析（低买高卖/信息差/政策套利/中间人角色）
+4. 总字数800-1000字"""
+
+    user_msg = """今日新闻素材（已按画像打分排序）：
+
+""" + "\n".join([
+        f"【{item.get('source','')}】{item['title']} (分:{score_news(item)})"
+        for item in top_items
+    ]) + "\n\n请生成今日【每日资讯】板块。"
+
+    # ---- 调用AI（外层120秒超时兜底，API内部60秒）----
+    try:
+        content = _run_with_timeout(
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=90),
+            timeout=150
+        )
+        if content:
+            logging.info(f"[新闻] ✅ AI日报生成成功: {len(content)}字符")
+            return content
+        else:
+            logging.warning("[新闻] AI日报生成返回空，使用降级模式")
+            return _fallback_news_section(all_raw)
+    except TimeoutError:
+        logging.warning("[新闻] AI日报生成超时(120秒)，使用降级模式")
+        return _fallback_news_section(all_raw)
+    except Exception as e:
+        logging.warning(f"[新闻] AI日报生成异常: {e}，使用降级模式")
+        return _fallback_news_section(all_raw)
 
     # 数据源（多源增加素材量）
     RSS_SOURCES = {
@@ -497,7 +589,36 @@ def generate_lottery_section():
 
     # 由JinZhu核心大脑统一生成展示内容
     try:
-        return jz.generate_daily_section(daily_result)
+        # 检查是否有 generate_daily_section 方法
+        if hasattr(jz, 'generate_daily_section'):
+            return jz.generate_daily_section(daily_result)
+        else:
+            # 降级：读取 lottery-predictions.json 并格式化
+            import json
+            pred_file = os.path.join(os.path.dirname(__file__), 'lottery-predictions.json')
+            if os.path.exists(pred_file):
+                with open(pred_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                # 兼容 list 或 dict 格式
+                if isinstance(data, list):
+                    # list 格式：直接是推荐列表
+                    lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金', '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
+                    for i, rec in enumerate(data[:5]):
+                        lines.append(f'注{i+1}: {rec}')
+                    return '\n'.join(lines)
+                elif isinstance(data, dict):
+                    # dict 格式：可能有 predictions 或 direct key
+                    preds = data.get('predictions', data)
+                    lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金', '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
+                    for game, recs in preds.items():
+                        lines.append(f'### {game.upper()}')
+                        for i, rec in enumerate(recs[:5]):
+                            lines.append(f'注{i+1}: {rec}')
+                    return '\n'.join(lines)
+                else:
+                    return '\n---\n## 🎰 彩票推荐\n（数据格式未知）\n---\n'
+            else:
+                return '\n---\n## 🎰 彩票推荐\n（lottery-predictions.json 未找到）\n---\n'
     except Exception as e:
         logging.error(f"[日报] ⚠️ JinZhu展示生成异常: {e}")
         return f"\n---\n## 🎰 彩票推荐\n（展示生成异常: {e}，推荐数据已正常生成）\n---\n"

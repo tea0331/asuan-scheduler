@@ -175,6 +175,13 @@ class JinZhu:
 
             analysis = self._analyze(game, history_data)
             if not analysis:
+                # PLN/LTN简化处理：直接返回历史数据
+                if game in ('pln', 'ltn'):
+                    analysis = {'history': history_data}
+                else:
+                    logging.error(f"[Gen] {game} 分析失败")
+                    return []
+            if not analysis:
                 logging.error(f"[Gen] {game} 分析失败")
                 return []
 
@@ -204,59 +211,14 @@ class JinZhu:
     def _fetch_history(self, game: str) -> list:
         """自动获取历史数据"""
         try:
-            if game == 'pln':
-                # 台湾威力彩：从CSV读取
-                import csv
-                try:
-                    with open('data/pln_history.csv', 'r', encoding='utf-8') as f:
-                        reader = csv.DictReader(f)
-                        rows = list(reader)
-                        if len(rows) >= 15:
-                            return [{'period': r['period'], 
-                                    'numbers': r['numbers'].split() + [r['special']],
-                                    'main': [int(x) for x in r['numbers'].split()],
-                                    'special': int(r['special'])} for r in rows[-15:]]
-                except:
-                    pass
-                # CSV失败，用mock
-                import random
-                mock = []
-                for i in range(15):
-                    main = sorted(random.sample(range(1, 39), 6))
-                    special = random.randint(1, 8)
-                    mock.append({'period': f"26{i+1:04d}", 
-                                  'numbers': [str(n) for n in main] + [str(special)],
-                                  'main': main, 'special': special})
-                return mock
-            elif game == 'ltn':
-                # 台湾大乐透：从CSV读取
-                import csv
-                try:
-                    with open('data/ltn_history.csv', 'r', encoding='utf-8') as f:
-                        reader = csv.DictReader(f)
-                        rows = list(reader)
-                        if len(rows) >= 15:
-                            return [{'period': r['period'], 
-                                    'numbers': r['numbers'].split(),
-                                    'main': [int(x) for x in r['numbers'].split()]} for r in rows[-15:]]
-                except:
-                    pass
-                # CSV失败，用mock
-                import random
-                mock = []
-                for i in range(15):
-                    main = sorted(random.sample(range(1, 50), 6))
-                    mock.append({'period': f"26{i+1:04d}", 
-                                  'numbers': [str(n) for n in main],
-                                  'main': main})
-                return mock
-            else:
-                fetch_map = {
-                    'ssq': lambda: __import__('lottery_analyzer', fromlist=['fetch_ssq_history']).fetch_ssq_history(15),
-                    'dlt': lambda: __import__('lottery_analyzer', fromlist=['fetch_dlt_history']).fetch_dlt_history(15),
-                    'qxc': lambda: __import__('lottery_analyzer', fromlist=['fetch_qxc_history']).fetch_qxc_history(50),
-                }
-                return fetch_map[game]()
+            fetch_map = {
+                'ssq': lambda: __import__('lottery_analyzer', fromlist=['fetch_ssq_history']).fetch_ssq_history(15),
+                'dlt': lambda: __import__('lottery_analyzer', fromlist=['fetch_dlt_history']).fetch_dlt_history(15),
+                'qxc': lambda: __import__('lottery_analyzer', fromlist=['fetch_qxc_history']).fetch_qxc_history(50),
+                'pln': lambda: __import__('games.pln', fromlist=['fetch_pln_history']).fetch_pln_history(15),
+                'ltn': lambda: __import__('games.ltn', fromlist=['fetch_ltn_history']).fetch_ltn_history(15),
+            }
+            return fetch_map[game]()
         except Exception as e:
             logging.error(f"[Gen] {game} 数据获取失败: {e}")
             return []
@@ -271,11 +233,9 @@ class JinZhu:
                 'dlt': wa.analyze_dlt,
                 'qxc': wa.analyze_qxc,
             }
-            # PLN/LTN需要特殊处理（因为历史数据格式不同）
-            if game == 'pln':
-                return wa.analyze_pln()
-            elif game == 'ltn':
-                return wa.analyze_ltn()
+            # PLN/LTN简化处理：直接返回历史数据（不需要复杂分析）
+            if game in ('pln', 'ltn'):
+                return {'history': history_data}
             return analyze_map[game]()
         except Exception as e:
             logging.error(f"[Gen] {game} 分析失败: {e}")
@@ -533,24 +493,33 @@ class JinZhu:
         return recs
 
     def _gen_ltn(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾大乐透5注推荐（6/49）"""
+        """台湾大乐透5注推荐（读CSV）"""
         import csv, random
         try:
             with open('data/ltn_history.csv', 'r') as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
             if len(rows) >= 5:
+                # 兼容两种格式
                 latest = rows[-1]
-                base = [int(x) for x in latest['numbers'].split()]
+                if 'front1' in latest:
+                    front = [int(latest[f'front{i}']) for i in range(1, 6)]
+                    back = [int(latest[f'back{i}']) for i in range(1, 3)]
+                else:
+                    front = [int(x) for x in latest.get('front', '').split(',')]
+                    back = [int(x) for x in latest.get('back', '').split(',')]
+                
                 strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
                 recs = []
                 for i in range(5):
-                    new = base.copy()
+                    new_front = front.copy()
                     for j in range(random.randint(1, 3)):
-                        idx = random.randint(0, 5)
-                        new[idx] = random.randint(1, 49)
+                        idx = random.randint(0, 4)
+                        new_front[idx] = random.randint(1, 35)
+                    new_back = [random.randint(1, 12) for _ in range(2)]
                     recs.append({
-                        'numbers': sorted(new),
+                        'front': sorted(new_front),
+                        'back': sorted(new_back),
                         'type': f'P{i}',
                         'strategy': strategies[i]
                     })
@@ -559,6 +528,16 @@ class JinZhu:
             logging.warning(f"LTN CSV读取失败: {e}，使用mock")
         
         # mock数据
+        strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
+        recs = []
+        for i in range(5):
+            recs.append({
+                'front': sorted(random.sample(range(1, 36), 5)),
+                'back': sorted(random.sample(range(1, 13), 2)),
+                'type': f'P{i}',
+                'strategy': strategies[i]
+            })
+        return recs
         strategies = ['core_hot', 'core_independent', 'ext1', 'ext2', 'cold']
         recs = []
         for i in range(5):
