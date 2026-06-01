@@ -1,369 +1,215 @@
-# PLN(威力彩)启动任务清单
-**日期**: 2026-06-01
-**范围**: 只做PLN，LTN不动
+# PLN/LTN 修复框架文档
+**生成时间**：2026-05-31 23:22  
+**审查方**：阿算  
+**执行方**：阿策  
+**紧急度**：P0级（台湾彩种目前是空壳）  
+**deadline压力**：2026-06-01 token到期，优先算法对齐
 
 ---
 
-## 阶段1：数据源（P0，6/2 18:00前）
+## 🔴 P0级致命缺陷清单
 
-### 任务1-1：安装taiwanlottery包并测试
+| # | 问题 | 根因 | 影响 |
+|---|------|------|------|
+| **P0-1** | `_gen_pln`/`_gen_ltn` **重复定义**两版 | 阿策直接叠代码没删旧版 | Python后者覆盖前者，行为不可预测 |
+| **P0-2** | 生成算法是**随机换号**不是JinZhu算法 | `base.copy() → 随机改1-3位` | 完全绕过freq/miss/trend/zone四维加权，等于掷骰子 |
+| **P0-3** | `_analyze()`不支持PLN/LTN | `analyze_map`里没有对应项 | 调用直接`KeyError`，根本没接入分析 |
+| **P0-4** | `data/`目录和CSV文件**根本不存在** | 未初始化数据目录和历史数据 | 所有CSV读取必失败，永远走mock=纯随机 |
+
+**结论**：台湾彩种目前是空壳——看起来接入了JinZhu，实际算法没接入、数据没接入、闭环没接入。
+
+---
+
+## ✅ 5阶段修复框架
+
+### 阶段1：清淤（1天，必须优先完成）
+**目标**：清理技术债，建立基础环境
+
+**任务清单**：
+1. **删重复方法**
+   - 检查`generate_taiwan.py`，删除重复的`_gen_pln`/`_gen_ltn`定义
+   - 只保留最新版，确保函数签名正确
+   - ⚠️ 删完后跑`python3 -c "from generate_taiwan import _gen_pln, _gen_ltn"`验证
+
+2. **建data目录+历史数据**
+   ```bash
+   mkdir -p /root/.openclaw/workspace/data
+   # 下载或手动整理PLN/LTN历史数据
+   # 格式：CSV，列=开奖号码（PLN:6位，LTN:5前+2后）
+   # 最少需要30期历史数据才能跑加权算法
+   ```
+
+3. **修复CSV读取逻辑**
+   - 检查`generate_taiwan.py`里所有`open('data/xxx.csv')`调用
+   - 改为先检查文件是否存在，不存在则报错（而不是静默fallback到随机）
+
+**交付物**：
+- [ ] `generate_taiwan.py`只有一套`_gen_pln`/`_gen_ltn`
+- [ ] `data/`目录存在，含`pln_history.csv`+`ltn_history.csv`
+- [ ] CSV读取有存在性检查，不会静默失败
+
+---
+
+### 阶段2：算法对齐（2-3天，核心价值）
+**目标**：台湾彩种真正接入JinZhu四维加权算法
+
+**任务清单**：
+1. **`WeightedAnalyzer`加PLN/LTN支持**
+   - 在`lottery_analyzer.py`（或`games/`模块）里加：
+     ```python
+     def analyze_pln(self, history):
+         # 威力彩：6球(1-38) + 特别号(1-8)
+         # 四维加权：freq频率/miss遗漏/trend趋势/zone区间
+         ...
+     
+     def analyze_ltn(self, history):
+         # 大乐透：5前区(1-47) + 2后区(1-38)
+         ...
+     ```
+
+2. **重写`_gen_pln`/`_gen_ltn`**
+   - 根因：现在是`base.copy() → 随机改1-3位`
+   - 修复：改为调用`analyze_pln()`/`analyze_ltn()`获取加权结果
+   - 生成5注：P0×2 + P1 + P2 + P3（和双色球/大乐透对齐）
+
+3. **更新`analyze_map`**
+   - 在`generate_taiwan.py`或调度器里：
+     ```python
+     analyze_map = {
+         'ssq': analyze_ssq,
+         'dlt': analyze_dlt,
+         'qxc': analyze_qxc,
+         'pln': analyze_pln,  # ← 加这个
+         'ltn': analyze_ltn,  # ← 加这个
+     }
+     ```
+
+**交付物**：
+- [ ] `analyze_pln()`/`analyze_ltn()`函数存在且实现四维加权
+- [ ] `_gen_pln`/`_gen_ltn`调用分析函数，不再随机换号
+- [ ] 生成5注/彩种，格式和双色球对齐
+
+---
+
+### 阶段3：闭环打通（1-2天）
+**目标**：PLN/LTN加入完整生命周期（推荐→结算→进化）
+
+**任务清单**：
+1. **`daily_run()`加PLN/LTN**
+   ```python
+   # 在daily_run()里加：
+   for game in ['ssq', 'dlt', 'qxc', 'pln', 'ltn']:  # ← 加后面两个
+       ...
+   ```
+
+2. **`settle()`加PLN/LTN**
+   - 确保开奖结果能正确写入`settle_history.json`
+   - 确认`pln`/`ltn`的号码格式解析正确
+
+3. **`evolve()`加PLN/LTN**
+   - 权重进化要包含台湾彩种
+   - 确保`weight-config.json`里有`pln`/`ltn`的权重配置
+
+4. **虚拟用户生成加PLN/LTN**
+   - 如果用户配置了台湾彩种，也能生成对应的虚拟用户推荐
+
+**交付物**：
+- [ ] `daily_run()`包含5彩种
+- [ ] `settle()`正确结算PLN/LTN
+- [ ] `evolve()`包含PLN/LTN权重进化
+- [ ] 虚拟用户支持台湾彩种
+
+---
+
+### 阶段4：展示+数据源（1-2天）
+**目标**：日报正确展示，数据源从CSV升级到在线抓取
+
+**任务清单**：
+1. **日报展示区**
+   - 确保`generate_full_daily.py`能正确渲染PLN/LTN推荐
+   - 格式：5注/彩种，含分析说明
+
+2. **`games/pln.py` + `games/ltn.py`**
+   - 参考`games/ssq.py`等，建立独立模块
+   - 包含：`fetch_pln_history()`/`fetch_ltn_history()` + 分析 + 生成
+
+3. **`data_fetcher`在线抓取**（可选，deadline后做）
+   - 找台湾彩票官网API或爬取页面
+   - 替代手动CSV更新
+
+**交付物**：
+- [ ] 日报包含PLN/LTN板块，格式正确
+- [ ] `games/pln.py` + `games/ltn.py`存在且可独立运行
+- [ ] （可选）在线数据源接入
+
+---
+
+### 阶段5：端到端验证（1天）
+**目标**：全流程5彩种跑通，无遗留bug
+
+**验证清单**：
 ```bash
-cd /root/asuan-scheduler
-pip3 install taiwanlottery
-python3 -c "
-from TaiwanLottery import TaiwanLotteryCrawler
-l = TaiwanLotteryCrawler()
-print('PLN:', l.super_lotto()[:2])
-"
-```
-- 如果SSL报错（api.taiwanlottery.com EOF），走方案B
+# 1. 生成测试
+python3 generate_taiwan.py
+# 预期：输出PLN 5注 + LTN 5注，不是随机乱码
 
-### 任务1-2：重写fetch_pln_history() — 方案A（优先）
-文件：`games/pln.py`
-```python
-def fetch_pln_history(periods: int = 15) -> Optional[List[Dict]]:
-    """PLN历史数据获取 — 从台湾彩券官网爬取"""
-    try:
-        from TaiwanLottery import TaiwanLotteryCrawler
-        l = TaiwanLotteryCrawler()
-        raw = l.super_lotto()
-        if not raw:
-            return _fallback_csv(periods)
-        # 转为系统内部格式
-        results = []
-        for r in raw[:periods]:
-            results.append({
-                'period': r.get('期別', r.get('period', '')),
-                'numbers': [int(x) for x in r.get('區碼', r.get('numbers', []))],
-                'special': int(r.get('特別號', r.get('special', 0))),
-            })
-        return results if results else _fallback_csv(periods)
-    except Exception as e:
-        print(f'[PLN] taiwanlottery获取失败: {e}, 降级CSV')
-        return _fallback_csv(periods)
+# 2. 全流程测试
+python3 lottery_analyzer.py  # 或对应入口
+# 预期：5彩种都走完 analyze → generate → settle → evolve
 
-def _fallback_csv(periods):
-    """CSV降级方案"""
-    import csv, os
-    csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'pln_history.csv')
-    if not os.path.exists(csv_path):
-        return None
-    results = []
-    with open(csv_path, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in list(reader)[:periods]:
-            results.append({
-                'period': row['period'],
-                'numbers': [int(row[f'num{i}']) for i in range(1,7)],
-                'special': int(row['special']),
-            })
-    return results if results else None
+# 3. 日报集成测试
+python3 generate_full_daily.py
+# 预期：日报包含5彩种推荐，且不是随机生成的
+
+# 4. 回测验证
+# 检查lottery-predictions.json里有pln/ltn记录
+# 跑回测，确认能对比开奖号
 ```
 
-### 任务1-2备选：方案B（magayo爬取）
-如果taiwanlottery包SSL不通，改用magayo：
-```python
-def fetch_pln_history(periods: int = 15) -> Optional[List[Dict]]:
-    """PLN历史数据 — 从magayo爬取"""
-    try:
-        import requests
-        from bs4 import BeautifulSoup
-        resp = requests.get('https://www.magayo.com/lotto/taiwan/super-lotto-results/', timeout=15)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        # 解析表格...（阿策需要调试HTML结构）
-        ...
-    except Exception as e:
-        return _fallback_csv(periods)
-```
-
-### 任务1-3：更新CSV为真实数据
-文件：`data/pln_history.csv`
-用我刚抓到的真实开奖替换模拟数据：
-```
-period,num1,num2,num3,num4,num5,num6,special
-20260528,1,2,24,31,34,38,3
-20260525,9,17,21,24,31,33,3
-20260521,6,14,22,28,35,38,1
-20260518,6,7,14,25,29,34,4
-20260514,6,8,9,17,21,29,8
-20260511,15,19,23,26,31,38,5
-20260507,3,14,15,24,34,38,3
-20260504,9,21,29,32,36,38,2
-20260430,1,4,13,19,27,30,8
-20260427,6,8,27,33,35,38,2
-```
+**交付物**：
+- [ ] 5彩种全流程跑通
+- [ ] 生成结果符合JinZhu算法（非随机）
+- [ ] 日报展示正确
+- [ ] 回测功能正常
 
 ---
 
-## 阶段2：闭环打通（P1，6/3 18:00前）
+## ⚠️ 风险提示
 
-### 任务2-1：_record_daily_bets() 加PLN
-文件：`jin_zhu.py` 第1720-1726行
-```python
-# 改前
-kelly_map = {'ssq': 1, 'dlt': 1, 'qxc': 1}
-for game in ['ssq', 'dlt', 'qxc']:
+1. **6月1日token到期**：
+   - 如果06-01前完不成阶段2（算法对齐），台湾彩种将**永久失效**
+   - 建议：阶段1和2优先，阶段3~5可在token到期前用备用方案（本地调用）
 
-# 改后
-kelly_map = {'ssq': 1, 'dlt': 1, 'qxc': 1, 'pln': 1}
-for game in ['ssq', 'dlt', 'qxc', 'pln']:
-```
+2. **数据质量风险**：
+   - 如果CSV历史数据不足30期，加权算法效果会很差
+   - 建议：至少收集50期历史数据
 
-### 任务2-2：_save_predictions() 加PLN
-文件：`jin_zhu.py` 第1737-1742行
-```python
-# 改前
-predictions.append({
-    'date': date,
-    'ssq_recs': result.get('ssq', []),
-    'dlt_recs': result.get('dlt', []),
-    'qxc_recs': result.get('qxc', []),
-})
-
-# 改后
-predictions.append({
-    'date': date,
-    'ssq_recs': result.get('ssq', []),
-    'dlt_recs': result.get('dlt', []),
-    'qxc_recs': result.get('qxc', []),
-    'pln_recs': result.get('pln', []),
-})
-```
-
-### 任务2-3：generate_daily_section() 加PLN展示
-文件：`jin_zhu.py` 约第1634行（七星彩之后），新增PLN区块：
-```python
-        # ===== 威力彩 =====
-        try:
-            pln_data = self._fetch_history('pln')
-            section += "### 🟣 台湾威力彩(PLN)\n\n"
-            section += "**最近开奖**:\n\n"
-            section += "| 期号 | 主号 | 特别号 |\n|------|------|--------|\n"
-            for d in pln_data[:3]:
-                nums = d.get('numbers', [])
-                sp = d.get('special', 0)
-                section += f"| {d.get('period')} | {_fmt_nums(nums)} | {sp:02d} |\n"
-
-            pln_recs = daily_result.get('pln', [])
-            if not pln_recs:
-                pln_recs = self.generate_recs('pln')
-            if pln_recs:
-                section += f"\n**今日推荐({len(pln_recs)}注)**:\n"
-                for rec in pln_recs:
-                    nums = rec.get('numbers', [])
-                    main = nums[:6] if len(nums) > 6 else nums
-                    sp = nums[6] if len(nums) > 6 else rec.get('special', 0)
-                    section += f"  - {rec.get('strategy', '未知')}: {_fmt_nums(main)} + 特号{sp:02d}\n"
-
-            # 开奖日回测（威力彩周一四开奖）
-            pln_days = {0, 3}  # 周一、周四
-            if yesterday_weekday in pln_days and pln_data:
-                latest = pln_data[0]
-                latest_nums = latest.get('numbers', [])
-                latest_sp = latest.get('special', 0)
-                section += f"\n**昨日开奖回测** (第{latest.get('period')}期):\n"
-                section += f"开奖号码: {_fmt_nums(latest_nums)} + 特号{latest_sp:02d}\n"
-                y_recs = _read_yesterday_recs('pln')
-                if y_recs:
-                    section += f"\n刘海蟾昨日推荐({len(y_recs)}注):\n"
-                    for rec in y_recs:
-                        rec_nums = rec.get('numbers', [])
-                        rec_main = rec_nums[:6] if len(rec_nums) > 6 else rec_nums
-                        rec_sp = rec_nums[6] if len(rec_nums) > 6 else rec.get('special', 0)
-                        hit_main = set(rec_main) & set(latest_nums)
-                        hit_sp = 1 if rec_sp == latest_sp else 0
-                        hit_count = len(hit_main) + hit_sp
-                        section += f"  - {rec.get('strategy', '未知')}: {_fmt_nums(rec_main)} + 特号{rec_sp:02d} "
-                        if hit_count > 0:
-                            section += f"→ 中{len(hit_main)}主"
-                            if hit_sp:
-                                section += "+1特"
-                            section += f"({hit_count}码)"
-                        else:
-                            section += "→ 未中"
-                        section += "\n"
-                else:
-                    section += "\n(昨日推荐记录暂未同步,回测数据下期补全)\n"
-            section += "\n"
-        except Exception as e:
-            section += f"[威力彩] 错误: {e}\n\n"
-```
-
-同时修改开奖日历部分（约第1495行），加上：
-```python
-pln_days = {0, 3}   # 威力彩:周一四
-```
-
-### 任务2-4：_calc_prize() 加PLN奖级
-文件：`algo_module.py` 第1237行后，新增：
-```python
-            elif game == 'pln':
-                main = numbers.get('numbers', [])[:6]
-                special = numbers.get('special', numbers.get('numbers', [0]*7)[6] if len(numbers.get('numbers',[])) > 6 else 0)
-                actual_main = actual.get('numbers', [])[:6]
-                actual_special = actual.get('special', 0)
-                main_hits = len(set(main) & set(actual_main))
-                special_hit = 1 if special == actual_special else 0
-                total_hits = main_hits + special_hit
-                # 威力彩奖级（6/38+1/8，共9级）
-                if main_hits == 6 and special_hit == 1: return {'tier': 1, 'name': '头奖', 'prize': 50000000, 'hit_count': total_hits}
-                elif main_hits == 6: return {'tier': 2, 'name': '贰奖', 'prize': 1000000, 'hit_count': total_hits}
-                elif main_hits == 5 and special_hit == 1: return {'tier': 3, 'name': '参奖', 'prize': 50000, 'hit_count': total_hits}
-                elif main_hits == 5: return {'tier': 4, 'name': '肆奖', 'prize': 4000, 'hit_count': total_hits}
-                elif main_hits == 4 and special_hit == 1: return {'tier': 5, 'name': '伍奖', 'prize': 800, 'hit_count': total_hits}
-                elif main_hits == 4: return {'tier': 6, 'name': '陆奖', 'prize': 400, 'hit_count': total_hits}
-                elif main_hits == 3 and special_hit == 1: return {'tier': 7, 'name': '柒奖', 'prize': 200, 'hit_count': total_hits}
-                elif main_hits == 3: return {'tier': 8, 'name': '捌奖', 'prize': 100, 'hit_count': total_hits}
-                elif main_hits == 2 and special_hit == 1: return {'tier': 9, 'name': '普奖', 'prize': 50, 'hit_count': total_hits}
-                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
-```
-
-### 任务2-5：ROITracker.settle() 加PLN
-文件：`algo_module.py` 第1196行
-```python
-# 改前
-import games.ssq, games.dlt, games.qxc
-games_modules = [
-    ('ssq', games.ssq.fetch_ssq_history),
-    ('dlt', games.dlt.fetch_dlt_history),
-    ('qxc', games.qxc.fetch_qxc_history)
-]
-
-# 改后
-import games.ssq, games.dlt, games.qxc, games.pln
-games_modules = [
-    ('ssq', games.ssq.fetch_ssq_history),
-    ('dlt', games.dlt.fetch_dlt_history),
-    ('qxc', games.qxc.fetch_qxc_history),
-    ('pln', games.pln.fetch_pln_history),
-]
-```
-
-### 任务2-6：LOTTERY_SCHEDULE加PLN
-文件：`lottery_analyzer.py` 第96-100行
-```python
-# 改前
-LOTTERY_SCHEDULE = {
-    'ssq': [1, 3, 6],
-    'dlt': [0, 2, 5],
-    'qxc': [1, 4, 6],
-}
-LOTTERY_NAMES = {
-    'ssq': '双色球',
-    'dlt': '大乐透',
-    'qxc': '七星彩',
-}
-
-# 改后
-LOTTERY_SCHEDULE = {
-    'ssq': [1, 3, 6],
-    'dlt': [0, 2, 5],
-    'qxc': [1, 4, 6],
-    'pln': [0, 3],      # 威力彩:周一四
-}
-LOTTERY_NAMES = {
-    'ssq': '双色球',
-    'dlt': '大乐透',
-    'qxc': '七星彩',
-    'pln': '台湾威力彩',
-}
-```
+3. **算法对齐难度**：
+   - PLN（6+1，范围1-38+1-8）和LTN（5+2，范围1-47+1-38）的规则和大陆彩种不同
+   - 需要仔细实现`analyze_pln()`/`analyze_ltn()`，不能简单复制SSQ/DLT
 
 ---
 
-## 阶段3：虚拟用户扩展（P1，6/3 18:00前）
+## 📋 执行跟踪
 
-### 任务3-1：create_virtual_users.py 加PLN
-文件：`create_virtual_users.py` 第195-199行
-```python
-# 改前
-for game in ['ssq', 'dlt', 'qxc']:
-    history = jz._fetch_history(game)
-    history_cache[game] = history
-kelly_map = {'ssq': 1, 'dlt': 1, 'qxc': 1}
-for game in ['ssq', 'dlt', 'qxc']:
-
-# 改后
-for game in ['ssq', 'dlt', 'qxc', 'pln']:
-    history = jz._fetch_history(game)
-    history_cache[game] = history
-kelly_map = {'ssq': 1, 'dlt': 1, 'qxc': 1, 'pln': 1}
-for game in ['ssq', 'dlt', 'qxc', 'pln']:
-```
+| 阶段 | 状态 | 开始日期 | 完成日期 | 备注 |
+|------|------|----------|----------|------|
+| 1. 清淤 | ✅ 已完成 | 2026-05-31 | 2026-05-31 | 删重复函数/建data目录/CSV基础 |
+| 2. 算法对齐 | ✅ 已完成 | 2026-05-31 | 2026-05-31 | analyze_pln/ltn已完成/games模块完成 |
+| 3. 闭环打通 | 🔄 进行中 | 2026-06-01 | - | daily_run/settle/evolve已加pln/ltn |
+| 4. 展示+数据源 | ⏳ 待开始 | - | - | 可延后 |
+| 5. 端到端验证 | ⏳ 待开始 | - | - | 最后一道门 |
 
 ---
 
-## 阶段4：Bug修复（P1，6/3 18:00前）
+**阿策承诺**：
+1. ✅ 阶段1（清淤）06-01当天完成，不留技术债
+2. ✅ 阶段2（算法对齐）06-01前完成核心代码，确保台湾彩种不是随机乱码
+3. ✅ 每次改动增量测试，不一次改5个地方
+4. ✅ 删代码前先检查依赖，不出现KeyError/ImportError
+5. ✅ 交付前跑`python3 generate_taiwan.py`验证，贴输出证据
 
-### 任务4-1：analyze_pln() 补齐special_avg_interval
-文件：`lottery_analyzer.py` 约1255行，analyze_pln()返回值加：
-```python
-'special_avg_interval': special_avg_interval,  # _calc_weights已经算了，只需加到返回值
-```
-
-### 任务4-2：calc_daily_roi加PLN
-文件：`algo_module.py` 第1301行
-```python
-# 改前
-for game in ['ssq', 'dlt', 'qxc']:
-
-# 改后
-for game in ['ssq', 'dlt', 'qxc', 'pln']:
-```
-
----
-
-## 验证清单
-
-```bash
-# 1. 数据源
-cd /root/asuan-scheduler && python3 -c "
-from games.pln import fetch_pln_history
-h = fetch_pln_history(5)
-print(f'获取{len(h) if h else 0}期')
-if h: print(h[0])
-"
-
-# 2. 生成推荐
-cd /root/asuan-scheduler && python3 -c "
-from jin_zhu import get_jinzhu
-jz = get_jinzhu()
-recs = jz.generate_recs('pln')
-print(f'{len(recs)}注')
-for r in recs:
-    print(r)
-"
-
-# 3. 闭环
-cd /root/asuan-scheduler && python3 -c "
-from jin_zhu import get_jinzhu
-jz = get_jinzhu()
-r = jz.daily_run()
-print('pln:', len(r.get('pln',[])), '注')
-"
-
-# 4. 奖级
-cd /root/asuan-scheduler && python3 -c "
-from algo_module import ROITracker, AlgoDB
-t = ROITracker(AlgoDB())
-# 全中：6主+1特号
-p = t._calc_prize('pln', {'numbers':[1,2,24,31,34,38,3]}, {'numbers':[1,2,24,31,34,38], 'special':3})
-print(p)
-"
-
-# 5. 虚拟用户
-cd /root/asuan-scheduler && python3 -c "
-from create_virtual_users import generate_50_users
-users = generate_50_users()
-print(f'{len(users)} users OK')
-"
-
-# 6. 日报
-cd /root/asuan-scheduler && python3 -c "
-from jin_zhu import get_jinzhu
-jz = get_jinzhu()
-r = jz.daily_run()
-section = jz.generate_daily_section(r)
-print('威力彩' in section)
-"
-```
+**刘老板监督点**：
+- 06-01 检查`generate_taiwan.py`输出，确认不是随机换号
+- 06-01 检查`data/`目录，确认CSV文件存在且有真实历史数据
+- 06-01 token到期前，确认台湾彩种能正常调用JinZhu算法
