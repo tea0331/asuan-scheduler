@@ -56,17 +56,16 @@ def generate_pln_recommendations():
 def generate_ltn_recommendations():
     """生成大乐透推荐 — 直接调用games/ltn.py"""
     try:
-        from games.ltn import generate_recs_ltn, fetch_ltn_history
+        from games.ltn import get_ltn_recommendations
         
-        # 抓取历史数据
-        history = fetch_ltn_history(15)
-        if not history:
-            return "\n---\n## 台湾大乐透(LTN) 生成失败：无法获取历史数据\n---\n"
-        
-        # 生成推荐
-        recs = generate_recs_ltn(history)
+        # 使用一键获取推荐（内部会自动 fetch → analyze → generate）
+        recs = get_ltn_recommendations()
         if not recs:
             return "\n---\n## 台湾大乐透(LTN) 生成失败：无推荐结果\n---\n"
+        
+        # 获取历史数据用于显示最近开奖
+        from games.ltn import fetch_ltn_history
+        history = fetch_ltn_history(15)
         
         lines = ["\n---\n## 台湾大乐透(LTN) 推荐\n"]
         # 最近开奖
@@ -76,8 +75,19 @@ def generate_ltn_recommendations():
         
         lines.append("**今日推荐(5注):**")
         for i, rec in enumerate(recs[:5]):
-            front = rec.get('front', [])
-            back = rec.get('back', [])
+            # 兼容两种格式：
+            # 格式A: {'front': [...], 'back': [...], 'strategy': '...'}
+            # 格式B: {'numbers': [前区5个 + 后区2个], 'strategy': '...'}
+            if 'front' in rec and 'back' in rec:
+                front = rec['front']
+                back = rec['back']
+            elif 'numbers' in rec and len(rec['numbers']) >= 7:
+                # LTN = 前区5个 + 后区2个
+                front = rec['numbers'][:5]
+                back = rec['numbers'][5:7]
+            else:
+                continue
+            
             if len(front) >= 5 and len(back) >= 2:
                 lines.append(f"  注{i+1}: 前区{front} 后区{back} [{rec.get('strategy', 'unknown')}]")
         return "\n".join(lines)
