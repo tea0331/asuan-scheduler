@@ -1,0 +1,6 @@
+阿策通知 — PLN威力彩启动
+
+任务: PLN威力彩闭环启动(6/38+1/8)，LTN不动。4个阶段：①数据源替CSV→taiwanlottery包(SSL不通走magayo)②闭环打通6处③虚拟用户加pln(3→4彩种,750→1000注/天)④bug修
+执行: 详看/workspace/PLN启动任务清单_阿策执行版.md 每个文件改哪行改什么全写了，照抄就行
+验证: python3 -c "from jin_zhu import get_jinzhu; jz=get_jinzhu(); print(jz.generate_recs('pln'))" 输出5注不报错
+死线: 阶段1 6/2 18:00, 阶段2-4 6/3 18:00
