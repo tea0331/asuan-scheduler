@@ -1510,10 +1510,23 @@ class JinZhu:
                 if os.path.exists(pred_path):
                     with open(pred_path, 'r', encoding='utf-8') as f:
                         predictions = json.load(f)
-                    for item in predictions:
-                        if item.get('date') == yesterday_str:
-                            recs = item.get(f'{game}_recs', [])
-                            break
+                    # 兼容两种格式：
+                    # 格式A: [{'date': '...', 'ssq_recs': [...], ...}, ...]
+                    # 格式B: [{'digits': [...], 'strategy': '...'}, ...] (纯推荐list)
+                    if isinstance(predictions, list):
+                        for item in predictions:
+                            if isinstance(item, dict):
+                                # 格式A：有date字段
+                                if item.get('date') == yesterday_str:
+                                    recs = item.get(f'{game}_recs', [])
+                                    break
+                                # 格式B：无date字段，整个list就是某彩种推荐（按game类型猜）
+                                elif 'date' not in item and 'digits' in item:
+                                    # 只有七星彩有digits字段，其他用numbers/reds
+                                    if game == 'qxc' and 'digits' in item:
+                                        recs.append(item)
+                                    elif game != 'qxc':
+                                        recs.append(item)
             except Exception:
                 pass
             # 2. fallback: 从algo_bets读
