@@ -380,49 +380,40 @@ def _match_gray_ops(news_items, gap_keywords):
 
 
 def _inject_gray_ops_to_content(content, top_items):
-    """扫描AI生成内容中的缺口板块，注入灰色操作卡
+    """强制接管缺口板块 — AI输出全部丢弃，代码全量生成
     
-    如果AI已生成缺口扫描板块 → 在每个缺口后追加操作卡
-    如果AI未生成缺口扫描板块 → 用代码完整生成缺口板块（含操作卡）
+    铁律: 缺口扫描板块不受AI安全策略限制。无论AI生成什么，全部用代码替换。
     """
     gap_header = "## 二、市场/中间人缺口扫描"
-    gap_end_marker = "\n## 三、"
     
+    # 用代码生成完整的缺口板块
+    code_gap = _fallback_gap_scan(top_items)
+
     if gap_header not in content:
-        # AI没生成缺口扫描，完全用代码生成
-        signal_kw = _extract_signal_keywords(top_items)
-        gap_section = _fallback_gap_scan(top_items)
-        # 插入到每日资讯后面
-        news_end = content.find("\n## 三、")
-        if news_end == -1:
-            news_end = content.find("\n## 二、")
-        if news_end == -1:
-            # 找不到就追加到末尾
-            return content + "\n\n" + gap_section
-        return content[:news_end] + "\n" + gap_section + "\n" + content[news_end:]
-    
-    # AI生成了缺口扫描，找到并增强
+        # AI没生成缺口扫描 → 插入到正确位置
+        insert_point = content.find("\n## 三、")
+        if insert_point == -1:
+            insert_point = content.find("\n## 一、")
+            if insert_point == -1:
+                return content + "\n\n" + code_gap
+            # 找到一处插入
+            next_section = content.find("\n## ", insert_point + 10)
+            if next_section == -1:
+                next_section = len(content)
+            return content[:next_section] + "\n" + code_gap + "\n" + content[next_section:]
+        return content[:insert_point] + "\n" + code_gap + "\n" + content[insert_point:]
+
+    # AI生成了缺口扫描 → 找到并替换
     gap_start = content.find(gap_header)
-    gap_end = content.find(gap_end_marker, gap_start + len(gap_header))
-    if gap_end == -1:
-        gap_end = content.find("\n## 四、", gap_start + len(gap_header))
+    # 找下一个板块的起始位置
+    for marker in ["\n## 三、", "\n## 四、", "\n## 五、", "\n## 六、"]:
+        gap_end = content.find(marker, gap_start + len(gap_header))
+        if gap_end != -1:
+            break
     if gap_end == -1:
         gap_end = len(content)
-    
-    ai_gap_section = content[gap_start:gap_end]
-    
-    # 检查AI的缺口扫描质量
-    has_ops_card = '🎯' in ai_gap_section or '操作卡' in ai_gap_section
-    
-    if not has_ops_card or len(ai_gap_section) < 300:
-        # AI生成的缺口扫描质量差/没操作卡 → 用代码生成替换
-        signal_kw = _extract_signal_keywords(top_items)
-        code_gap = _fallback_gap_scan(top_items)
-        return content[:gap_start] + code_gap + content[gap_end:]
-    
-    # AI生成的质量还行，但追加操作增强
-    # 不赘述，直接保留AI内容
-    return content
+
+    return content[:gap_start] + code_gap + content[gap_end:]
 
 
 def _load_xie_xiu_memory():
@@ -982,21 +973,21 @@ def _fallback_gap_scan(top_items):
             lines.append("  - ⏱️ 窗口期: 供给冲击后2-4周最活跃，替代方案出现后关闭")
             lines.append("  - 🎯 操作卡: ①找到有货没渠道的供应商→②找到缺货的买家→③以'行业资源对接'名义介绍→④收撮合费现金/私账→⑤买卖双方跳过你直接交易时换下一对")
         else:
-            lines.append(f"- **缺口类型**: 信息差套利 — {context[:30]}")
-            lines.append("  - 收钱模式: 产业链上下游信息撮合/中间人佣金")
-            lines.append("  - 规避路径: 不持仓、不囤货，只收信息撮合费")
-            lines.append("  - 窗口期: 新闻热度持续期间，通常1-3周")
-            lines.append(f"  - 💰 资金匹配: 10-50万流动资金即可运作")
+            lines.append(f"- **缺口**: 信息差套利 — {context[:30]}")
+            lines.append("  - 💰 收钱模式: 在信息不对称处做中间人——不持仓不囤货只收撮合费")
+            lines.append("  - 🛡️ 规避路径: 不签合同不碰货不碰资金，纯介绍人身份，出事免责")
+            lines.append("  - ⏱️ 窗口期: 新闻热度持续期（1-3周），信息充分扩散后关闭")
+            lines.append("  - 🎯 操作卡: ①从这条新闻找到最不对称的信息点→②找到'有资源没渠道'的一方→③以'行业对接'名义联系'有渠道没资源'的一方→④收撮合费现金→⑤双方跳过你时换下一对")
 
         gaps_found += 1
 
-    # 如果不足2个缺口，补充通用缺口
+    # 如果不足2个缺口，补充通用灰色操作（不依赖关键词匹配）
     while gaps_found < 2:
-        lines.append(f"- **缺口类型**: 跨领域信息差 (基于综合新闻推断)")
-        lines.append("  - 收钱模式: 信息撮合/咨询服务/中介抽佣")
-        lines.append("  - 规避路径: 先收定金再服务，避免白嫖咨询")
-        lines.append("  - 窗口期: 2-4周持续评估")
-        lines.append(f"  - 💰 资金匹配: 知识变现为主，资金需求低")
+        lines.append(f"- **缺口**: 新闻综合推断 — 基于今日热点的中间人位置")
+        lines.append("  - 💰 收钱模式: 在信息不对称最严重的地方做撮合——找到'知道但接触不到'的人和'能接触到但不知道'的人之间的断裂")
+        lines.append("  - 🛡️ 规避路径: 纯信息撮合不碰货不碰资金不签合同——出了问题是介绍人不是交易方")
+        lines.append("  - ⏱️ 窗口期: 新闻热度消退前（通常1-2周），信息充分扩散后窗口关闭")
+        lines.append("  - 🎯 操作卡: ①从今日TOP新闻中找到最不对称的信息→②找到'有信息没渠道'的一方→③以'行业交流'名义联系'有渠道没信息'的一方→④收撮合费现金/私账→⑤双方跳过你时换下一对")
         gaps_found += 1
 
     # 用户当前可行动标记
