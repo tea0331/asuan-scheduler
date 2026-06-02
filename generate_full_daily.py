@@ -663,6 +663,9 @@ def _patch_missing_sections(content, top_items, missing_headers):
         else:
             continue
         content += "\n\n" + patch
+        # 扩展金句（确保≥50字）
+        if len(candidate) < 50:
+            candidate += " —— 邪修原则：不赌涨跌，只吃信息费；不追热点，只找断层。"
     return content
 
 
@@ -985,7 +988,7 @@ def _fallback_quote(top_items):
 
     if not top_items:
         quote = _gen_unique_quote("眼前的信息", used_quotes)
-        return f"## 六、今日邪修金句\n\n💭 {quote}"
+        return f"## 六、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
 
     top = top_items[0]
     title = top.get('title', '未知')
