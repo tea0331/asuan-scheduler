@@ -62,8 +62,8 @@ def _run_with_timeout(func, timeout=60):
 # ============================================================
 # 用户画像: 关键词权重 (正=感兴趣, 负=不感兴趣)
 # ============================================================
-USER_PROFILE = {
-    # 大宗商品/价格信号 (传导预判核心)
+USER_PROFILE_V7 = {
+    # ====== 大宗商品/价格信号 (传导预判核心) ======
     '涨价': 5, '暴跌': 5, '缺货': 5, '断供': 5, '停产': 5,
     '铜价': 5, '铝价': 5, '钢价': 4, '油价': 4, '煤价': 4,
     '硫酸': 5, '硫磺': 5, '磷肥': 4, '钛白粉': 4, '锂价': 4,
@@ -71,38 +71,75 @@ USER_PROFILE = {
     '加工费': 4, '替代': 4, '供给': 4, '需求': 3,
     '出口禁令': 5, '出口管制': 5, '制裁': 4, '关税': 4,
     '冶炼': 3, '矿': 3, '废铜': 3, '废钢': 3, '回收': 3,
-    # AI/大模型
+    # ====== AI/大模型 ======
     'AI': 4, '人工智能': 4, '大模型': 4, 'DeepSeek': 4,
     'GPT': 3, 'Claude': 3, 'AGI': 3, 'LLM': 3, '开源模型': 3,
     'AI应用': 3, 'AI Agent': 3, '智能体': 3, '自动化': 2,
-    # 算力/芯片
+    # ====== 算力/芯片 ======
     '算力': 4, 'GPU': 4, '英伟达': 3, 'NVIDIA': 3, '黄仁勋': 2,
     '芯片': 3, '半导体': 3, '台积电': 3, '光刻': 2, '晶圆': 2,
     'H100': 2, 'H200': 2, 'B200': 2, 'CUDA': 2,
-    # 新能源/电动车
+    # ====== 新能源/电动车 ======
     '新能源': 4, '电动车': 4, '电池': 3, '充电桩': 3,
     '光伏': 3, '储能': 3, '碳中和': 2, '电网': 4,
-    # 搞钱/进出口/出海
+    # ====== 搞钱/进出口/出海 ======
     '进出口': 4, '出口': 4, '进口': 3, '外贸': 4,
     '出海': 4, '跨境': 4, '跨境电商': 3, '汇率': 4,
     '副业': 3, '搞钱': 3, '赚钱': 3, '信息差': 4,
     '创业': 2, '融资': 2, '上市': 2, '投资': 2, '营收': 2,
     '蓝海': 3, '供需': 4, '缺口': 5, '垄断': 2,
     '供应链': 4, '代工': 2, '贴牌': 2, 'OEM': 2,
-    # 政策/宏观
+    # ====== 政策/宏观 ======
     '政策': 4, '补贴': 3, '免税': 3, '减税': 2, '新规': 4,
     '央行': 4, '降息': 4, '加息': 4, '流动性': 3,
     '裁员': 2, '亏损': 3, '逆势': 3, '关停': 4,
-    # 科技/产业
+    # ====== 科技/产业（调整） ======
     '手机': 1, '华为': 2, '小米': 1, '苹果': 1,
     '机器人': 3, '无人驾驶': 2, '自动驾驶': 2,
     '5G': 1, '通信': 1, '数字化': 1,
-    # 负面: 不感兴趣
+    '腾讯': 4, '互联网大厂': 3, '平台经济': 3, '社交电商': 3,
+
+    # ====== V7新增: 台湾/两岸套利（刘老板专属战场） ======
+    '台湾': 5, '台北': 4, '高雄': 3, '台中': 3, '台南': 3,
+    '两岸': 5, '台海': 4, '陆资': 4, '台资': 3, '台商': 4,
+    '小三通': 4, '金门': 4, '马祖': 3, '福建': 3,
+    '汇差': 4, '人民币': 5, '新台币': 4, '跨境汇款': 4,
+    '自由行': 3, '观光': 3, '夜市': 2, '小吃': 3,
+    '台湾旅游': 4, '台湾签证': 3, '健保': 3,
+
+    # ====== V7新增: 直销/分销/餐饮商业模式 ======
+    '直销': 5, '分销': 5, '层级': 4, '加盟': 5, '代理': 5,
+    '餐饮': 5, '甜品': 4, '冰淇淋': 4, '绵绵冰': 5, '冷链': 4,
+    '食品': 4, '饮品': 4, '奶茶': 3, '小吃连锁': 4,
+    '尚赫': 5, '安利': 3, '如新': 3, '多层次': 4,
+    '直销牌照': 5, '团队计酬': 4, '金字塔': 3,
+    '中央厨房': 4, '预制菜': 3, '餐饮出海': 5,
+
+    # ====== V7新增: 威士忌/酒类 ======
+    '威士忌': 5, 'Kavalan': 5, '金车': 5, '噶玛兰': 5,
+    '单一麦芽': 4, '桶强': 4, '雪莉桶': 4, '波本桶': 4,
+    '葡萄酒桶': 4, '白兰地桶': 4, '勾兑': 4, '年份': 4,
+    '蒸馏': 3, '橡木桶': 3, '烈酒': 3, '原酒': 4,
+    '威士忌收藏': 5, '威士忌投资': 5, '拍卖': 3,
+
+    # ====== V7新增: 信仰经济 ======
+    '庙宇': 5, '供奉': 5, '开光': 5, '法会': 5, '香火': 4,
+    '线上庙宇': 5, '财神': 5, '赵公明': 5, '祈福': 3,
+    '信仰经济': 5, '供奉品': 4, '线上供养': 4,
+    '刘海蟾': 5, '金蟾': 4, '财神爷': 4, '线上法会': 5,
+
+    # ====== V7修正: 彩票/博彩产业（从-2→+5） ======
+    '彩票': 5, '博彩': 3, '彩券': 5, '威力彩': 5, '大乐透': 5,
+    '公益彩券': 4, '台彩': 5, '中国体育彩票': 4, '双色球': 4,
+    '七星彩': 4, '乐透': 4, '刮刮乐': 2, '派彩': 4,
+    '台彩公司': 5, '彩券商': 5, '彩票经销': 5, '运动彩券': 3,
+
+    # ====== 负面: 不感兴趣（保持不变） ======
     '明星': -3, '综艺': -3, '恋情': -3, '离婚': -3, '出轨': -3,
     '八卦': -4, '饭圈': -4, '偶像': -3, '选秀': -3, '粉丝': -2,
     '娱乐圈': -4, '网红': -2, '直播带货': -1,
     '体育': -1, '足球': -1, '篮球': -1, 'NBA': -1, '世界杯': -1,
-    '彩票': -2, '赌博': -3,
+    '赌博': -3,  # 赌博仍然负面，彩票已单独提升
     '剧情': -2, '电视剧': -2, '电影': -1, '追剧': -2,
     '减肥': -1, '美容': -1, '美妆': -1,
 }
@@ -112,7 +149,7 @@ def score_news(item):
     """根据用户画像给新闻打分"""
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
     score = 0
-    for keyword, weight in USER_PROFILE.items():
+    for keyword, weight in USER_PROFILE_V7.items():
         if keyword.lower() in text:
             score += weight
     return score
@@ -134,6 +171,7 @@ XIE_XIU_MEMORY_PATH = os.path.join(MODULE_DIR, 'xie_xiu_memory.json')
 
 # 传导链模板库: 从信号到终端的完整路径
 CHAIN_TEMPLATES = [
+    # ====== 通用大宗/科技传导链（保留，调整为9条） ======
     {'trigger': ['铜价', '铜', '铜矿'], 'chain': ['铜矿减产/涨价', '冶炼加工费压缩', 'PCB/电机成本上升', '电动车/家电涨价', '替代材料(铝)需求增'], 'gap': '铜铝价差套利/废铜回收/台湾冶炼厂中间人', 'tide': '铜价涨→大家看空需求→实际中国基建托底'},
     {'trigger': ['AI', '算力', 'GPU', '英伟达'], 'chain': ['大模型训练需求爆发', 'GPU/HBM供不应求', '散热/电源/PCB配套涨', '数据中心建设加速', '电力消耗激增→核电/绿电'], 'gap': '算力中间商/散热材料/数据中心电力', 'tide': 'AI概念过热→短期回调→但算力需求是实打实的'},
     {'trigger': ['锂价', '电池', '新能源'], 'chain': ['锂价暴跌/暴涨', '电池成本变化', '电动车定价策略', '传统车企转型压力', '充电桩/储能配套'], 'gap': '锂价波动对冲/电池回收/储能系统集成', 'tide': '锂价跌→短期看空→但储能需求是新增量'},
@@ -142,6 +180,43 @@ CHAIN_TEMPLATES = [
     {'trigger': ['磷肥', '硫酸', '硫磺'], 'chain': ['硫磺/硫酸供应紧张', '磷肥生产成本上升', '粮食生产成本增加', '化肥替代/减量技术', '粮食安全政策'], 'gap': '硫酸替代技术/磷肥中间商/粮食套利', 'tide': '化肥涨价→短期恐慌→但替代技术正在成熟'},
     {'trigger': ['光伏', '储能', '电网'], 'chain': ['光伏装机量激增', '储能配套不足', '电网调度压力', '虚拟电厂需求', '电力市场化交易'], 'gap': '储能系统集成/虚拟电厂/电力交易', 'tide': '光伏产能过剩→短期看空→但消纳瓶颈催生新业态'},
     {'trigger': ['半导体', '芯片', '台积电'], 'chain': ['芯片制程突破/受限', '代工产能重新分配', '国产替代加速', '设备/材料需求', '终端产品成本变化'], 'gap': '国产替代中间人/设备维护/材料供应', 'tide': '制程受限→短期看空→但国产替代是长期趋势'},
+
+    # ====== V2新增: 刘老板专属战场 ======
+    # 链9: 台湾两岸套利
+    {'trigger': ['台湾', '两岸', '小三通', '金门', '台海'],
+     'chain': ['两岸政策松动/收紧', '小三通/直航流量变化', '金门中转仓储角色', '台商资金流调整', '大陆商品→台湾渠道重组或台湾→大陆反套利'],
+     'gap': '两岸小额贸易中间人/跨境支付渠道/金门仓储中转/台币人民币汇差套利',
+     'tide': '政策收紧→短期恐慌→但民间灰色渠道利润更高；政策宽松→表面利好→但竞争加剧'},
+
+    # 链10: 直销→餐饮连锁转型
+    {'trigger': ['直销', '分销', '加盟', '尚赫', '安利', '如新'],
+     'chain': ['直销牌照审批/行业整顿', '多层分销模式合规成本上升', '代理体系被迫转型社交电商', '线下体验+线上裂变融合', '餐饮/食品连锁加盟成新载体'],
+     'gap': '直销转型加盟咨询服务/合规架构设计/供应链金融垫资/培训体系输出',
+     'tide': '直销被打压→短期看空→但百万直销人员转型需求催生千亿级服务市场'},
+
+    # 链11: 大陆餐饮→台湾出海
+    {'trigger': ['餐饮', '甜品', '绵绵冰', '冰淇淋', '奶茶', '冷链'],
+     'chain': ['大陆餐饮品牌寻找出海第一站', '台湾作跳板测试华人市场', '冷链/中央厨房本地化', '加盟代理体系铺设', '品牌溢价→台湾本地消费升级'],
+     'gap': '跨境餐饮品牌代理权/冷链物流共享仓/中央厨房代运营/加盟商招募',
+     'tide': '大陆品牌出海热→短期抢渠道→但供应链和本地化才是壁垒'},
+
+    # 链12: 威士忌年份/桶型套利
+    {'trigger': ['威士忌', 'Kavalan', '噶玛兰', '金车', '单一麦芽', '桶强'],
+     'chain': ['原酒进口成本或国产替代加速', '特定桶型/年份减产→稀缺溢价', '收藏级威士忌拍卖市场', '消费税/关税政策调整', '高端消费收缩→反而是抄底窗口'],
+     'gap': '年份酒跨市场价差套利/桶装原酒投资/特定桶型囤货/限量版代购',
+     'tide': '消费降级→短期看空威士忌→但高端稀缺性反而加强，k型分化'},
+
+    # 链13: 信仰经济变现
+    {'trigger': ['线上庙宇', '信仰经济', '供奉', '开光', '法会', '财神', '赵公明'],
+     'chain': ['线上信仰服务平台涌现', '用户付费意愿验证（ARPU高得惊人）', '平台抽成/佣金/会员模式', '线下寺庙被迫数字化', '信仰+电商/直播/AI开光新形态'],
+     'gap': '线上供养平台代运营/庙宇数字化SaaS/信仰商品供应链/AI法会技术输出',
+     'tide': '线上信仰→被看作小众→但复购率和客单价远超预期，沉默的百亿市场'},
+
+    # 链14: 彩票产业套利
+    {'trigger': ['彩票', '彩券', '威力彩', '大乐透', '台彩', '公益彩券'],
+     'chain': ['彩券销量/政策变化', '经销牌照价值变动', '线上/线下渠道博弈', '奖池累积→衍生金融工具', '跨境代购/合买组织兴起'],
+     'gap': '台彩经销权转售/跨区套利/线上合买平台/赔率差套利',
+     'tide': '彩票被看作负和游戏→但经销和平台是稳赚不赔的收税模式'},
 ]
 
 # 逆潮模式库: 市场共识 vs 逆向可能
@@ -156,14 +231,32 @@ CONTRA_TIDE_PATTERNS = [
 
 
 def _load_xie_xiu_memory():
-    """加载邪修记忆库"""
+    """加载邪修记忆库（冷启动自动初始化）"""
     if os.path.exists(XIE_XIU_MEMORY_PATH):
         try:
             with open(XIE_XIU_MEMORY_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                if 'chains' in data and 'quotes' in data:
+                    return data
         except Exception:
             pass
-    return {'chains': [], 'quotes': [], 'validated_patterns': []}
+
+    # 冷启动: 初始化记忆库种子
+    seed_memory = {
+        'chains': [
+            {'date': '2026-06-02', 'trigger': '系统冷启动', 'chain': '初始化→画像V7→台湾切入→邪修专属战场→每日进化'},
+        ],
+        'quotes': [
+            "邪修之道：在有余和不足之间收过路费",
+            "天之道损有余补不足，邪修之道损有余为己用",
+            "所有人看新闻，邪修看新闻背后的钱流",
+        ],
+        'validated_patterns': [],
+    }
+    # 写回磁盘
+    _save_xie_xiu_memory(seed_memory)
+    logging.info("[邪修] 记忆库冷启动: 已初始化种子数据")
+    return seed_memory
 
 
 def _save_xie_xiu_memory(memory):
@@ -294,15 +387,18 @@ def _fetch_baidu_hot(count=20):
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
     RSS_SOURCES = {
-        '36氪': 'https://36kr.com/feed',
-        'IT之家': 'https://www.ithome.com/rss/',
-        '虎嗅': 'https://www.huxiu.com/rss/0.xml',
-        '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    }
+    '36氪': 'https://36kr.com/feed',
+    'IT之家': 'https://www.ithome.com/rss/',
+    '虎嗅': 'https://www.huxiu.com/rss/0.xml',
+    '钛媒体': 'https://www.tmtpost.com/rss.xml',
+    # V7新增: 台湾视角新闻源
+    '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
+    '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
+}
 
     all_raw = []
     source_stats = {}
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=7) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
         hot_future = pool.submit(_fetch_baidu_hot, 20)
 
@@ -643,67 +739,218 @@ def _infer_signal(title):
 
 
 def _fallback_gap_scan(top_items):
-    """降级: 缺口扫描"""
-    matched = _match_chains(top_items)
+    """降级: 缺口扫描 — V7版基于关键词推断，含资金匹配+行动标志"""
     lines = ["## 二、市场/中间人缺口扫描\n"]
-    lines.append("> （降级模式）基于今日新闻关键词推断的供需缺口:\n")
+    lines.append("> （降级模式）基于今日新闻关键词的供需缺口推断:\n")
 
-    if matched:
-        for i, ch in enumerate(matched[:2]):
-            lines.append(f"- **缺口类型**: {ch['chain'][0]} → {ch['chain'][-1]}")
-            lines.append(f"  - 收钱模式: {ch['gap']}")
-            lines.append(f"  - 规避路径: 关注政策反转信号，设置2周观察期")
-            lines.append(f"  - 窗口期: 2-4周，传导链末端信号出现后收网")
-    else:
-        lines.append("- **缺口类型**: 供应链中间环节 (基于新闻综合推断)")
-        lines.append("  - 收钱模式: 信息差撮合/供应链整合")
-        lines.append("  - 规避路径: 关注政策反转信号")
-        lines.append("  - 窗口期: 2-4周")
+    # 从新闻中提取关键信号词
+    signal_keywords = _extract_signal_keywords(top_items)
+
+    gaps_found = 0
+    for kw, context in signal_keywords.items():
+        if gaps_found >= 2:
+            break
+
+        # 基于关键词推断缺口
+        if kw in ['台湾', '两岸', '小三通']:
+            lines.append(f"- **缺口类型**: 两岸渠道 — {context[:30]}")
+            lines.append("  - 收钱模式: 小额贸易中间撮合/跨境支付通道/汇差套利")
+            lines.append("  - 规避路径: 关注两岸政策风向，合法合规为前提，先小额试点")
+            lines.append("  - 窗口期: 政策窗口通常3-6个月，下一次ECFA/小三通评估节点为关键信号")
+            lines.append(f"  - 💰 资金匹配: 200-300万级别，可分3批入场，首期50万测试渠道")
+        elif kw in ['直销', '分销', '加盟', '尚赫']:
+            lines.append(f"- **缺口类型**: 直销转型服务 — {context[:30]}")
+            lines.append("  - 收钱模式: 合规架构咨询/代理体系重设计/培训+供应链输出")
+            lines.append("  - 规避路径: 避开纯拉人头模式，绑定实体产品（如餐饮）做合规防火墙")
+            lines.append("  - 窗口期: 牌照审批周期6-12个月，在窗口期内抢占转型客户")
+            lines.append(f"  - 💰 资金匹配: 100-200万启动咨询+样板店，ROI 6-12月验证期")
+        elif kw in ['餐饮', '甜品', '绵绵冰', '冷链']:
+            lines.append(f"- **缺口类型**: 餐饮跨境代理/供应链 — {context[:30]}")
+            lines.append("  - 收钱模式: 品牌区域代理费/中央厨房代运营/冷链共享仓收费")
+            lines.append("  - 规避路径: 先签独家代理条款，锁定区域避免品牌直营后踢掉代理")
+            lines.append("  - 窗口期: 大陆品牌出海热预计持续12-18个月，首批代理跑通后品牌会直营")
+            lines.append(f"  - 💰 资金匹配: 150-250万含加盟费+装修+首年运营，6个月内盈亏平衡")
+        elif kw in ['威士忌', 'Kavalan', '噶玛兰', '单一麦芽']:
+            lines.append(f"- **缺口类型**: 年份酒/桶型套利 — {context[:30]}")
+            lines.append("  - 收钱模式: 限量版跨市场价差/桶装原酒投资/拍卖代拍费")
+            lines.append("  - 规避路径: 假酒风险是最大坑，必须通过官方渠道或认证拍卖行")
+            lines.append("  - 窗口期: 特定桶型停产到市场消化约3-6个月，拍卖季前后价差最大")
+            lines.append(f"  - 💰 资金匹配: 单瓶5-30万，组合投资50-200万，年化8-15%预期")
+        elif kw in ['线上庙宇', '信仰经济', '供奉', '开光']:
+            lines.append(f"- **缺口类型**: 信仰数字化服务 — {context[:30]}")
+            lines.append("  - 收钱模式: 平台抽成15-30%/SaaS年费/信仰商品供应链差价")
+            lines.append("  - 规避路径: 宗教合规是前提，避开政治敏感的庙宇，聚焦财神/祈福类")
+            lines.append("  - 窗口期: 线上信仰窗口还在早期，预计2-3年跑出头部平台")
+            lines.append(f"  - 💰 资金匹配: 50-100万可启动MVP，3-6月验证ARPU，再追加")
+        elif kw in ['彩票', '彩券', '台彩', '威力彩']:
+            lines.append(f"- **缺口类型**: 彩票经销/渠道套利 — {context[:30]}")
+            lines.append("  - 收钱模式: 台彩经销权转让/线上合买平台抽佣/跨境代购服务费")
+            lines.append("  - 规避路径: 台彩经销权转让需经台彩公司批准，注意合规风险")
+            lines.append("  - 窗口期: 合买/代购模式处于灰色地带，政策明朗前快速收割")
+            lines.append(f"  - 💰 资金匹配: 经销权30-100万，平台50-150万启动，月流水可达百万")
+        elif kw in ['涨价', '缺货', '断供', '铜', '铝', '钢', '硫酸', '锂']:
+            lines.append(f"- **缺口类型**: 供应链价差/替代套利 — {context[:30]}")
+            lines.append("  - 收钱模式: 信息撮合/替代材料推荐/废料回收差价")
+            lines.append("  - 规避路径: 别赌单方向，做中间人收撮合费而不是持仓")
+            lines.append("  - 窗口期: 供给冲击信号出现后2-4周最活跃，替代方案出现后窗口关闭")
+            lines.append(f"  - 💰 资金匹配: 50-100万流动资金做撮合，不做库存持仓")
+        else:
+            lines.append(f"- **缺口类型**: 信息差套利 — {context[:30]}")
+            lines.append("  - 收钱模式: 产业链上下游信息撮合/中间人佣金")
+            lines.append("  - 规避路径: 不持仓、不囤货，只收信息撮合费")
+            lines.append("  - 窗口期: 新闻热度持续期间，通常1-3周")
+            lines.append(f"  - 💰 资金匹配: 10-50万流动资金即可运作")
+
+        gaps_found += 1
+
+    # 如果不足2个缺口，补充通用缺口
+    while gaps_found < 2:
+        lines.append(f"- **缺口类型**: 跨领域信息差 (基于综合新闻推断)")
+        lines.append("  - 收钱模式: 信息撮合/咨询服务/中介抽佣")
+        lines.append("  - 规避路径: 先收定金再服务，避免白嫖咨询")
+        lines.append("  - 窗口期: 2-4周持续评估")
+        lines.append(f"  - 💰 资金匹配: 知识变现为主，资金需求低")
+        gaps_found += 1
+
+    # 用户当前可行动标记
+    lines.append(f"\n> 📍 **当前可行动**: 刘老板在台湾(至6/16-17)，以上缺口涉及台湾的项优先考察，"
+                 f"大陆相关的项先标记等回沪后启动。")
 
     return "\n".join(lines)
 
 
 def _fallback_contra_tide(top_items):
-    """降级: 逆潮观察"""
-    matched = _match_chains(top_items)
+    """降级: 逆潮观察 — V7版基于新闻关键词推断逆向下注方向"""
     lines = ["## 三、逆潮观察\n"]
-    lines.append("> （降级模式）基于传导链模板的逆向思考:\n")
+    lines.append("> （降级模式）基于今日新闻的逆向信号检测:\n")
 
-    if matched:
-        ch = matched[0]
-        lines.append(f"- **市场共识**: {ch['chain'][0]}是主要方向")
-        lines.append(f"  - 逆向可能: {ch['tide']}")
-        lines.append(f"  - 逆向下注: 在传导链末端寻找反向机会")
-        lines.append(f"  - 止损线: 传导信号连续3天弱化则撤")
-    else:
+    if not top_items:
         lines.append("- **市场共识**: 当前主流叙事")
         lines.append("  - 逆向可能: 共识越强，反转越猛")
         lines.append("  - 逆向下注: 在恐慌中找折价资产")
         lines.append("  - 止损线: 共识持续强化2周则认错")
+        return "\n".join(lines)
+
+    # 从最高分新闻出发推断逆潮
+    top = top_items[0]
+    title = top.get('title', '')
+    title_lower = title.lower()
+
+    # 检测共识倾向
+    if any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN']):
+        consensus = f"'{title[:25]}' → 市场共识偏向狂热"
+        reverse = "涨过头必有回调——关注库存积压/产能释放信号"
+        bet = "做空或减仓相关资产，等回调20%以上再入场"
+        stop = "价格再涨15%且基本面持续强化，则逆向判断错误"
+    elif any(kw in title_lower for kw in ['暴跌', '崩', '恐慌', '裁', '关停']):
+        consensus = f"'{title[:25]}' → 市场共识偏向恐慌"
+        reverse = "恐慌出清后强势玩家市占率上升——关注龙头"
+        bet = "在恐慌底部布局行业龙头/核心资产，分批建仓"
+        stop = "负面信号持续3周无缓和，则恐慌不是暂时的"
+    elif any(kw in title_lower for kw in ['新规', '政策', '监管', '整顿']):
+        consensus = f"'{title[:25]}' → 市场共识偏向悲观"
+        reverse = "政策从发文到执行有时间差，且执行往往打折"
+        bet = "趁市场过度反应时反向布局受影响资产"
+        stop = "政策细则出台后确实严格，则逆向判断错误"
+    else:
+        consensus = f"'{title[:25]}' → 市场共识尚未形成明确方向"
+        reverse = "不确定性本身就是机会——多数人在等确定性时，邪修先布局"
+        bet = "小仓位试探性下注，等共识形成后反向操作"
+        stop = "方向明确后价格已跑出20%以上则追不划算"
+
+    lines.append(f"- **市场共识**: {consensus}")
+    lines.append(f"  - 逆向可能: {reverse}")
+    lines.append(f"  - 逆向下注: {bet}")
+    lines.append(f"  - 止损线: {stop}")
 
     return "\n".join(lines)
 
 
 def _fallback_deep_chain(top_items):
-    """降级: 深度传导分析"""
-    matched = _match_chains(top_items)
+    """降级: 深度传导分析 — V7版基于新闻逐层推导5层，非模板填充"""
     lines = ["## 四、深度传导分析\n"]
-    lines.append("> （降级模式）基于传导链模板的5层推导:\n")
+    lines.append("> （降级模式）基于今日新闻的5层传导推导:\n")
 
-    if matched:
-        ch = matched[0]
-        for i, step in enumerate(ch['chain'][:5], 1):
-            lines.append(f"- 第{i}层: {step}")
-        lines.append(f"\n🔮 **天之道**: 损有余补不足 — {ch['chain'][0]}有余，{ch['chain'][-1]}不足")
-        lines.append(f"⚡ **邪修之道**: 在有余和不足之间做中间人收过路费")
-    else:
-        lines.append("- 第1层: 今日核心事件 (AI分析暂不可用)")
+    if not top_items:
+        lines.append("- 第1层: 今日核心事件 (数据不足)")
         lines.append("- 第2层: 第一波冲击波")
         lines.append("- 第3层: 产业链传导")
         lines.append("- 第4层: 跨产业扩散")
         lines.append("- 第5层: 终局推演")
         lines.append("\n🔮 **天之道**: 损有余补不足")
         lines.append("⚡ **邪修之道**: 在有余和不足之间收过路费")
+        return "\n".join(lines)
+
+    top = top_items[0]
+    title = top.get('title', '')
+    title_lower = title.lower()
+    source = top.get('source', '')
+
+    # 基于新闻关键词推断5层传导（非模板，逐层推导）
+    if '台湾' in source or any(kw in title_lower for kw in ['台湾', '两岸', '台']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 两岸人流/物流/资金流短期调整"
+        layer3 = "第3层（产业链传导）: 台商资金重新配置→大陆台资工厂产能调整→替代供应链"
+        layer4 = "第4层（跨产业传导）: 两岸服务业(旅游/餐饮/金融)→汇率避险需求→人民币/台币跨境结算"
+        layer5 = "第5层（终局推演）: 民间灰色渠道受益 > 官方渠道，小额高频交易取代大宗贸易"
+        tian_dao = "天之道: 损两岸官方之有余，补民间通道之不足"
+        xie_xiu = "邪修之道: 在两岸官方壁垒之间做民间桥梁，收过桥费"
+    elif any(kw in title_lower for kw in ['涨价', '跌', '价', '铜', '铝', '硫酸', '锂']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 相关下游产品成本变化→终端消费品定价调整"
+        layer3 = "第3层（产业链传导）: 替代材料需求上升→替代品供应商利润→新供应商格局"
+        layer4 = "第4层（跨产业传导）: 成本上升传导至物流/包装→电商平台→消费者"
+        layer5 = "第5层（终局推演）: 第一个找到替代方案的人赚最多，中间撮合者稳赚不赔"
+        tian_dao = "天之道: 损涨价商品之有余，补替代方案之不足"
+        xie_xiu = "邪修之道: 不在价格涨跌上赌方向，在供需断裂处做中间人"
+    elif any(kw in title_lower for kw in ['直销', '分销', '加盟', '餐饮', '甜品']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 商业模式合规评估→行业洗牌→强者恒强"
+        layer3 = "第3层（产业链传导）: 供应链金融需求→培训/系统服务商→物流冷链配套"
+        layer4 = "第4层（跨产业传导）: 餐饮出海→品牌管理→加盟商融资→房产租赁"
+        layer5 = "第5层（终局推演）: 有实体产品的分销体系存活，纯拉人头的出局"
+        tian_dao = "天之道: 损纯拉人头之有余，补产品+服务之不足"
+        xie_xiu = "邪修之道: 在模式转型的混乱期，帮人从旧模式切到新模式收转型税"
+    elif any(kw in title_lower for kw in ['威士忌', '酒', 'Kavalan', '噶玛兰']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 特定品类稀缺溢价→收藏市场反应→拍卖价格波动"
+        layer3 = "第3层（产业链传导）: 酒厂扩产/减产→橡木桶供应→包装/物流"
+        layer4 = "第4层（跨产业传导）: 高端消费→体验经济→旅游/品鉴→社交货币"
+        layer5 = "第5层（终局推演）: 品牌价值和稀缺性决定长期回报，短期波动是入场窗口"
+        tian_dao = "天之道: 损短期炒作之有余，补长期稀缺之不足"
+        xie_xiu = "邪修之道: 在恐慌抛售时接盘，在狂热追高时出货"
+    elif any(kw in title_lower for kw in ['AI', '算力', '大模型', 'GPU']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 算力需求激增→GPU供不应求→配套产业链"
+        layer3 = "第3层（产业链传导）: 散热/电源/PCB→数据中心→电力→核能/绿电"
+        layer4 = "第4层（跨产业传导）: AI应用落地→各行业效率提升→岗位替代→新工种"
+        layer5 = "第5层（终局推演）: 卖铲子的(算力/工具)稳赚，淘金的(AI应用)99%会死"
+        tian_dao = "天之道: 损AI概念股之有余，补算力基础设施之不足"
+        xie_xiu = "邪修之道: 不赌哪个AI公司赢，在算力链条每个环节收过路费"
+    elif any(kw in title_lower for kw in ['信仰', '庙宇', '供奉', '法会', '开光']):
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 线上信仰平台流量→用户付费转化→内容/服务供给"
+        layer3 = "第3层（产业链传导）: 数字供养品→信仰电商→AI加持→线下联动"
+        layer4 = "第4层（跨产业传导）: 心理慰藉经济→冥想/正念→酒店/旅游→文化IP"
+        layer5 = "第5层（终局推演）: 信仰+技术的结合是超长坡厚雪赛道，复购率碾压SaaS"
+        tian_dao = "天之道: 损线下庙宇之有余，补线上信仰之不足"
+        xie_xiu = "邪修之道: 在信仰的刚需上建平台抽成，比任何SaaS都稳"
+    else:
+        layer1 = f"第1层（事件）: {title}"
+        layer2 = "第2层（直接影响）: 对相关产业的第一波冲击"
+        layer3 = "第3层（产业链传导）: 上游/下游连锁反应"
+        layer4 = "第4层（跨产业传导）: 扩散至看似无关的领域"
+        layer5 = "第5层（终局推演）: 谁受益、谁受损"
+        tian_dao = "天之道: 损有余补不足"
+        xie_xiu = "邪修之道: 在有余和不足之间收过路费"
+
+    lines.append(f"- {layer1}")
+    lines.append(f"- {layer2}")
+    lines.append(f"- {layer3}")
+    lines.append(f"- {layer4}")
+    lines.append(f"- {layer5}")
+    lines.append(f"\n🔮 **{tian_dao}**")
+    lines.append(f"⚡ **{xie_xiu}**")
 
     return "\n".join(lines)
 
@@ -728,30 +975,121 @@ def _fallback_pitfall(top_items):
 
 
 def _fallback_quote(top_items):
-    """降级: 邪修金句"""
+    """降级: 邪修金句 — V7版结合新闻内容+记忆库去重"""
     memory = _load_xie_xiu_memory()
-    used_quotes = memory.get('quotes', [])[-7:]
+    used_quotes = memory.get('quotes', [])[-10:]  # 扩大去重窗口到10条
 
-    # 基于新闻主题生成降级金句
-    if top_items:
-        top_title = top_items[0]['title']
-        # 用标题的hash选一个金句模板
-        h = int(hashlib.md5(top_title.encode()).hexdigest()[:8], 16)
-        templates = [
-            f"所有人都在看{top_title[:10]}的时候，邪修在看谁在为这个消息付钱",
-            f"新闻是果不是因——{top_title[:10]}背后的钱流方向才是邪修的方向",
-            f"天之道让{top_title[:8]}回归均值，邪修之道在均值回归前收手",
-            f"当{top_title[:10]}成了所有人的共识，就是邪修反向布局的时候",
-            f"信息差不是知道更多，是比别人早一步知道{top_title[:8]}意味着什么",
+    if not top_items:
+        quote = _gen_unique_quote("眼前的信息", used_quotes)
+        return f"## 六、今日邪修金句\n\n💭 {quote}"
+
+    top = top_items[0]
+    title = top.get('title', '未知')
+    # 提取标题核心名词（5-8字）
+    core = title[:12] if len(title) >= 8 else title
+
+    title_lower = title.lower()
+
+    # 基于新闻主题从多个金句角度尝试，取第一个不重复的
+    candidates = []
+
+    if any(kw in title_lower for kw in ['台湾', '两岸', '小三通']):
+        candidates = [
+            f"两岸之间的空隙不是障碍——是邪修的收钱通道",
+            f"{core}的新闻出来时，邪修已经在算两岸价差",
+            f"政策筑墙越高，墙两边愿意付过墙费的人越多",
         ]
-        quote = templates[h % len(templates)]
-        # 避免和近期金句重复
-        if quote in used_quotes:
-            quote = f"看穿{top_title[:10]}的本质——谁在赚钱，谁在亏钱，邪修跟赚钱的人走"
+    elif any(kw in title_lower for kw in ['涨价', '跌', '铜', '铝', '硫酸']):
+        candidates = [
+            f"所有人都在看{core}的价格，邪修在看谁在为这个价格买单",
+            f"价格波动是果不是因——{core}背后的供需断裂才是邪修的入场信号",
+            f"当{core}成了新闻，大多数人已经错过了最好的窗口",
+        ]
+    elif any(kw in title_lower for kw in ['直销', '分销', '加盟', '餐饮']):
+        candidates = [
+            f"{core}的商业模式在变——转型的混乱期就是邪修的收税期",
+            f"看得见的是{core}的新闻，看不见的是百万人在找新出路",
+            f"旧模式死了新模式还没站稳——中间那个阶段，邪修在收过渡费",
+        ]
+    elif any(kw in title_lower for kw in ['威士忌', '酒', 'Kavalan']):
+        candidates = [
+            f"等{core}上了新闻再出手，邪修已经少赚了一轮",
+            f"一瓶酒的价格里，只有20%是酒，80%是故事——邪修卖的是故事",
+            f"恐慌时接盘{core}的人，和狂热时追高的人，不是同一批人",
+        ]
+    elif any(kw in title_lower for kw in ['AI', '算力', '大模型']):
+        candidates = [
+            f"{core}的淘金热里，邪修不淘金——邪修卖铲子和水",
+            f"AI泡沫破裂时，卖算力的照收租金——邪修就站在那个位置",
+            f"每次{core}上头条，就意味着有一批人已经赚完走了",
+        ]
+    elif any(kw in title_lower for kw in ['信仰', '庙宇', '供奉', '法会']):
+        candidates = [
+            f"信徒供养的不是庙——是安全感，邪修做的是安全感的中介",
+            f"{core}的复购率比任何SaaS都高——因为信仰不欠费",
+            f"科技的尽头是玄学，玄学的尽头是稳定的现金流",
+        ]
     else:
-        quote = "看不见的手在调价，邪修在手经过的地方收过路费"
+        candidates = [
+            f"新闻是水面上的波纹，邪修在水下看谁在搅动水流",
+            f"{core}——大多数人看标题，邪修看标题背后的钱流方向",
+            f"不是所有新闻都是机会，但每条新闻都有人因此赚到钱",
+            f"天之道让一切回归均值，邪修之道在回归前离场",
+            f"信息差不是知道更多，是比别人早一步知道{core}意味着什么",
+        ]
+
+    quote = _gen_unique_quote(core, used_quotes, candidates)
 
     return f"## 六、今日邪修金句\n\n💭 {quote}"
+
+
+def _gen_unique_quote(context_hint, used_quotes, candidates=None):
+    """生成一句不重复的金句"""
+    if not candidates:
+        candidates = [
+            f"所有人都在看{context_hint}的时候，邪修在看谁在为这个消息付钱",
+            f"新闻是果不是因——{context_hint}背后的钱流方向才是邪修的方向",
+            f"天之道让{context_hint}回归均值，邪修之道在均值回归前收手",
+            f"当{context_hint}成了所有人的共识，就是邪修反向布局的时候",
+            f"信息差不是知道更多，是比别人早一步知道{context_hint}意味着什么",
+            f"看穿{context_hint}的本质——谁在赚钱，谁在亏钱，邪修跟赚钱的人走",
+        ]
+
+    # 选第一个不在used_quotes中的
+    for q in candidates:
+        if q not in used_quotes:
+            return q
+
+    # 全部用过？加时间戳微调
+    import hashlib
+    seed = int(hashlib.md5(context_hint.encode()).hexdigest()[:8], 16)
+    # 用seed微调最后一句
+    base = candidates[seed % len(candidates)]
+    return f"{base}（第{len(used_quotes)+1}日）"
+
+
+def _extract_signal_keywords(top_items):
+    """从新闻中提取关键信号词和上下文"""
+    sig = {}
+    for item in top_items[:10]:
+        title = item.get('title', '')
+        title_lower = title.lower()
+        for kw_group in [
+            '台湾', '两岸', '小三通', '金门',
+            '直销', '分销', '加盟', '尚赫',
+            '餐饮', '甜品', '绵绵冰', '冷链',
+            '威士忌', 'Kavalan', '噶玛兰', '单一麦芽',
+            '线上庙宇', '信仰经济', '供奉', '开光',
+            '彩票', '彩券', '台彩', '威力彩',
+            '涨价', '缺货', '断供', '铜', '铝', '钢', '硫酸', '锂',
+        ]:
+            if kw_group in sig:
+                continue  # 已有一个同类信号
+            if kw_group in title_lower:
+                sig[kw_group] = title
+        if len(sig) >= 3:
+            break
+    return sig
 
 
 # ============================================================
