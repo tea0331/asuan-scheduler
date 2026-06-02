@@ -53,10 +53,14 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _run_with_timeout(func, timeout=60):
-    """用线程池执行func，超时则跳过"""
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(func)
-        return future.result(timeout=timeout)
+    """用subprocess执行AI调用，超时则跳过（避免线程池卡死）"""
+    import multiprocessing
+    with multiprocessing.Pool(processes=1) as pool:
+        result = pool.apply_async(func)
+        try:
+            return result.get(timeout=timeout)
+        except multiprocessing.TimeoutError:
+            raise TimeoutError(f"AI调用超时({timeout}秒)")
 
 
 # ============================================================
