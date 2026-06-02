@@ -275,6 +275,25 @@ class JinZhu:
                         front_weights[neighbor] = front_weights.get(neighbor, 0) + bonus
             analysis['front_weights'] = sorted(front_weights.items(), key=lambda x: x[1], reverse=True)
 
+        elif game in ('pln', 'ltn'):
+            # PLN: 前区1-38选6 + 特别号1-8
+            # LTN: 前区1-47选5 + 特别号1-39
+            last_numbers = last_draw.get('numbers', [])
+            if not last_numbers and isinstance(last_draw, dict):
+                last_numbers = last_draw.get('front', last_draw.get('reds', []))
+            if not last_numbers:
+                last_numbers = []
+            main_weights = dict(analysis.get('main_weights', []))
+            if not main_weights:
+                main_weights = dict(analysis.get('front_weights', []))
+            limit = 38 if game == 'pln' else 47
+            for n in last_numbers:
+                for neighbor in [n - 1, n + 1]:
+                    if 1 <= neighbor <= limit and neighbor in main_weights:
+                        main_weights[neighbor] = main_weights.get(neighbor, 0) + bonus
+            if main_weights:
+                analysis['main_weights'] = sorted(main_weights.items(), key=lambda x: x[1], reverse=True)
+
         return analysis
 
     # ------ 双色球推荐 ------
@@ -673,8 +692,6 @@ class JinZhu:
             {'front': cold_front, 'back': cold_back, 'strategy': Strategy.COLD},
         ]
 
-    # ------ 七星彩推荐 ------
-        return result
 
     # ============================================================
     #  Smart Selection Tools - 智能选号工具方法
