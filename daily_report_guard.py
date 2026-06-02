@@ -111,6 +111,17 @@ def validate_report(content: str) -> dict:
     if degradation_found:
         warnings.append(f"⚠️ 检测到降级标志: {', '.join(degradation_found)}")
 
+    # 3.5 检查过期年份 — AI可能用训练数据中的旧日期
+    current_year = datetime.now(CST).year
+    stale_years = [str(y) for y in range(2020, current_year)]
+    # 只检查窗口期/周期相关上下文中的年份
+    gap_section = _extract_section(content, "二、市场/中间人缺口扫描")
+    if gap_section:
+        for sy in stale_years:
+            if sy in gap_section:
+                warnings.append(f"⚠️ [时间] 缺口扫描出现过期年份{sy}，当前是{current_year}年，AI可能用了旧数据")
+                break
+
     # 4. 检查总长度
     if len(content) < 2000:
         errors.append(f"❌ 日报总长度过短: {len(content)}字 < 2000字最低标准")
