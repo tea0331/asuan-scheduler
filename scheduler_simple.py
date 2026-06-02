@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-调度器 - 邪修版（天之道框架 + 价格传导分析 + 人脉掮客角度）
-新闻：邪修金句 + 天之道5层传导 + 人脉掮客机会
+调度器 - 最终版
+新闻：调 generate_full_daily.generate_news_section()（有超时保护）
 彩票：读 lottery-predictions.json
 保证7:30准时发邮件，不卡死。
 """
@@ -70,31 +70,6 @@ def send_email(subject, body):
         return False
 
 
-def fetch_baidu_hot_curl(count=15):
-    """用curl抓百度热搜（不依赖requests）"""
-    try:
-        result = subprocess.run(
-            ['curl', '-s', '-H', 'User-Agent: Mozilla/5.0', '--max-time', '10',
-             'https://top.baidu.com/board?tab=realtime'],
-            capture_output=True, text=True, timeout=15
-        )
-        if result.returncode != 0:
-            return []
-        html = result.stdout
-        titles = re.findall(r'<div class="c-single-text-ellipsis">([^<]+)</div>', html)
-        if not titles:
-            titles = re.findall(r'title="([^"]+)"', html)[:20]
-        results = []
-        for t in titles[:count]:
-            t = t.strip()
-            if t:
-                results.append({'title': t, 'source': '百度热搜', 'summary': ''})
-        return results
-    except Exception as e:
-        logging.warning(f"[新闻] 百度热搜抓取失败: {e}")
-        return []
-
-
 def format_lottery_section():
     """从 lottery-predictions.json 生成彩票展示部分"""
     pred_path = os.path.join(PROJECT_DIR, 'lottery-predictions.json')
@@ -160,56 +135,23 @@ def format_lottery_section():
 def main():
     logging.info(f"========== 日报任务开始 {today_str} ==========")
 
-    # 新闻部分（邪修版：天之道传导+5层分析+人脉掮客）
-    news_lines = [f"## 一、每日资讯（{today_display}）\n"]
-
-    # 邪修金句
-    news_lines.append("### 🔥 邪修金句\n")
-    news_lines.append("- 价格不会凭空涨——一定有传导链：A涨价→B成本上升→C被迫替代→D供给收缩→E跳涨。大多数只看到A，你要推到E\n")
-    news_lines.append("- 已定价的=没机会，未定价的=利润。铜涨35%所有人都知道了→追铜=送钱。但铜涨价传导到硫酸→磷肥→粮食这条链，一半人还没反应过来→下注硫酸/磷肥=提前卡位\n")
-    news_lines.append("- 传导有时间差：上游→中游→下游→终端，每个环节滞后1-3个月。你在中游下注，等终端涨价时兑现\n")
-    news_lines.append("- 反身性：某些传导会循环加强（如硫酸缺→铜减产→铜更涨→冶炼利润更高→但硫酸增量有限→硫酸继续涨）\n\n")
-
-    # 天之道传导（5层分析）
-    news_lines.append("### 🌐 天之道传导分析（5层延伸）\n")
-    news_lines.append("- **传导链1：铜→硫酸→磷肥→粮食**\n")
-    news_lines.append("  - 📈 传导路径：铜涨价→冶炼厂硫酸副产品涨价→磷肥成本上升→粮食涨价\n")
-    news_lines.append("  - ⏱️ 时间差：铜(已定价)→硫酸(半定价)→磷肥(未定价)→粮食(未定价)，滞后3-6个月\n")
-    news_lines.append("  - 💰 落地动作：关注磷肥股/粮食期货/供应链中间人\n")
-    news_lines.append("- **传导链2：AI算力→英伟达→散热/电源→VC均热板**\n")
-    news_lines.append("  - 📈 传导路径：AI需求→英伟达H200→散热需求→VC均热板(未定价)\n")
-    news_lines.append("  - ⏱️ 时间差：英伟达(已定价)→散热模组(半定价)→VC均热板(未定价)，滞后1-3个月\n")
-    news_lines.append("  - 💰 落地动作：关注散热/电源供应商/算力租赁\n")
-    news_lines.append("- **传导链3：出口退税→跨境结算→汇率对冲**\n")
-    news_lines.append("  - 📈 传导路径：国内政策→进出口套利→跨境结算→汇率对冲\n")
-    news_lines.append("  - ⏱️ 时间差：政策(已定价)→跨境结算(半定价)→汇率对冲(未定价)，滞后1-3个月\n")
-    news_lines.append("  - 💰 落地动作：政策解读/合规套利/跨境结算\n\n")
-
-    # 人脉掮客（台湾视角）
-    news_lines.append("### 🌉 人脉掮客机会（台湾角色）\n")
-    news_lines.append("- **中间人角色**：一半人知道的传导链，你在中间撮合谁和谁？\n")
-    news_lines.append("  > 例：铜涨价→台湾冶炼厂→大陆PCB厂，你撮合长单锁定价格\n")
-    news_lines.append("- **信息差套利**：台湾早大陆3-6个月知道的电子代工转单信号\n")
-    news_lines.append("  > 例：苹果供应链转单→提前卡位替代材料（铝/镁合金）\n")
-    news_lines.append("- **合规套利**：利用两岸政策时间差，做合规通道业务\n")
-    news_lines.append("  > 例：大陆限电→台湾产能补位→你做合规转单通道\n\n")
-
-    # 百度热搜（真实标题）
-    hot_items = fetch_baidu_hot_curl(20)
-    if hot_items:
-        news_lines.append("### 🔥 热搜/时事\n")
-        for item in hot_items[:10]:
-            news_lines.append(f"- **{item['title']}**  [百度热搜]\n")
-        news_lines.append("\n> 以上内容由百度热搜生成，AI分析模块维护中。\n\n")
-    else:
-        news_lines.append("- **热搜抓取失败，下次重试**\n\n")
-
-    news = ''.join(news_lines)
+    # 新闻部分（调 generate_full_daily.generate_news_section，有超时保护）
+    try:
+        from generate_full_daily import generate_news_section
+        logging.info("[新闻] 开始生成（调 generate_full_daily）...")
+        news_content = generate_news_section()
+        logging.info(f"[新闻] ✅ 生成成功: {len(news_content)}字符")
+    except TimeoutError:
+        logging.warning("[新闻] 生成超时(150秒），使用降级模式")
+        news_content = "## 一、每日资讯\n\n> 新闻生成超时，下次自动恢复。\n\n"
+    except Exception as e:
+        logging.warning(f"[新闻] 生成异常: {e}，使用降级模式")
+        news_content = "## 一、每日资讯\n\n> 新闻生成异常，下次自动恢复。\n\n"
 
     # 彩票部分
     lottery = format_lottery_section()
 
-    content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news}{lottery}"
+    content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery}"
 
     # 写文件
     filepath = os.path.join(OUTPUT_DIR, f'{today_str}.md')
