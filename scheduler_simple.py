@@ -1,32 +1,36 @@
 #!/usr/bin/env python3
 """
-调度器 - 最终版
-新闻：调 generate_full_daily.generate_news_section()（有超时保护）
-彩票：读 lottery-predictions.json
-保证7:30准时发邮件，不卡死。
+调度器 V6 — 日报调度层（只调度不生成）
+
+架构:
+  scheduler_simple.py（调度层）
+    ├── generate_all_sections() → generate_full_daily.py (6板块AI生成)
+    ├── generate_lottery_section() → generate_full_daily.py → jin_zhu.py
+    ├── generate_taiwan_section() → generate_full_daily.py → generate_taiwan.py
+    └── daily_report_guard.py（验证层，发送前检查）
+
+⚠️ 本文件只负责调度+发送，不生成任何新闻内容
+⚠️ 日报架构修改权限: 仅WorkBuddy，阿策禁止修改
 """
 import os
 import sys
-import glob
-import json
 import logging
 import smtplib
-import subprocess
-import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 CST = timezone(timedelta(hours=8))
 today_str = datetime.now(CST).strftime('%Y-%m-%d')
 today_display = datetime.now(CST).strftime('%Y年%m月%d日')
 yesterday_str = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
 
-# 邮件配置
+# 邮件配置 (从环境变量读取，不硬编码)
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
 SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
-SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', 'WNpyg7vTPx4KTQ9s'))
+SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
 SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s',
@@ -39,7 +43,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def send_email(subject, body):
-    """发送邮件：Markdown正文+HTML渲染双格式"""
+    """发送邮件: Markdown正文+HTML渲染双格式"""
     if not SMTP_PASS:
         logging.warning("[邮件] SMTP密码未配置，跳过发送")
         return False
@@ -70,94 +74,69 @@ def send_email(subject, body):
         return False
 
 
-def format_lottery_section():
-    """从 lottery-predictions.json 生成彩票展示部分"""
-    pred_path = os.path.join(PROJECT_DIR, 'lottery-predictions.json')
-    if not os.path.exists(pred_path):
-        return "\n---\n## 🎰 彩票推荐\n（lottery-predictions.json 未找到）\n---\n"
-
-    with open(pred_path, 'r', encoding='utf-8') as f:
-        predictions = json.load(f)
-
-    recs_today = {}
-    recs_yesterday = {}
-    if isinstance(predictions, list):
-        for item in predictions:
-            if not isinstance(item, dict):
-                continue
-            if item.get('date') == today_str:
-                recs_today = item
-            elif item.get('date') == yesterday_str:
-                recs_yesterday = item
-    recs = recs_today or recs_yesterday
-
-    lines = [
-        "\n---\n",
-        "## 🎰 彩票号码推荐 - 刘海蟾点金·金主引擎(仅供娱乐参考)\n",
-        "> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n\n"
-    ]
-
-    game_map = [
-        ('ssq_recs', '🔴 双色球', ['reds', 'blue'], '红={} 蓝={}'),
-        ('dlt_recs', '🔵 大乐透', ['front', 'back'], '前={} 后={}'),
-        ('qxc_recs', '🟢 七星彩', ['digits'], '号码={}'),
-    ]
-
-    for rec_key, label, fields, fmt in game_map:
-        game_recs = recs.get(rec_key, [])
-        if not game_recs:
-            continue
-        lines.append(f"### {label}\n")
-        for i, rec in enumerate(game_recs[:5]):
-            if 'digits' in rec:
-                nums = rec['digits']
-                display = ' '.join(str(int(d)) for d in nums)
-            elif 'reds' in rec:
-                reds = ' '.join(f"{int(r):02d}" for r in rec['reds'])
-                blue = int(rec.get('blue', 0))
-                display = f"{reds} + {blue:02d}"
-            elif 'front' in rec:
-                front = ' '.join(f"{int(f):02d}" for f in rec['front'])
-                back = ' '.join(f"{int(b):02d}" for b in rec['back'])
-                display = f"{front} + {back}"
-            else:
-                display = str(rec)
-            strategy = rec.get('strategy', '策略')
-            lines.append(f"  - 注{i+1}: {display}  [{strategy}]\n")
-        lines.append("\n")
-
-    if not recs:
-        lines.append("（推荐数据暂未同步，下次自动恢复）\n")
-
-    return ''.join(lines)
-
-
 def main():
-    logging.info(f"========== 日报任务开始 {today_str} ==========")
+    logging.info(f"========== 日报调度开始 {today_str} ==========")
 
-    # 新闻部分（调 generate_full_daily.generate_news_section，有超时保护）
+    # 1. 生成6板块新闻分析 (调 generate_full_daily，有超时保护)
     news_content = ""
     try:
-        from generate_full_daily import generate_news_section
-        logging.info("[新闻] 开始生成（调 generate_full_daily）...")
-        # 用线程池执行，150秒超时
+        from generate_full_daily import generate_all_sections
+        logging.info("[调度] 开始生成6板块新闻分析...")
         with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(generate_news_section)
-            news_content = future.result(timeout=150)
-        logging.info(f"[新闻] ✅ 生成成功: {len(news_content)}字符")
+            future = pool.submit(generate_all_sections)
+            news_content = future.result(timeout=200)
+        logging.info(f"[调度] ✅ 新闻分析完成: {len(news_content)}字符")
     except TimeoutError:
-        logging.warning("[新闻] 生成超时(150秒），使用降级模式")
-        news_content = "## 一、每日资讯\n\n> 新闻生成超时，下次自动恢复。\n\n"
+        logging.warning("[调度] 新闻生成超时(200秒)，使用降级模式")
+        news_content = "## 一、每日资讯\n\n> 新闻生成超时，降级模式运行。\n\n"
     except Exception as e:
-        logging.warning(f"[新闻] 生成异常: {e}，使用降级模式")
-        news_content = "## 一、每日资讯\n\n> 新闻生成异常，下次自动恢复。\n\n"
+        logging.warning(f"[调度] 新闻生成异常: {e}，使用降级模式")
+        try:
+            from generate_full_daily import _fallback_all_sections
+            news_content = _fallback_all_sections([], [])
+        except Exception:
+            news_content = "## 一、每日资讯\n\n> 新闻生成异常，降级模式运行。\n\n"
 
-    # 彩票部分
-    lottery = format_lottery_section()
+    # 2. 生成彩票部分
+    lottery_content = ""
+    try:
+        from generate_full_daily import generate_lottery_section
+        logging.info("[调度] 开始生成彩票推荐...")
+        lottery_content = generate_lottery_section()
+        logging.info(f"[调度] ✅ 彩票推荐完成: {len(lottery_content)}字符")
+    except Exception as e:
+        logging.warning(f"[调度] 彩票生成异常: {e}")
+        lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常）\n"
 
-    content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery}"
+    # 3. 生成台湾彩种
+    taiwan_content = ""
+    try:
+        from generate_full_daily import generate_taiwan_section
+        taiwan_content = generate_taiwan_section()
+        logging.info(f"[调度] ✅ 台湾彩种完成: {len(taiwan_content)}字符")
+    except Exception as e:
+        logging.warning(f"[调度] 台湾彩种异常: {e}")
 
-    # 写文件
+    # 4. 拼接完整日报
+    content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}{taiwan_content}"
+
+    # 5. 质量守护 — 发送前验证
+    guard_passed = True
+    try:
+        from daily_report_guard import validate_report
+        guard_result = validate_report(content)
+        if guard_result['valid']:
+            logging.info(f"[守护] ✅ 日报质量通过 (得分: {guard_result['score']}/100)")
+        else:
+            logging.warning(f"[守护] ⚠️ 日报质量不通过: {guard_result['errors']}")
+            guard_passed = False
+            if guard_result.get('warnings'):
+                for w in guard_result['warnings']:
+                    logging.warning(f"[守护] {w}")
+    except Exception as e:
+        logging.warning(f"[守护] 验证异常(不阻塞): {e}")
+
+    # 6. 写文件
     filepath = os.path.join(OUTPUT_DIR, f'{today_str}.md')
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -166,11 +145,15 @@ def main():
     except Exception as e:
         logging.error(f"[P0] 写入日报文件失败: {e}")
 
-    # 发邮件
-    subject = f'阿算帮刘老板发财日报 | {today_str}'
-    send_email(subject, content)
+    # 7. 发邮件 (即使守护不通过也发送，但标记质量)
+    if not SMTP_PASS:
+        logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
+    else:
+        quality_tag = "" if guard_passed else " [质量待审]"
+        subject = f'阿算帮刘老板发财日报{quality_tag} | {today_str}'
+        send_email(subject, content)
 
-    logging.info(f"========== 日报任务完成 {today_str} ==========")
+    logging.info(f"========== 日报调度完成 {today_str} ==========")
 
 
 if __name__ == '__main__':
