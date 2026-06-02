@@ -607,15 +607,26 @@ def _record_xie_xiu_content(sections_text):
 # ============================================================
 # 新闻抓取
 # ============================================================
-def _fetch_rss(url, count=15, timeout=8):
-    """从RSS源获取新闻"""
+def _fetch_rss(url, count=15, timeout=12):
+    """从RSS源获取新闻（V11: 修复GBK编码，超时12秒）"""
     try:
         import xml.etree.ElementTree as ET
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
         if resp.status_code != 200:
             logging.warning(f"[新闻] RSS下载失败({url}): HTTP {resp.status_code}")
             return []
-        root = ET.fromstring(resp.content)
+        # 使用 resp.text (自动处理编码) 而非 resp.content (GBK等编码会报错)
+        try:
+            root = ET.fromstring(resp.text)
+        except ET.ParseError:
+            # 某些RSS源编码特殊，尝试手动检测
+            import re as _re
+            enc_match = _re.search(r'encoding=["\']([^"\']+)["\']', resp.text[:200])
+            if enc_match:
+                resp.encoding = enc_match.group(1)
+                root = ET.fromstring(resp.text)
+            else:
+                raise
         results = []
         for item in root.findall('.//item')[:count]:
             title = item.findtext('title', '').strip()
@@ -635,6 +646,35 @@ def _fetch_rss(url, count=15, timeout=8):
         return []
     except Exception as e:
         logging.warning(f"[新闻] RSS抓取失败({url}): {e}")
+        return []
+
+
+
+def _fetch_sina_finance(count=20):
+    """从新浪财经JSON API抓取新闻"""
+    import json
+    url = 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k=&num=' + str(count) + '&r=0.1'
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if resp.status_code != 200:
+            return []
+        data = json.loads(resp.text)
+        items = []
+        result = data.get('result', {})
+        news_list = result.get('data', [])
+        for n in news_list:
+            title = n.get('title', '') or n.get('intro', '')
+            if title and len(title) > 5:
+                items.append({
+                    'title': title.replace('\n', ' ').strip(),
+                    'link': n.get('url', ''),
+                    'source': '新浪财经',
+                    'published': n.get('ctime', ''),
+                    'score': 5,  # 默认分
+                })
+        return items[:count]
+    except Exception as e:
+        logging.warning(f"[新闻] 新浪财经抓取失败: {e}")
         return []
 
 
@@ -668,9 +708,11 @@ def fetch_raw_materials():
     RSS_SOURCES = {
     # 大陆科技/商业
     '36氪': 'https://36kr.com/feed',
+    '36氪快讯': 'https://36kr.com/feed-newsflash',
     '虎嗅': 'https://www.huxiu.com/rss/0.xml',
     '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    # 台湾综合/财经
+    '创业邦': 'https://www.cyzone.cn/rss/',
+    # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
     '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
     '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
     '工商时报': 'https://ctee.com.tw/rss',
@@ -679,7 +721,7 @@ def fetch_raw_materials():
 
     all_raw = []
     source_stats = {}
-    with ThreadPoolExecutor(max_workers=9) as pool:
+    with ThreadPoolExecutor(max_workers=12) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
         hot_future = pool.submit(_fetch_baidu_hot, 20)
 
@@ -697,6 +739,14 @@ def fetch_raw_materials():
             source_stats['百度热搜'] = len(hot_raw)
         except Exception:
             source_stats['百度热搜'] = 0
+
+    # 新浪财经 (JSON API, 非RSS)
+    try:
+        sina_items = _fetch_sina_finance(20)
+        all_raw.extend(sina_items)
+        source_stats['新浪财经'] = len(sina_items)
+    except Exception:
+        source_stats['新浪财经'] = 0
 
     logging.info(f"[新闻] 抓取完成: {source_stats}, 共{len(all_raw)}条")
     return all_raw, source_stats
@@ -989,20 +1039,62 @@ def _fallback_all_sections(all_raw, top_items):
 
 
 def _infer_signal(title):
-    """基于标题关键词推断传导信号"""
+    """基于标题关键词推断落地动作 — V11版：更多触发词+更具体的操作建议"""
     title_lower = title.lower()
-    if any(kw in title_lower for kw in ['铜', '铝', '钢', '矿']):
-        return '关注相关大宗商品期货多单，止损3%'
-    elif any(kw in title_lower for kw in ['ai', '算力', 'gpu', '大模型']):
-        return '关注算力租赁/散热材料供应链，止损5%'
-    elif any(kw in title_lower for kw in ['出口', '关税', '制裁']):
-        return '关注转口贸易服务商，止损10%'
-    elif any(kw in title_lower for kw in ['锂', '电池', '新能源']):
-        return '关注锂价波动对冲/储能集成，止损8%'
-    elif any(kw in title_lower for kw in ['降息', '央行', '利率']):
-        return '关注利率敏感型资产(地产/券商)，止损5%'
-    elif any(kw in title_lower for kw in ['光伏', '储能', '电网']):
-        return '关注储能系统集成商，止损10%'
+    # 大宗/原材料
+    if any(kw in title_lower for kw in ['铜', '铝', '钢', '矿', '硫酸', '锂']):
+        return '关注现货-期货基差套利，止损3%'
+    elif any(kw in title_lower for kw in ['涨价', '缺货', '断供']):
+        return '找有货没渠道的供应商撮合，撮合费1-3%'
+    # AI/算力/科技
+    elif any(kw in title_lower for kw in ['ai', '算力', 'gpu', '大模型', '英伟达', 'nvidia']):
+        return '关注二手GPU倒卖渠道/算力租赁中介，止损5%'
+    elif any(kw in title_lower for kw in ['机器人', '具身智能', '智能体']):
+        return '关注工业机器人系统集成商的融资需求，可做FA撮合'
+    elif any(kw in title_lower for kw in ['芯片', '半导体']):
+        return '关注芯片分销灰色渠道，信息撮合费3-5%'
+    elif any(kw in title_lower for kw in ['ipo', '上市', '过会', 'a股', '港股']):
+        return '关注上市前最后一轮老股转让，折扣8-9折接'
+    # 出海/贸易
+    elif any(kw in title_lower for kw in ['出口', '关税', '制裁', '贸易']):
+        return '关注转口贸易通道/第三国中转商，撮合费2-5%'
+    elif any(kw in title_lower for kw in ['出海', '全球化', '海外']):
+        return '关注出海服务商（物流/合规/支付），介绍费3-5%'
+    # 餐饮/零售/品牌
+    elif any(kw in title_lower for kw in ['餐饮', '甜品', '饮品', '连锁', '加盟']):
+        return '关注品牌区域代理谈判，底线10-15万人币不松口'
+    elif any(kw in title_lower for kw in ['品牌', '营销', '新消费']):
+        return '联系品牌方了解跨境分销政策，做台湾代理商中间人'
+    # 台湾/两岸
+    elif any(kw in title_lower for kw in ['台湾', '两岸', '台', '小三通', '金门']):
+        return '关注两岸民间兑汇/货代/小三通通道，单笔5万台币以下试水'
+    # 直销/分销
+    elif any(kw in title_lower for kw in ['直销', '分销', '尚赫', '安利', '如新']):
+        return '联系直销团队长提供转型咨询，首单3-5万服务费'
+    # 威士忌
+    elif any(kw in title_lower for kw in ['威士忌', 'whisky', '噶玛兰', 'kavalan', '单一麦芽']):
+        return '关注限量版发售公告→台湾购入→人肉带回/拍卖出货，单瓶利差30-80%'
+    # 信仰经济
+    elif any(kw in title_lower for kw in ['庙宇', '供奉', '开光', '法会', '线上信仰']):
+        return '找3-5家线下庙宇谈数字化代运营，首单免费做样板'
+    # 彩票
+    elif any(kw in title_lower for kw in ['彩票', '彩券', '威力彩', '大乐透']):
+        return '关注台彩经销商转让信息/线上合买社群，抽佣5-10%'
+    # 金融/宏观
+    elif any(kw in title_lower for kw in ['降息', '央行', '利率', '美联储']):
+        return '关注利率敏感型资产（地产/券商），避险对冲为主'
+    elif any(kw in title_lower for kw in ['新能源', '锂', '光伏', '储能', '电网']):
+        return '关注储能系统集成商项目融资（一年期以上），帮对接资金方抽1-2%'
+    elif any(kw in title_lower for kw in ['暴跌', '崩盘', '恐慌', '危机']):
+        return '恐慌中找折价资产，偏逆向布局，止损10%'
+    elif any(kw in title_lower for kw in ['暴涨', '疯抢', '炒作']):
+        return '做空/减仓相关资产或找反向对冲标的，等回调20%入场'
+    elif any(kw in title_lower for kw in ['政策', '新规', '监管', '整顿']):
+        return '趁市场过度反应反向布局，关注执行打折后的套利窗口'
+    elif any(kw in title_lower for kw in ['火灾', '事故', '停产']):
+        return '关注保险理赔后的供应链缺口，找替代供应商撮合'
+    elif any(kw in title_lower for kw in ['融资', '投资', '收购']):
+        return '关注标的上下游服务商，做财务顾问(FA)抽佣2-3%'
     else:
         return '关注产业链上下游价差套利，止损5%'
 
@@ -1022,7 +1114,7 @@ def _fallback_gap_scan(top_items):
 
         # 提取新闻中的实体（公司名/品牌名/人名），注入操作卡
         entity = _extract_entity(context)
-        ent_short = entity[:8] if len(entity) > 8 else entity
+        ent_short = entity[:14] if len(entity) > 14 else entity
 
         # 基于关键词推断缺口
         if kw in ['台湾', '两岸', '小三通']:
@@ -1042,7 +1134,7 @@ def _fallback_gap_scan(top_items):
             lines.append("  - 💰 收钱模式: 区域独家代理费（20-50万）+ 供应链加价10-15%")
             lines.append("  - 🛡️ 规避路径: 签独家区域代理条款防品牌直营踢代理、冷链外包不自己建仓")
             lines.append("  - ⏱️ 窗口期: 大陆餐饮出海热12-18个月，品牌方跑通后会收回代理权直营")
-            lines.append("  - 🎯 操作卡: ①锁定{ent_short}→②以'台湾独家代理'名义谈→③首付10-20万→④冷链找共享仓→⑤品牌直营时转加盟")
+            lines.append(f"  - 🎯 操作卡: ①锁定{ent_short}→②以'台湾独家代理'名义谈→③首付10-20万→④冷链找共享仓→⑤品牌直营时转加盟")
         elif kw in ['威士忌', 'Kavalan', '噶玛兰', '单一麦芽']:
             lines.append(f"- **缺口**: {ent_short}跨市场搬运 — {context[:30]}")
             lines.append("  - 💰 收钱模式: 台湾买→大陆/香港卖（价差30-80%）/拍卖代拍费（5-10%）")
@@ -1085,11 +1177,11 @@ def _fallback_gap_scan(top_items):
             title = item.get('title', '')
             if title[:15] not in used_titles:
                 ent = _extract_entity(title)
-                lines.append(f"- **缺口**: {ent[:10]}的套利窗口 — {title[:30]}")
-                lines.append(f"  - 💰 收钱模式: 围绕'{ent[:10]}'这条新闻→找上下游供需断裂→做撮合抽1-3%")
+                lines.append(f"- **缺口**: {ent[:14]}的套利窗口 — {title[:35]}")
+                lines.append(f"  - 💰 收钱模式: 围绕'{ent[:14]}'这条新闻→找上下游供需断裂→做撮合抽1-3%")
                 lines.append("  - 🛡️ 规避路径: 纯撮合不持仓不碰货→介绍人身份")
                 lines.append("  - ⏱️ 窗口期: 新闻热度1-2周内")
-                lines.append(f"  - 🎯 操作卡: ①从'{ent[:10]}'找到供需断裂→②找有货没渠道方→③以'行业对接'名义→④收现金撮合费→⑤失效换下一对")
+                lines.append(f"  - 🎯 操作卡: ①从'{ent[:14]}'找到供需断裂→②找有货没渠道方→③以'行业对接'名义→④收现金撮合费→⑤失效换下一对")
                 gaps_found += 1
                 break
 
@@ -1350,34 +1442,94 @@ def _gen_unique_quote(context_hint, used_quotes, candidates=None):
 
 
 def _extract_entity(title):
-    """从新闻标题中提取核心实体（公司名/品牌名/人名/产品名），供操作卡引用"""
+    """从新闻标题中提取核心实体（公司名/品牌名/人名/产品名），供操作卡引用。
+    V11重写：修复中文无空格分词失效问题，改用正则+标点分割。"""
     import re
-    # 去除常见噪音词
-    noise = ['今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '台积电', '联发科']
-    # 常见实体模式: XX公司/XX品牌/XX集团/XX平台/XX产品
-    patterns = [
-        r'([A-Za-z]+(?:[A-Z][a-z]*)+)',  # 英文专有名词如 OpenAI/DeepSeek
-        r'([\u4e00-\u9fa5]{2,6}(?:公司|集团|品牌|平台|科技|股份|酒厂|银行|证券|基金|庙宇|寺|宫))',
-        r'([\u4e00-\u9fa5]{2,4}(?:创始人|CEO|董事长|总裁|部长))',
-    ]
-    words = title.replace('：', ' ').replace('，', ' ').replace('。', ' ').split()
-    for word in words:
-        word = word.strip()
-        if len(word) < 2 or len(word) > 12:
-            continue
-        if word in noise:
-            continue
-        # 优先匹配实体模式
-        for pat in patterns:
-            m = re.search(pat, word)
-            if m:
-                return m.group(1)
-    # 兜底：取前两个有意义的词
-    meaningful = [w.strip() for w in words if len(w.strip()) >= 2 and w.strip() not in noise]
-    if meaningful:
-        return meaningful[0] if len(meaningful) == 1 else meaningful[0] + meaningful[1]
-    return title[:8]
-
+    # 噪音词库
+    noise = {'今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '警惕', '注意', '曝光',
+             '台积电', '联发科', '8点1氪', '氪星晚报', '晚报', '早报', '日报', '周报', '月报',
+             '丨', '｜', '【', '】', '「', '」', '《', '》',
+             # 被 Pattern1/3 可能误匹配的通用词，需要精确排除
+             '中国品牌', '韩国', '美国', '日本', '中国', '台湾', '香港', '澳门',
+             '北京', '上海', '深圳', '广州', '福建', '厦门', '金门'}
+    # 通用词子串（含这些词的片段不提取）
+    noise_sub = {'中国品牌', '品牌出海', '产业链', '供应链', '制造业', '互联网', '人工智能',
+                 '韩国', '美国', '日本', '中国', '台湾', '香港', '澳门',
+                 '北京', '上海', '深圳', '广州', '福建', '厦门', '金门',
+                 '全台疯抢', '人民币'}
+    # 英文停用词（大写开头单独出现不算实体）
+    eng_stop = {'The', 'How', 'What', 'Why', 'When', 'This', 'That', 'These', 'Those',
+                'Here', 'There', 'Where', 'Which', 'Would', 'Could', 'Should', 'From',
+                'With', 'Will', 'Have', 'Been', 'More', 'New', 'One', 'Two', 'Our'}
+    
+    # 用标点切分中文句子
+    segments = re.split(r'[，,。！!？?；;：:、\s]+', title)
+    
+    # 模式1: 公司/品牌名（XX公司/集团/平台/科技/品牌/银行/基金/酒厂/股份）
+    for seg in segments:
+        seg = seg.strip()
+        m = re.search(r'([一-龥A-Za-z]{2,10}(?:公司|集团|平台|科技|品牌|银行|证券|基金|酒厂|股份|庙宇|寺|宫|商会|协会))', seg)
+        if m:
+            entity = m.group(1)
+            if entity not in noise:
+                return entity
+    
+    # 模式2: 英文专有名词（OpenAI, DeepSeek, NVIDIA, TSMC, SK等）
+    # 要求>=4字符或多词组合，且不在英文停用词中
+    for seg in segments:
+        seg = seg.strip()
+        m = re.search(r'([A-Z][A-Za-z]{2,15}(?:\s*[A-Z][A-Za-z]{1,15})*)', seg)
+        if m:
+            entity = m.group(1).strip()
+            if len(entity) >= 4 and entity not in eng_stop:
+                # 检查是否只是英文停用词点缀了数字
+                cleaned = entity.split()[0] if ' ' in entity else entity
+                if cleaned not in eng_stop:
+                    return entity
+    
+    # 模式3: 产品/品牌名称（中文2-6字后跟'发布'/'上线'/'推出'/'上市'）
+    for seg in segments:
+        seg = seg.strip()
+        m = re.search(r'([一-龥]{2,6})(?:发布|上线|上市|推出|官宣|融资|IPO|过会|获投|道歉|回应|财报|涨价|降价|暴跌|暴涨|开光|法会)', seg)
+        if m:
+            entity = m.group(1)
+            if entity not in noise and entity not in {'韩国', '美国', '日本', '中国', '台湾', '北京', '上海', '深圳'}:
+                return entity
+    
+    # 模式4: 人名+头衔（2-4字中文名+创始人/CEO/董事长/总裁）
+    for seg in segments:
+        seg = seg.strip()
+        m = re.search(r'([一-龥]{2,4})(?:创始人|CEO|董事长|总裁|部长|经理|教授)', seg)
+        if m:
+            entity = m.group(1)
+            if entity not in noise:
+                return entity + m.group(0)[len(entity):]  # 保留头衔
+    
+    # 模式5: 品牌/产品名（带引号或书名号的）
+    m = re.search(r'[「「]([^」」]{2,12})[」」]', title)
+    if m:
+        return m.group(1)
+    m = re.search(r"['\"]([^'\"]{2,12})['\"]", title)
+    if m:
+        return m.group(1)
+    
+    # 兜底: 从末尾取有效中文片段（中文标题核心实体通常在尾部）
+    for seg in reversed(segments):
+        seg = seg.strip()
+        clean = re.sub(r'[\d\.\-\+%￥$€¥\s（）()\[\]]+', '', seg)
+        if len(clean) >= 2 and len(clean) <= 15 and clean not in noise:
+            # 跳过含噪音子串的片段
+            if any(ns in clean for ns in noise_sub):
+                continue
+            # 如果以动词开头，提取后面的核心名词
+            for verb in ['做', '打造', '推出', '发布', '宣布', '表示']:
+                if clean.startswith(verb) and len(clean) > len(verb) + 2:
+                    clean = clean[len(verb):]
+                    break
+            return clean
+    
+    # 最后兜底：标题前15字
+    return re.sub(r'[\d\.\-\+%￥$€¥\s]+', '', title[:15]).strip()[:12]
 
 def _fill_ops_template(op_template, news_entity):
     """将新闻实体注入操作卡模板，让操作卡看起来针对这条新闻"""
