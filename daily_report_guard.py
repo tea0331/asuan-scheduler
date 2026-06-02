@@ -119,7 +119,7 @@ def validate_report(content: str) -> dict:
     chain_section = _extract_section(content, "四、深度传导分析")
     if chain_section:
         # 检查5层传导是否都有具体内容(不是"第N层: "后面直接换行)
-        chain_lines = [l for l in chain_section.split('\n') if l.strip().startswith('- 第')]
+        chain_lines = [l for l in chain_section.split('\n') if re.match(r'^-.*第\d+层', l.strip())]
         if len(chain_lines) < 3:
             warnings.append("⚠️ [邪修] 传导链层数不足3层，可能内容不完整")
 
