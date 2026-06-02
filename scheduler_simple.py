@@ -136,10 +136,14 @@ def main():
     logging.info(f"========== 日报任务开始 {today_str} ==========")
 
     # 新闻部分（调 generate_full_daily.generate_news_section，有超时保护）
+    news_content = ""
     try:
         from generate_full_daily import generate_news_section
         logging.info("[新闻] 开始生成（调 generate_full_daily）...")
-        news_content = generate_news_section()
+        # 用线程池执行，150秒超时
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(generate_news_section)
+            news_content = future.result(timeout=150)
         logging.info(f"[新闻] ✅ 生成成功: {len(news_content)}字符")
     except TimeoutError:
         logging.warning("[新闻] 生成超时(150秒），使用降级模式")
