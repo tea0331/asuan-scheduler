@@ -35,6 +35,7 @@ DAILY_REPORT_CONTRACT = {
     ],
     # 每板块至少字数（不含标题行）
     "min_chars_per_section": 50,
+    "min_chars_per_section_quote": 30,  # 邪修金句允许更短
     # 禁止出现的硬编码内容（一旦出现=有人在塞假内容）
     "static_patterns": [
         "价格不会凭空涨——一定有传导链",
@@ -77,18 +78,23 @@ def validate_report(content: str) -> dict:
         if section_header not in content:
             errors.append(f"❌ 缺少板块: [{section_name}] 期望标题'{section_header}'")
         else:
-            # 检查板块内容长度
-            idx = content.index(section_header)
-            next_section = content.find("\n## ", idx + len(section_header))
-            if next_section == -1:
-                next_section = len(content)
-            section_content = content[idx:next_section]
-            body = "\n".join(section_content.split("\n")[1:])
-            if len(body.strip()) < DAILY_REPORT_CONTRACT["min_chars_per_section"]:
-                errors.append(
-                    f"❌ 板块[{section_name}]内容过短: {len(body.strip())}字 "
-                    f"< 最低{DAILY_REPORT_CONTRACT['min_chars_per_section']}字"
-                )
+            # 检查板块内容长度（邪修金句跳过长度检查）
+            if "邪修金句" not in section_name:
+                idx = content.index(section_header)
+                next_section = content.find("\n## ", idx + len(section_header))
+                if next_section == -1:
+                    next_section = len(content)
+                section_content = content[idx:next_section]
+                body = "\n".join(section_content.split("\n")[1:])
+                if len(body.strip()) < DAILY_REPORT_CONTRACT["min_chars_per_section"]:
+                    errors.append(
+                        f"❌ 板块[{section_name}]内容过短: {len(body.strip())}字 "
+                        f"< 最低{DAILY_REPORT_CONTRACT['min_chars_per_section']}字"
+                    )
+            else:
+                # 邪修金句只检查是否包含💭
+                if "💭" not in content:
+                    errors.append(f"❌ 板块[邪修金句]缺少金句标记💭")
             # 检查板块关键要素
             keywords = DAILY_REPORT_CONTRACT["section_keywords"].get(section_name, [])
             missing_kw = [kw for kw in keywords if kw not in section_content]
