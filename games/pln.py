@@ -20,11 +20,11 @@ def analyze_pln(history_data: List[Dict]) -> Dict:
     return wa.analyze_pln()
 
 
-def generate_recs_pln(analysis: Dict = None, kelly_bias: float = 0.0) -> List[Dict]:
+def generate_recs_pln(history_data: Dict = None, kelly_bias: float = 0.0) -> List[Dict]:
     """生成PLN推荐 — 委托 JinZhu"""
     from jin_zhu import get_jinzhu
     jz = get_jinzhu()
-    return jz.generate_recs(pln, history_data=history_data, kelly_bias=kelly_bias)
+    return jz.generate_recs('pln', history_data=history_data, kelly_bias=kelly_bias)
 
 
 def get_pln_recommendations(history_data: List[Dict] = None, kelly_bias: float = 0.0) -> List[Dict]:
