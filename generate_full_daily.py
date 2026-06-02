@@ -349,6 +349,13 @@ def generate_news_section():
         else:
             logging.warning("[新闻] AI日报生成返回空，使用降级模式")
             return _fallback_news_section(all_raw)
+    except TimeoutError:
+        logging.warning("[新闻] AI日报生成超时(150秒），使用降级模式")
+        return _fallback_news_section(all_raw)
+    except Exception as e:
+        logging.warning(f"[新闻] AI日报生成异常: {e}，使用降级模式")
+        return _fallback_news_section(all_raw)
+
 def _fallback_news_section(all_raw_items):
     """API失败时的降级方案：用画像过滤的原始标题兜底"""
     logging.info("[新闻] 降级模式：用画像过滤原始标题")
