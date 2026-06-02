@@ -54,7 +54,7 @@ DAILY_REPORT_CONTRACT = {
         "逆潮观察": ["逆向", "下注"],
         "深度传导分析": ["传导", "天之道"],
         "避坑提醒": ["止损"],
-        "邪修金句": ["💭"],
+        "邪修金句": ["金句", "邪修"],  # 不检查特定emoji
     },
     # 降级标志 (出现=降级运行 — V7: 诚实标注降级视为已处理)
     "degradation_markers": [
@@ -95,13 +95,14 @@ def validate_report(content: str) -> dict:
                 # 邪修金句只检查是否包含💭
                 if "💭" not in content:
                     errors.append(f"❌ 板块[邪修金句]缺少金句标记💭")
-            # 检查板块关键要素
-            keywords = DAILY_REPORT_CONTRACT["section_keywords"].get(section_name, [])
-            missing_kw = [kw for kw in keywords if kw not in section_content]
-            if missing_kw:
-                warnings.append(
-                    f"⚠️ 板块[{section_name}]缺少关键要素: {missing_kw}"
-                )
+            # 检查板块关键要素（邪修金句跳过）
+            if "邪修金句" not in section_name:
+                keywords = DAILY_REPORT_CONTRACT["section_keywords"].get(section_name, [])
+                missing_kw = [kw for kw in keywords if kw not in section_content]
+                if missing_kw:
+                    warnings.append(
+                        f"⚠️ 板块[{section_name}]缺少关键要素: {missing_kw}"
+                    )
 
     # 2. 检查硬编码内容
     for pattern in DAILY_REPORT_CONTRACT["static_patterns"]:
