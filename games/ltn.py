@@ -62,15 +62,7 @@ def generate_recs_ltn(analysis: Dict = None, kelly_bias: float = 0.0) -> List[Di
 
 
 def get_ltn_recommendations(history_data: List[Dict] = None, kelly_bias: float = 0.0) -> List[Dict]:
-    """一键获取LTN推荐"""
-    try:
-        if not history_data:
-            history_data = fetch_ltn_history(15)
-        if not history_data:
-            return []
-        analysis = analyze_ltn(history_data)
-        return generate_recs_ltn(analysis, kelly_bias)
-    except Exception as e:
-        print(f'[LTN] 生成失败: {e}')
-        import traceback; traceback.print_exc()
-        return []
+    """一键获取LTN推荐 - 委托 JinZhu"""
+    from jin_zhu import get_jinzhu
+    jz = get_jinzhu()
+    return jz.generate_recs('ltn', history_data=history_data, kelly_bias=kelly_bias)
