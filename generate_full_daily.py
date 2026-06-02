@@ -1068,22 +1068,30 @@ def _fallback_gap_scan(top_items):
             lines.append("  - ⏱️ 窗口期: 供给冲击后2-4周最活跃，替代方案出现后关闭")
             lines.append("  - 🎯 操作卡: ①找到有货没渠道的供应商→②找到缺货的买家→③以'行业资源对接'名义介绍→④收撮合费现金/私账→⑤买卖双方跳过你直接交易时换下一对")
         else:
-            lines.append(f"- **缺口**: 信息差套利 — {context[:30]}")
-            lines.append("  - 💰 收钱模式: 在信息不对称处做中间人——不持仓不囤货只收撮合费")
+            lines.append(f"- **缺口**: {ent_short}的信息断裂 — {context[:30]}")
+            lines.append("  - 💰 收钱模式: 在{ent_short}这条新闻背后的信息不对称处做中间人——不持仓只收撮合费")
             lines.append("  - 🛡️ 规避路径: 不签合同不碰货不碰资金，纯介绍人身份，出事免责")
-            lines.append("  - ⏱️ 窗口期: 新闻热度持续期（1-3周），信息充分扩散后关闭")
-            lines.append("  - 🎯 操作卡: ①从这条新闻找到最不对称的信息点→②找到'有资源没渠道'的一方→③以'行业对接'名义联系'有渠道没资源'的一方→④收撮合费现金→⑤双方跳过你时换下一对")
+            lines.append("  - ⏱️ 窗口期: 新闻热度消退前（1-2周），信息充分扩散后窗口关闭")
+            lines.append(f"  - 🎯 操作卡: ①从'{ent_short}'找到信息最不对称的环节→②找到有资源没渠道的一方→③以{ent_short}'合作'名义联系→④收撮合费→⑤双方跳过你时换下一对")
 
         gaps_found += 1
 
-    # 如果不足2个缺口，补充通用灰色操作（不依赖关键词匹配）
-    while gaps_found < 2:
-        lines.append(f"- **缺口**: 新闻综合推断 — 基于今日热点的中间人位置")
-        lines.append("  - 💰 收钱模式: 在信息不对称最严重的地方做撮合——找到'知道但接触不到'的人和'能接触到但不知道'的人之间的断裂")
-        lines.append("  - 🛡️ 规避路径: 纯信息撮合不碰货不碰资金不签合同——出了问题是介绍人不是交易方")
-        lines.append("  - ⏱️ 窗口期: 新闻热度消退前（通常1-2周），信息充分扩散后窗口关闭")
-        lines.append("  - 🎯 操作卡: ①从今日TOP新闻中找到最不对称的信息→②找到'有信息没渠道'的一方→③以'行业交流'名义联系'有渠道没信息'的一方→④收撮合费现金/私账→⑤双方跳过你时换下一对")
-        gaps_found += 1
+    # 如果不足2条缺口，用最高分未使用的新闻补1条（必须绑定具体新闻标题）
+    if gaps_found < 2 and top_items:
+        used_titles = set()
+        for kw, ctx in signal_keywords.items():
+            used_titles.add(ctx[:15])
+        for item in top_items:
+            title = item.get('title', '')
+            if title[:15] not in used_titles:
+                ent = _extract_entity(title)
+                lines.append(f"- **缺口**: {ent[:10]}的套利窗口 — {title[:30]}")
+                lines.append(f"  - 💰 收钱模式: 围绕'{ent[:10]}'这条新闻→找上下游供需断裂→做撮合抽1-3%")
+                lines.append("  - 🛡️ 规避路径: 纯撮合不持仓不碰货→介绍人身份")
+                lines.append("  - ⏱️ 窗口期: 新闻热度1-2周内")
+                lines.append(f"  - 🎯 操作卡: ①从'{ent[:10]}'找到供需断裂→②找有货没渠道方→③以'行业对接'名义→④收现金撮合费→⑤失效换下一对")
+                gaps_found += 1
+                break
 
     # 用户当前可行动标记
     lines.append(f"\n> 📍 **当前可行动**: 刘老板在台湾(至6/16-17)，以上缺口涉及台湾的项优先考察，"
