@@ -146,27 +146,26 @@ def send_email(subject, body):
 
 
 def _fetch_rss(url, count=5, timeout=8):
-    """从RSS源获取新闻（先用requests带timeout下载，再feedparser解析）"""
+    """从RSS源获取新闻（用requests带timeout下载，xml.etree解析，无网络重试）"""
     try:
-        import feedparser
-        # requests有timeout，feedparser.parse(url)直接网络请求没有timeout会卡死
+        import xml.etree.ElementTree as ET
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
         if resp.status_code != 200:
             logging.warning(f"[新闻] RSS下载失败({url}): HTTP {resp.status_code}")
             return []
-        feed = feedparser.parse(resp.content)
+        # 用xml解析RSS（feedparser会发起额外网络请求，容易卡死）
+        root = ET.fromstring(resp.content)
         results = []
-        for entry in feed.entries[:count]:
-            title = entry.get('title', '').strip()
-            summary = entry.get('summary', '').strip()
-            # 清理HTML标签
+        for item in root.findall('.//item')[:count]:
+            title = item.findtext('title', '').strip()
+            summary = item.findtext('description', '').strip()
             if summary:
                 from bs4 import BeautifulSoup
                 summary = BeautifulSoup(summary, 'html.parser').get_text(strip=True)
             if title:
                 results.append({
                     'title': title,
-                    'source': entry.get('author', entry.get('source', {}).get('title', '')),
+                    'source': url.split('/')[2],
                     'summary': summary[:200]
                 })
         return results
@@ -179,20 +178,25 @@ def _fetch_rss(url, count=5, timeout=8):
 
 
 def _fetch_baidu_hot(count=10):
-    """抓取百度热搜榜"""
+    """用curl抓取百度热搜榜（不依赖requests，避免超时卡死）"""
     try:
+        import re, subprocess
         url = "https://top.baidu.com/board?tab=realtime"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code != 200:
+        headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        curl_cmd = ['curl', '-s', '-H', headers, url]
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
             return []
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        html = result.stdout
+        # 提取热搜标题
+        titles = re.findall(r'<div class="c-single-text-ellipsis">([^<]+)</div>', html)
+        if not titles:
+            titles = re.findall(r'title="([^"]+)"', html)[:20]
         results = []
-        for item in soup.select('div.c-single-text-ellipsis')[:count]:
-            title = item.get_text(strip=True)
-            if title:
-                results.append({'title': title, 'source': '百度热搜', 'summary': ''})
+        for t in titles[:count]:
+            t = t.strip()
+            if t:
+                results.append({'title': t, 'source': '百度热搜', 'summary': ''})
         return results
     except Exception as e:
         logging.warning(f"[新闻] 百度热搜抓取失败: {e}")
@@ -345,190 +349,6 @@ def generate_news_section():
         else:
             logging.warning("[新闻] AI日报生成返回空，使用降级模式")
             return _fallback_news_section(all_raw)
-    except TimeoutError:
-        logging.warning("[新闻] AI日报生成超时(120秒)，使用降级模式")
-        return _fallback_news_section(all_raw)
-    except Exception as e:
-        logging.warning(f"[新闻] AI日报生成异常: {e}，使用降级模式")
-        return _fallback_news_section(all_raw)
-
-    # 数据源（多源增加素材量）
-    RSS_SOURCES = {
-        '36氪': 'https://36kr.com/feed',
-        'IT之家': 'https://www.ithome.com/rss/',
-        '虎嗅': 'https://www.huxiu.com/rss/0.xml',
-        '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    }
-
-    # ---- 抓取原始数据（并发，4个RSS+百度热搜同时抓）----
-    all_raw = []
-    source_stats = {}
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        # 并发抓取所有RSS
-        rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
-        # 并发抓百度热搜
-        hot_future = pool.submit(_fetch_baidu_hot, 20)
-        # 收集RSS结果
-        for name, future in rss_futures.items():
-            raw = future.result(timeout=15)
-            all_raw.extend(raw)
-            source_stats[name] = len(raw)
-        # 收集热搜结果
-        hot_raw = hot_future.result(timeout=15)
-    source_stats['百度热搜'] = len(hot_raw)
-    all_raw.extend(hot_raw)
-
-    total_raw = len(all_raw)
-    logging.info(f"[新闻] 抓取原始素材{total_raw}条({'+'.join(f'{k}{v}' for k,v in source_stats.items())})")
-
-    # ---- 画像过滤 + 去重 ----
-    all_filtered = filter_by_profile(all_raw, min_score=-1, top_n=35)
-    seen_titles = set()
-    unique = []
-    for n in all_filtered:
-        t = n['title'].strip()[:30]
-        if t not in seen_titles:
-            seen_titles.add(t)
-            unique.append(n)
-
-    # 构建素材文本（喂给AI）
-    material_lines = []
-    for i, n in enumerate(unique[:30], 1):
-        score = score_news(n)
-        title = n['title'].strip()
-        summary = n.get('summary', '').strip()[:150]
-        line = f"{i}. [{score}分] {title}"
-        if summary:
-            line += f"\n   摘要：{summary}"
-        material_lines.append(line)
-
-    material = "\n".join(material_lines)
-
-    if not material.strip() or len(material) < 100:
-        logging.warning("[新闻] 新闻素材过少，跳过AI生成")
-        return _fallback_news_section(all_raw)
-
-    # ---- AI生成六大板块 ----
-    system_msg = """你是刘海蟾点金的价格传导分析师+人脉掮客——从新闻中识别价格信号，推导隐性传导链，提前3个月到1年布局，用200-300万资金吃最大一段利润。
-
-你的三重身份：
-1. 价格传导猎手：从一条新闻推导5层传导链，找到"还没涨但必涨"的东西，提前下注
-2. 人脉掮客：不注册公司、不签大合同、不碰货，靠信息差和人脉做资源撮合，收中介费
-3. 两岸资源掮客：人在台湾时能接触大陆稀缺资源（GPU算力/保健品/化工品信息），做人脉两端对接
-
-读者画像（必须围绕这个画像输出）：
-- 个人投资者，可用资金200-300万人民币
-- 不做实体生意（没场地没经验），只做：A股/期货/人脉撮合/实物囤积
-- 预判周期3个月-1年，不是短线炒作
-- 人在台湾旅游期间（5月底-6月中），可接触台湾资源
-- 人脉圈：上海科技圈+AI创业圈+GPU算力圈
-- 搞钱方式：找到信息差→通过人脉对接→收中介费/提前下注
-
-底层OS：
-1. 价格不会凭空涨——一定有传导链：A涨价→B成本上升→C被迫替代→D供给收缩→E跳涨。大多数只看到A，你要推到E
-2. 已定价的=没机会，未定价的=利润。铜涨35%所有人都知道了→追铜=送钱。但铜涨价传导到硫酸→磷肥→粮食这条链，一半人还没反应过来→下注硫酸/磷肥=提前卡位
-3. 传导有时间差：上游→中游→下游→终端，每个环节滞后1-3个月。你在中游下注，等终端涨价时兑现
-4. 反身性：某些传导会循环加强（如硫酸缺→铜减产→铜更涨→冶炼利润更高→但硫酸增量有限→硫酸继续涨）
-5. 政策是最大催化剂：出口禁令、关税、补贴——政策落地前1-2周是最佳下注窗口
-6. 人脉掮客模式：不碰货不碰钱不留文字，手机+人脉=办公室。单笔5万以下不触发反洗钱
-7. 台湾资源视角：台湾GPU算力/保健品/化工信息→大陆AI公司/中产圈/中小企业→信息差=利润
-8. 200-300万布局：不All in一个方向，分3-5个仓位，每个30-80万，3个月-1年兑现
-
-铁律：
-- 必须基于今日新闻，不空谈
-- 每条传导链必须写清：哪个环节已定价、哪个未定价、你下注哪个
-- 下注方向具体到：A股标的/期货合约/实物囤积/人脉撮合渠道，不是"关注XX行业"
-- 资金分配：200-300万怎么分，每个方向配多少，仓位管理必须写清
-- 时间线：3个月/6个月/1年三个节点分别看什么信号
-- 风险标清：窗口期多久/收壳信号是什么/最大回撤多少
-- 台湾资源角度：每条分析必须评估"人在台湾能做什么"——能否直接获取资源/信息/渠道
-- 人脉掮客角度：每条分析必须评估"能否通过人脉撮合获利"——谁有货/谁有需求/你抽多少
-- 灰度诚实🟢🟡🔴不混淆
-- 禁用废话：值得关注/需警惕/赋能/生态/数字化转型——出现一个扣10分"""
-
-    user_msg = f"""## 今日新闻素材（已按画像打分排序）
-{material}
-
-## 输出格式（六大板块，直接输出markdown）
-
-## 一、每日资讯（3小节，每节3-4条，只选有价格传导信号的）
-### 🤖 AI/算力/GPU
-### 🌐 大宗/政策/两岸
-### 🔥 热搜/时事
-每条：
-- **标题**（价格传导角度+人脉掮客角度，不照抄原标题）
-  > 📊 传导信号：这条新闻意味着什么价格要动——谁涨价/谁跌价/什么替代品需求上升
-  > 💰 下注方向：A股代码/期货品种/实物囤积/人脉撮合渠道
-  > 🌉 台湾资源：人在台湾能接触到什么相关资源/信息/渠道（如适用）
-
-## 二、价格传导预判+布局方案（2-3条传导链，核心板块）
-每条传导链写全：
-
-**传导链名称**（如"铜→硫酸→磷肥→粮食"而非"铜涨价机会"）
-- 📈 传导路径：A涨价→B→C→D，每环标注【已定价/未定价/半定价】
-- 🎯 下注点：你下注哪一环？为什么（预期差在哪）
-  - 标的：A股/期货/实物/人脉撮合（具体到代码/合约/渠道）
-  - 资金配置：从200-300万中配多少万（附理由）
-  - 仓位管理：分几批建仓/每批多少/间隔多久
-  - 入场时机：现在/等X信号后（3个月/6个月/1年三个节点）
-  - 目标收益：预计涨多少/多久兑现
-  - 止损线：跌多少砍仓/什么信号认错
-- ⏱️ 时间差：传导到下注点还需多久（标明3个月/6个月/1年哪个节点兑现）
-- 🌉 台湾掮客机会：这条传导链中，人在台湾能做什么？（获取资源/信息/渠道？撮合谁和谁？）
-- 🤝 人脉撮合机会：不花钱也能赚——谁有货/谁有需求/你对接抽多少
-- ⚖️ 风险：
-  - 传导断裂可能：什么情况下传导链会断
-  - 收壳信号：什么出现=这逻辑结束了，该跑
-  - 灰度🟢🟡🔴 + 合规提醒
-
-## 三、逆潮观察（1-3个反直觉信号）
-格式：
-- 📉/📈 现象（当前市场共识是什么）
-- 🔮 逆向真相：共识错在哪→实际会怎么走→你该怎么下注
-- ⚡ 行动：具体下注方向+标的+资金配置
-- 🌉 台湾视角：这个逆向判断能否通过台湾资源/信息来验证或获利
-
-## 四、深度传导分析（5层传导+天之道）
-选1条最重要的新闻，做完整5层传导推导：
-- 第1层：事件（一句话，含具体数据）
-- 第2层：谁吃亏→成本传导路径→传导到哪个环节还没被定价→你下注那个环节
-- 第3层：传导缝隙（为什么市场还没定价？信息差/时间差/认知差/政策差在哪）
-- 第4层：窗口期（传导兑现还需多久+3个月/6个月/1年各看什么信号+收壳信号）
-- 第5层：终局（提前下注的人吃到什么规模的收益，200-300万配多少/预期回报率）
-- 🔮 天之道传导解读：
-  - 损(有余)：哪个环节利润被"损"→让出什么空间
-  - 补(不足)：哪里出现短缺/缺口→资金流向哪里→暴利区在哪
-  - 邪修之道：A被打压→需求转向B→B的具体标的→B预期涨多少→你提前多少天卡位→配多少资金
-- 🌉 掮客之道：这条传导链中，不花钱怎么赚——信息差在哪→谁有货谁有需求→你怎么撮合→抽多少
-
-## 五、避坑提醒（1-2个看似是机会实际是坑的下注）
-- 🪤 诱惑：看起来能赚的
-- 💀 为什么是坑：逻辑哪里断了/定价已经完成/庄家在出货
-- 🛑 止损纪律：真进了怎么跑
-- ✅ 如果非要碰：怎么对冲风险
-
-## 六、今日邪修金句
-💭 一句话，关于预判和下注，有攻击性和行动力"""
-
-    # ---- 调用AI（外层120秒超时兜底，API内部60秒）----
-    try:
-        content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=90),
-            timeout=150
-        )
-        if content:
-            logging.info(f"[新闻] ✅ AI日报生成成功: {len(content)}字符")
-            return content
-        else:
-            logging.warning("[新闻] AI日报生成返回空，使用降级模式")
-            return _fallback_news_section(all_raw)
-    except TimeoutError:
-        logging.warning("[新闻] AI日报生成超时(120秒)，使用降级模式")
-        return _fallback_news_section(all_raw)
-    except Exception as e:
-        logging.warning(f"[新闻] AI日报生成异常: {e}，使用降级模式")
-        return _fallback_news_section(all_raw)
-
 def _fallback_news_section(all_raw_items):
     """API失败时的降级方案：用画像过滤的原始标题兜底"""
     logging.info("[新闻] 降级模式：用画像过滤原始标题")
@@ -596,20 +416,43 @@ def generate_lottery_section():
             # 降级：读取 lottery-predictions.json 并格式化
             import json
             pred_file = os.path.join(os.path.dirname(__file__), 'lottery-predictions.json')
+            today_str = datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d')
+            yesterday_str = (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=1)).strftime('%Y-%m-%d')
             if os.path.exists(pred_file):
                 with open(pred_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                # 兼容 list 或 dict 格式
+                lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金', '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
+                # 格式1: list of dicts，每个dict含 date + ssq_recs/dlt_recs/qxc_recs
                 if isinstance(data, list):
-                    # list 格式：直接是推荐列表
-                    lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金', '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
-                    for i, rec in enumerate(data[:5]):
-                        lines.append(f'注{i+1}: {rec}')
+                    # 找今天的推荐（优先）或昨天的
+                    recs_today = {}
+                    recs_yesterday = {}
+                    for item in data:
+                        if not isinstance(item, dict):
+                            continue
+                        if item.get('date') == today_str:
+                            recs_today = item
+                        elif item.get('date') == yesterday_str:
+                            recs_yesterday = item
+                    recs = recs_today or recs_yesterday
+                    for game_key, game_label in [('ssq_recs', '🔴 双色球'), ('dlt_recs', '🔵 大乐透'), ('qxc_recs', '🟢 七星彩')]:
+                        game_recs = recs.get(game_key, [])
+                        if game_recs:
+                            lines.append(f'### {game_label}')
+                            for i, rec in enumerate(game_recs[:5]):
+                                digits = rec.get('digits', rec.get('numbers', rec))
+                                if isinstance(digits, list):
+                                    fmt = ' '.join(str(int(d)) for d in digits)
+                                else:
+                                    fmt = str(rec)
+                                lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
+                            lines.append('')
+                    if not recs:
+                        lines.append('（推荐数据暂未同步，下次自动恢复）\n')
                     return '\n'.join(lines)
+                # 格式2: dict 格式
                 elif isinstance(data, dict):
-                    # dict 格式：可能有 predictions 或 direct key
                     preds = data.get('predictions', data)
-                    lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金', '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
                     for game, recs in preds.items():
                         lines.append(f'### {game.upper()}')
                         for i, rec in enumerate(recs[:5]):

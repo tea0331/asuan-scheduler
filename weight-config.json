@@ -1,17 +1,17 @@
 {
-  "freq": 0.3368,
-  "miss": 0.1813,
+  "freq": 0.3428,
+  "miss": 0.1753,
   "trend": 0.3512,
   "zone": 0.1307,
   "cold_miss_front": 0.394,
-  "cold_cycle_front": 0.3182,
+  "cold_cycle_front": 0.3254,
   "cold_freq_front": 0.2956,
   "cold_miss_back": 0.2955,
   "cold_cycle_back": 0.409,
   "cold_freq_back": 0.2955,
   "neighbor_bonus": 0.04999999999999999,
   "gamma": 0.8099999999999999,
-  "version": 19,
+  "version": 25,
   "algo_version": "v8.3",
   "evolution_log": [
     {
@@ -481,6 +481,96 @@
         "freq": 0.0033,
         "miss": -0.0033,
         "cold_cycle_front": 0.001
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 285,
+      "changes": [
+        "[ssq] 热号领先 → freq +0.005, miss -0.005",
+        "[dlt] 冷号领先 → cold_cycle_front +0.003",
+        "[qxc] 冷号领先 → cold_cycle_front +0.003"
+      ],
+      "final_signals": {
+        "freq": 0.001,
+        "miss": -0.001,
+        "cold_cycle_front": 0.0012
       }
     }
   ],

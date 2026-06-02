@@ -1215,6 +1215,7 @@ class WeightedAnalyzer:
                 'miss': miss,
                 'avg_interval': avg_interval,  # 🟢 v6.2: 平均遗漏间隔
             })
+        return {'positions': pos_data, 'total_periods': total}
 
     def analyze_pln(self):
         """台湾威力彩(PLN)加权分析 (6/38 + 1/8)"""
