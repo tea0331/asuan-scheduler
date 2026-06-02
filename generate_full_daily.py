@@ -1008,9 +1008,9 @@ def _infer_signal(title):
 
 
 def _fallback_gap_scan(top_items):
-    """降级: 缺口扫描 — V7版基于关键词推断，含资金匹配+行动标志"""
+    """降级: 缺口扫描 — V10版含新闻实体注入，操作卡不泛泛而谈"""
     lines = ["## 二、市场/中间人缺口扫描\n"]
-    lines.append("> （降级模式）基于今日新闻关键词的供需缺口推断:\n")
+    lines.append("> 基于今日新闻的供需断裂 + 具体操作路径:\n")
 
     # 从新闻中提取关键信号词
     signal_keywords = _extract_signal_keywords(top_items)
@@ -1020,13 +1020,17 @@ def _fallback_gap_scan(top_items):
         if gaps_found >= 2:
             break
 
+        # 提取新闻中的实体（公司名/品牌名/人名），注入操作卡
+        entity = _extract_entity(context)
+        ent_short = entity[:8] if len(entity) > 8 else entity
+
         # 基于关键词推断缺口
         if kw in ['台湾', '两岸', '小三通']:
-            lines.append(f"- **缺口**: 两岸小额通道 — {context[:30]}")
+            lines.append(f"- **缺口**: {ent_short}→两岸通道 — {context[:30]}")
             lines.append("  - 💰 收钱模式: 小三通货运不报关/台币人民币民间兑汇/金门中转仓代发")
             lines.append("  - 🛡️ 规避路径: 单笔5万以下不触发反洗钱、走金门民间兑换所不走银行、货拆散件入境")
             lines.append("  - ⏱️ 窗口期: 政策收紧前（ECFA/小三通评估节点），通常3-6个月为一轮")
-            lines.append("  - 🎯 操作卡: ①到金门/厦门找民间兑汇商→②以'代购'名义谈合作→③首笔试水5万台币→④走微信/支付宝对敲结算→⑤两岸任一端口严查就停")
+            lines.append(f"  - 🎯 操作卡: ①到金门/厦门找民间兑汇商→②以'{ent_short}'合作名义谈→③首笔试水5万台币→④走微信/支付宝对敲结算→⑤两岸任一端口严查就停")
         elif kw in ['直销', '分销', '加盟', '尚赫']:
             lines.append(f"- **缺口**: 直销体系转型顾问 — {context[:30]}")
             lines.append("  - 💰 收钱模式: 收转型咨询费（按团队规模收费5-20万/团队）+ 供应链返点")
@@ -1034,13 +1038,13 @@ def _fallback_gap_scan(top_items):
             lines.append("  - ⏱️ 窗口期: 牌照整顿期（6-12个月），整顿结束合规化后窗口关闭")
             lines.append("  - 🎯 操作卡: ①联系尚赫/安利/如新中层团队长→②提供'新零售转型培训'→③首单收3-5万咨询服务费→④绑定1-2个餐饮/食品供应链做返点→⑤牌照政策明朗后评估是否继续")
         elif kw in ['餐饮', '甜品', '绵绵冰', '冷链']:
-            lines.append(f"- **缺口**: 餐饮品牌跨境代理 — {context[:30]}")
+            lines.append(f"- **缺口**: {ent_short}→台湾代理 — {context[:30]}")
             lines.append("  - 💰 收钱模式: 区域独家代理费（20-50万）+ 供应链加价10-15%")
             lines.append("  - 🛡️ 规避路径: 签独家区域代理条款防品牌直营踢代理、冷链外包不自己建仓")
             lines.append("  - ⏱️ 窗口期: 大陆餐饮出海热12-18个月，品牌方跑通后会收回代理权直营")
-            lines.append("  - 🎯 操作卡: ①锁定1-2个大陆有出海意愿的餐饮品牌→②以'台湾市场独家代理'名义谈→③首付10-20万代理费+装修→④冷链找本地共享仓不自己建→⑤品牌要直营时转加盟或卖掉代理权")
+            lines.append("  - 🎯 操作卡: ①锁定{ent_short}→②以'台湾独家代理'名义谈→③首付10-20万→④冷链找共享仓→⑤品牌直营时转加盟")
         elif kw in ['威士忌', 'Kavalan', '噶玛兰', '单一麦芽']:
-            lines.append(f"- **缺口**: 限量版跨市场价差 — {context[:30]}")
+            lines.append(f"- **缺口**: {ent_short}跨市场搬运 — {context[:30]}")
             lines.append("  - 💰 收钱模式: 台湾买→大陆/香港卖（价差30-80%）/拍卖代拍费（5-10%）")
             lines.append("  - 🛡️ 规避路径: 不超过海关个人携带限额（1.5升≈2瓶）、走收藏品名义不走贸易、保留购买凭证")
             lines.append("  - ⏱️ 窗口期: 限量版发售后1-3个月（首批价格低），进入拍卖市场后价差缩小")
@@ -1335,6 +1339,46 @@ def _gen_unique_quote(context_hint, used_quotes, candidates=None):
     # 用seed微调最后一句
     base = candidates[seed % len(candidates)]
     return f"{base}（第{len(used_quotes)+1}日）"
+
+
+def _extract_entity(title):
+    """从新闻标题中提取核心实体（公司名/品牌名/人名/产品名），供操作卡引用"""
+    import re
+    # 去除常见噪音词
+    noise = ['今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '台积电', '联发科']
+    # 常见实体模式: XX公司/XX品牌/XX集团/XX平台/XX产品
+    patterns = [
+        r'([A-Za-z]+(?:[A-Z][a-z]*)+)',  # 英文专有名词如 OpenAI/DeepSeek
+        r'([\u4e00-\u9fa5]{2,6}(?:公司|集团|品牌|平台|科技|股份|酒厂|银行|证券|基金|庙宇|寺|宫))',
+        r'([\u4e00-\u9fa5]{2,4}(?:创始人|CEO|董事长|总裁|部长))',
+    ]
+    words = title.replace('：', ' ').replace('，', ' ').replace('。', ' ').split()
+    for word in words:
+        word = word.strip()
+        if len(word) < 2 or len(word) > 12:
+            continue
+        if word in noise:
+            continue
+        # 优先匹配实体模式
+        for pat in patterns:
+            m = re.search(pat, word)
+            if m:
+                return m.group(1)
+    # 兜底：取前两个有意义的词
+    meaningful = [w.strip() for w in words if len(w.strip()) >= 2 and w.strip() not in noise]
+    if meaningful:
+        return meaningful[0] if len(meaningful) == 1 else meaningful[0] + meaningful[1]
+    return title[:8]
+
+
+def _fill_ops_template(op_template, news_entity):
+    """将新闻实体注入操作卡模板，让操作卡看起来针对这条新闻"""
+    # op_template: (操作名, 找谁, 怎么说, 资金路径, 试水金额, 撤退信号)
+    name, who, how, path, amount, retreat = op_template
+    # 如果有新闻实体，替换模板中的泛称
+    if news_entity and news_entity not in who:
+        who = f"{news_entity}的{who}" if '的' not in who[:5] else who
+        how = how.replace('以', f'以「{news_entity}」').replace('名义', '背景') if news_entity not in how else how
 
 
 def _extract_signal_keywords(top_items):
