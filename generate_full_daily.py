@@ -179,7 +179,7 @@ def score_news_with_scene(item):
     scene_bonus = 0
 
     # 台湾场景加权
-    if source in ['中央社', '经济日报']:
+    if source in ['中央社', '经济日报', '工商时报', '联合财经']:
         scene_bonus += 5
     if any(kw in text for kw in ['台湾', '台北', '高雄', '台中', '台南', '两岸', '台商']):
         scene_bonus += 5
@@ -225,8 +225,101 @@ def filter_by_profile(news_list, min_score=0, top_n=None):
 
 
 # ============================================================
-# 邪修进化引擎 — 传导链记忆 + 缺口信号 + 逆潮模式
+# V9 领域配额制 — 保证刘老板每个关注领域都有新闻
 # ============================================================
+# 领域定义: (领域名, [匹配关键词], 最低条数)
+LIU_DOMAINS = [
+    ('台湾/两岸', ['台湾', '台北', '两岸', '台商', '台币', '金门', '小三通', '台海', '陆资', '台资'], 3),
+    ('餐饮/直销', ['餐饮', '甜品', '小吃', '冰淇淋', '奶茶', '冷链', '直销', '分销', '加盟', '代理', '尚赫', '安利', '如新', '连锁'], 2),
+    ('威士忌/酒', ['威士忌', 'Kavalan', '噶玛兰', '金车', '单一麦芽', '桶强', '烈酒', '原酒', '橡木桶'], 1),
+    ('信仰经济', ['庙宇', '供奉', '开光', '法会', '线上庙宇', '信仰', '财神', '赵公明', '刘海蟾', '金蟾', '线上供养'], 1),
+    ('彩票产业', ['彩票', '彩券', '台彩', '威力彩', '大乐透', '公益彩券', '博彩', '乐透', '派彩'], 1),
+    ('AI/算力', ['AI', '人工智能', '大模型', '算力', 'GPU', '英伟达', 'NVIDIA', 'DeepSeek', 'LLM', 'AGI', '芯片', '半导体'], 3),
+    ('大宗/供应链', ['涨价', '暴跌', '缺货', '断供', '铜价', '铝价', '锂价', '硫酸', '减产', '停产', '期货', '现货'], 2),
+    ('金融/宏观', ['央行', '降息', '加息', '汇率', '人民币', '利率', '流动性', '政策', '关税', '制裁', '出口', '出海'], 2),
+]
+
+
+def _classify_news(item):
+    """将新闻归类到刘老板关注领域，返回领域名或None"""
+    text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
+    source = item.get('source', '')
+    
+    # 先检查具体领域关键词（优先级高于来源）
+    for domain_name, keywords, _ in LIU_DOMAINS:
+        if domain_name == '台湾/两岸':
+            continue  # 台湾最后兜底
+        if any(kw.lower() in text for kw in keywords):
+            return domain_name
+    
+    # 台湾来源兜底（已经排除了具体领域）
+    if source in ['中央社', '经济日报', '工商时报', '联合财经']:
+        if any(kw in text for kw in ['科技', 'AI', '芯片', '半导体', '台积电']):
+            return 'AI/算力'
+        return '台湾/两岸'
+    
+    # 最后检查台湾/两岸关键词
+    if any(kw.lower() in text for kw in LIU_DOMAINS[0][1]):
+        return '台湾/两岸'
+    
+    return None
+
+
+def filter_by_domain_quota(news_items, total=20):
+    """领域配额过滤: 每个关注领域保底，剩余按全局分竞争
+    
+    Returns: top_items list, domain_stats dict
+    """
+    # 打分并排序
+    scored = [(item, score_news_with_scene(item)) for item in news_items]
+    filtered = [(item, sc) for item, sc in scored if sc >= 1]
+    filtered.sort(key=lambda x: x[1], reverse=True)
+    
+    # 分类
+    domain_buckets = {d[0]: [] for d in LIU_DOMAINS}
+    domain_buckets['其他'] = []
+    assigned_titles = set()
+    
+    for item, score in filtered:
+        title_key = item['title'][:30]
+        if title_key in assigned_titles:
+            continue
+        domain = _classify_news(item)
+        if domain:
+            domain_buckets[domain].append((item, score))
+        else:
+            domain_buckets['其他'].append((item, score))
+        assigned_titles.add(title_key)
+    
+    # 各领域保底配额
+    result = []
+    used_titles = set()
+    domain_stats = {}
+    
+    for domain_name, _, quota in LIU_DOMAINS:
+        bucket = domain_buckets.get(domain_name, [])
+        taken = 0
+        for item, score in bucket:
+            if taken >= quota or len(result) >= total:
+                break
+            t = item['title'][:30]
+            if t not in used_titles:
+                result.append(item)
+                used_titles.add(t)
+                taken += 1
+        domain_stats[domain_name] = taken
+    
+    # 剩余位置按全局分竞争（不限领域）
+    for item, score in filtered:
+        if len(result) >= total:
+            break
+        t = item['title'][:30]
+        if t not in used_titles:
+            result.append(item)
+            used_titles.add(t)
+    
+    return result[:total], domain_stats
+
 XIE_XIU_MEMORY_PATH = os.path.join(MODULE_DIR, 'xie_xiu_memory.json')
 
 # 传导链模板库: 从信号到终端的完整路径
@@ -573,18 +666,20 @@ def _fetch_baidu_hot(count=20):
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
     RSS_SOURCES = {
+    # 大陆科技/商业
     '36氪': 'https://36kr.com/feed',
-    'IT之家': 'https://www.ithome.com/rss/',
     '虎嗅': 'https://www.huxiu.com/rss/0.xml',
     '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    # V7新增: 台湾视角新闻源
+    # 台湾综合/财经
     '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
     '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
+    '工商时报': 'https://ctee.com.tw/rss',
+    '联合财经': 'https://udn.com/rssfeed/news/2/6642',
 }
 
     all_raw = []
     source_stats = {}
-    with ThreadPoolExecutor(max_workers=7) as pool:
+    with ThreadPoolExecutor(max_workers=9) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
         hot_future = pool.submit(_fetch_baidu_hot, 20)
 
@@ -675,13 +770,9 @@ def generate_all_sections():
     # 1. 抓取新闻素材
     all_raw, source_stats = fetch_raw_materials()
 
-    # 2. 画像过滤排序
-    scored = [(item, score_news_with_scene(item)) for item in all_raw]
-    filtered = [(item, sc) for item, sc in scored if sc >= 1]
-    filtered.sort(key=lambda x: x[1], reverse=True)
-    top_items = [item for item, sc in filtered[:20]]
-
-    logging.info(f"[日报] 画像过滤TOP20: {[item['title'][:20] for item, _ in filtered[:5]]}")
+    # 2. 领域配额过滤 — 保证各关注领域都有新闻，不被AI/算力挤占
+    top_items, domain_stats = filter_by_domain_quota(all_raw, total=20)
+    logging.info(f"[日报] 领域配额: {domain_stats} | 共{len(top_items)}条")
 
     # 3. 构建邪修上下文
     chain_ctx, used_quotes = _build_xie_xiu_context(top_items)
