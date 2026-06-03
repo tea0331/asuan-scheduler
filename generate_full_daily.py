@@ -1442,27 +1442,61 @@ def _fallback_contra_tide(top_items):
     ent = entity[:12].rstrip('？?！!。、') if len(entity) > 12 else entity.rstrip('？?！!。、')
     title_lower = title.lower()
 
-    # 检测共识倾向
-    if any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN']):
+    # 检测共识倾向 — V16: 扩充关键词覆盖+else分支生成具体逆向分析
+    if any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN', '新高', '历史最高', '飙升', '翻倍', '大涨']):
         consensus = f"'{title[:25]}' → 市场共识偏向狂热"
         reverse = "涨过头必有回调——关注库存积压/产能释放信号"
         bet = "做空或减仓相关资产，等回调20%以上再入场"
         stop = "价格再涨15%且基本面持续强化，则逆向判断错误"
-    elif any(kw in title_lower for kw in ['暴跌', '崩', '恐慌', '裁', '关停']):
+    elif any(kw in title_lower for kw in ['暴跌', '崩', '恐慌', '裁', '关停', '新低', '腰斩', '闪崩', '暴跌', '崩盘']):
         consensus = f"'{title[:25]}' → 市场共识偏向恐慌"
         reverse = "恐慌出清后强势玩家市占率上升——关注龙头"
         bet = "在恐慌底部布局行业龙头/核心资产，分批建仓"
         stop = "负面信号持续3周无缓和，则恐慌不是暂时的"
-    elif any(kw in title_lower for kw in ['新规', '政策', '监管', '整顿']):
+    elif any(kw in title_lower for kw in ['新规', '政策', '监管', '整顿', '审查', '备案', '合规', '限制', '禁令']):
         consensus = f"'{title[:25]}' → 市场共识偏向悲观"
         reverse = "政策从发文到执行有时间差，且执行往往打折"
         bet = "趁市场过度反应时反向布局受影响资产"
         stop = "政策细则出台后确实严格，则逆向判断错误"
+    elif any(kw in title_lower for kw in ['发布', '推出', '首发', '突破', '创新', '技术', '量子', '上线']):
+        consensus = f"'{title[:25]}' → 市场共识偏向乐观期待"
+        reverse = f"新技术/新产品发布→PPT到量产差18-24个月→市场高估短期影响→{ent}的实际商业化进度远慢于预期"
+        bet = f"做空{ent}概念股的短期溢价，或在发布后1-2周买入被连带错杀的竞争对手"
+        stop = f"如果6个月内{ent}真的达到量产里程碑，则逆向判断错误"
+    elif any(kw in title_lower for kw in ['融资', '投资', '收购', '合并', '并购', '定增', '募资']):
+        consensus = f"'{title[:25]}' → 市场共识偏向看好融资方"
+        reverse = f"融资≠盈利→{ent}拿钱烧补贴→估值虚高→下一轮融资可能down round→早期投资人锁定期后抛售"
+        bet = f"不投{ent}本身→投其供应链（被融资方需求拉动的上游）→确定性更高"
+        stop = f"如果{ent}融资后6个月内营收增长>100%，则融资方确实在吃市场"
+    elif any(kw in title_lower for kw in ['出口', '关税', '制裁', '贸易', '禁运', '脱钩']):
+        consensus = f"'{title[:25]}' → 市场共识偏向悲观脱钩"
+        reverse = "脱钩越狠→灰色通道利润越高→官方越堵→民间越钻→供需不会断只会变形"
+        bet = "布局转口贸易/替代供应链中间人角色，脱钩程度=利润空间"
+        stop = "替代供应链完全建立（6-12个月），中间人窗口关闭"
     else:
-        consensus = f"'{title[:25]}' → 市场共识尚未形成明确方向"
-        reverse = "不确定性本身就是机会——多数人在等确定性时，邪修先布局"
-        bet = "小仓位试探性下注，等共识形成后反向操作"
-        stop = "方向明确后价格已跑出20%以上则追不划算"
+        # V16: else分支不再说空话，基于新闻实体生成具体逆向判断
+        # 提取行业关键词推断
+        industry_hints = []
+        if any(kw in title_lower for kw in ['科技', '技术', '软件', '硬件', '互联网', '平台']):
+            industry_hints = ['科技', '技术迭代快→6个月淘汰一轮→不追首发等二代']
+        elif any(kw in title_lower for kw in ['金融', '银行', '保险', '证券', '基金']):
+            industry_hints = ['金融', '监管周期3-5年→利空出尽是利好→利好出尽是利空']
+        elif any(kw in title_lower for kw in ['能源', '电力', '石油', '天然气', '煤炭']):
+            industry_hints = ['能源', '周期性极强→价格高点=供给扩张起点→2年后过剩']
+        elif any(kw in title_lower for kw in ['医药', '医疗', '生物', '药']):
+            industry_hints = ['医药', '研发到上市10年→新闻发布≠产品上市→90%倒在临床']
+
+        if industry_hints:
+            consensus = f"'{title[:25]}' → {industry_hints[0]}行业共识偏乐观"
+            reverse = industry_hints[1]
+            bet = f"在{ent}的热度消退期（3-6个月后）低价布局真正受益的上游"
+            stop = f"如果{ent}所在行业基本面持续改善3个月，则行业趋势确实成立"
+        else:
+            # 最终兜底：基于实体生成具体判断而非空话
+            consensus = f"'{title[:25]}' → 市场正在消化{ent}信息，方向未定"
+            reverse = f"方向未定=还有人没下注→邪修先于共识布局{ent}的上下游断裂点"
+            bet = f"找{ent}供应链中信息不对称最大的环节（有货没渠道/有需求没供给）→做中间人"
+            stop = f"如果{ent}方向在2周内被大资金明确表态（涨停/跌停），则跟风窗口关闭"
 
     lines.append(f"- **市场共识**: {consensus}")
     lines.append(f"  - 逆向可能: {reverse}")
@@ -1593,13 +1627,55 @@ def _fallback_deep_chain(top_items):
         tian_dao = f"天之道: 损光伏产能之有余→补储能消纳之不足\n  > 推导: 装机↑→储能不足→消纳瓶颈→有余在产能、不足在配套"
         xie_xiu = f"邪修之道: 在产能和配套之间做中间人→①帮大陆光伏厂清库存→②对接台湾储能项目→③收3-5%撮合费"
 
+    elif any(kw in title_lower for kw in ['融资', '投资', '收购', '定增', '募资']):
+        chain = f"{ent}获融资 → 产能扩张 → 上下游供需重新洗牌 → 供应链议价权转移 → 中间服务商(FA/合规/猎头)需求激增"
+        surplus = f"{ent}融资后的过剩产能（钱多项目少，烧钱期）"
+        deficit = f"配套服务的不足供给（投后管理/人才/合规跟不上融资速度）"
+        tian_dao = f"天之道: 损融资过剩之有余（烧钱期产能闲置）→补配套服务之不足（投后/人才/合规缺口）\n  > 推导: 融资→扩张→但人才/合规/渠道跟不上→有余在资金、不足在配套"
+        xie_xiu = f"邪修之道: 不投{ent}→投其配套缺口→①做{ent}的投后管理外包②做被融资挤出的竞争对手的转型顾问③收5-10万/月→融资方倒了你换下一家"
+
+    elif any(kw in title_lower for kw in ['科技', '技术', '量子', '发布', '突破', '创新', '软件', '硬件', '平台', '系统']):
+        chain = f"{ent}技术突破 → 早期采用者(大厂)率先部署 → 配套硬件/接口需求爆发 → 技能人才严重短缺 → 培训/咨询/外包市场出现"
+        surplus = f"{ent}技术的过剩宣传（PPT到量产差18个月）"
+        deficit = f"{ent}落地服务的不足供给（会部署的人/成熟的配套远不够）"
+        tian_dao = f"天之道: 损技术炒作之有余（宣传过剩）→补落地服务之不足（人才/配套缺口）\n  > 推导: 发布→大厂抢部署→但没人会装→配套跟不上→有余在宣传、不足在落地"
+        xie_xiu = f"邪修之道: 不做{ent}开发→做{ent}的落地服务→①找会{ent}的3-5个工程师②组外包团队③接大厂部署单→收项目费20-50万/单→技术过时换下一个"
+
+    elif any(kw in title_lower for kw in ['金融', '银行', '保险', '证券', '基金', '利率']):
+        chain = f"金融政策变化 → 资金成本调整 → 两岸利差/汇差扩大 → 跨境资金流动加速 → 合规通道需求激增"
+        surplus = "低利率区的过剩资金（找不到投资标的）"
+        deficit = "跨境合规通道的不足供给（外管额度有限/审批慢）"
+        tian_dao = f"天之道: 损低利率资金之有余（资金泛滥）→补跨境通道之不足（合规额度紧）\n  > 推导: 利差→资金流动→但通道有限→有余在资金、不足在通道"
+        xie_xiu = f"邪修之道: 在资金和通道之间做桥→①帮台湾资金找大陆标的②帮大陆资金找境外合规渠道③收通道费0.5-2%→资金量越大赚越多"
+
     else:
-        # 通用因果链
-        chain = f"{ent}事件 → 直接相关方利益重分配 → 上游供应商受影响 → 下游客户需求变化 → 跨行业套利窗口出现"
-        surplus = f"{ent}信息优势方"
-        deficit = f"{ent}信息劣势方"
-        tian_dao = f"天之道: 损信息优势方之有余→补信息劣势方之不足\n  > 推导: 事件→利益重分配→信息差→套利窗口→有余在信息源、不足在接受端"
-        xie_xiu = f"邪修之道: 在{ent}的信息不对称处收过路费→①找到知道但接触不到的人②找到能接触到但不知道的人③以「行业对接」撮合→收1-3%"
+        # V16: else分支不再用抽象模板，基于新闻实体+辅助实体生成具体因果链
+        # 分析标题中的行业线索
+        if any(kw in title_lower for kw in ['医药', '医疗', '生物', '药']):
+            chain = f"{ent}医药动态 → 临床/审批进度变化 → 医保/集采政策联动 → 医药分销渠道调整 → 医疗服务/数字医疗机会"
+            surplus = f"{ent}研发管线（90%倒在临床，过剩投入）"
+            deficit = f"医疗服务的不足供给（看病难/基层缺医）"
+        elif any(kw in title_lower for kw in ['汽车', '新能源', '电动', '电池', '充电']):
+            chain = f"{ent}汽车/能源动态 → 电池/充电桩需求变化 → 原材料(锂/钴/镍)价格波动 → 供应链重组 → 二手车/回收市场机会"
+            surplus = f"新能源产能过剩（补贴退坡后库存积压）"
+            deficit = f"充电/回收配套不足（基础设施跟不上车量增长）"
+        elif any(kw in title_lower for kw in ['地产', '房产', '土地', '楼盘', '物业']):
+            chain = f"{ent}地产动态 → 资金链压力传导 → 上游建材/家电订单减少 → 法拍/不良资产增加 → 物业/运营转型机会"
+            surplus = f"地产库存过剩（卖不掉的房子）"
+            deficit = f"物业运营/改造升级服务不足（从卖房到运营的转变缺服务商）"
+        else:
+            # 最终兜底：用辅助实体构建传导链，每步是具体的而非抽象的
+            if aux_entities:
+                chain = f"{ent}事件 → {aux_ent}受直接影响 → {aux_ent2}间接受波及 → 供应链上下游重新议价 → 替代方案/中间人机会出现"
+                surplus = f"{ent}的过剩产能/信息（率先反应者的先发优势）"
+                deficit = f"{aux_ent}的不足应对（反应慢=需要中间人帮忙）"
+            else:
+                chain = f"{ent}事件 → 上游原料供应端受冲击 → 中游加工/制造环节成本变化 → 下游终端消费价格调整 → 跨区域套利窗口打开"
+                surplus = f"{ent}信息先知方（有消息但没渠道变现）"
+                deficit = f"{ent}信息后知方（有需求但不知道变化）"
+
+        tian_dao = f"天之道: 损{surplus.split('（')[0] if '（' in surplus else surplus[:12]}之有余→补{deficit.split('（')[0] if '（' in deficit else deficit[:12]}之不足\n  > 推导: {chain.split('→')[0].strip()}→逐级传导→有余在先发端、不足在反应端"
+        xie_xiu = f"邪修之道: 在{ent}的传导断裂处收过路费→①找到{surplus.split('（')[0] if '（' in surplus else '有货方'}②找到{deficit.split('（')[0] if '（' in deficit else '缺货方'}③以「行业资源对接」撮合→收1-3%→断裂修复就换下一对"
 
     lines.append(f"- **因果链**: {chain}")
     lines.append(f"- **有余方**: {surplus}")
