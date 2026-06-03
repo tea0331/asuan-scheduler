@@ -68,17 +68,20 @@ def _run_with_timeout(func, timeout=60):
 # ============================================================
 USER_PROFILE_V7 = {
     # ====== 大宗商品/价格信号 (传导预判核心) ======
-    '涨价': 5, '暴跌': 5, '缺货': 5, '断供': 5, '停产': 5,
-    '铜价': 5, '铝价': 5, '钢价': 4, '油价': 4, '煤价': 4,
-    '硫酸': 5, '硫磺': 5, '磷肥': 4, '钛白粉': 4, '锂价': 4,
-    '期货': 4, '现货': 4, '库存': 4, '减产': 4, '扩产': 3,
-    '加工费': 4, '替代': 4, '供给': 4, '需求': 3,
+    # 5分: 直接影响操作决策; 4分: 强相关信号; 3分: 背景关注
+    '涨价': 4, '暴跌': 4, '缺货': 5, '断供': 5, '停产': 5,
+    '铜价': 4, '铝价': 4, '钢价': 4, '油价': 3, '煤价': 3,
+    '硫酸': 4, '硫磺': 4, '磷肥': 3, '钛白粉': 3, '锂价': 4,
+    '期货': 3, '现货': 3, '库存': 3, '减产': 4, '扩产': 3,
+    '加工费': 3, '替代': 3, '供给': 3, '需求': 3,
     '出口禁令': 5, '出口管制': 5, '制裁': 4, '关税': 4,
     '冶炼': 3, '矿': 3, '废铜': 3, '废钢': 3, '回收': 3,
     # ====== AI/大模型 ======
-    'AI': 4, '人工智能': 4, '大模型': 4, 'DeepSeek': 4,
+    # 注意: "AI" 使用词边界匹配(\bAI\b)防止子串误匹配(如"Thailand","Airlines")
+    '人工智能': 4, '大模型': 4, 'DeepSeek': 4,
     'GPT': 3, 'Claude': 3, 'AGI': 3, 'LLM': 3, '开源模型': 3,
     'AI应用': 3, 'AI Agent': 3, '智能体': 3, '自动化': 2,
+    # V14: AI关键词单独处理(词边界匹配)，不放在USER_PROFILE_V7中
     # ====== 算力/芯片 ======
     '算力': 4, 'GPU': 4, '英伟达': 3, 'NVIDIA': 3, '黄仁勋': 2,
     '芯片': 3, '半导体': 3, '台积电': 3, '光刻': 2, '晶圆': 2,
@@ -104,39 +107,44 @@ USER_PROFILE_V7 = {
     '腾讯': 4, '互联网大厂': 3, '平台经济': 3, '社交电商': 3,
 
     # ====== V7新增: 台湾/两岸套利（刘老板专属战场） ======
+    # 5分: 直接可操作窗口; 4分: 强关联信号; 3分: 背景关注
     '台湾': 5, '台北': 4, '高雄': 3, '台中': 3, '台南': 3,
     '两岸': 5, '台海': 4, '陆资': 4, '台资': 3, '台商': 4,
     '小三通': 4, '金门': 4, '马祖': 3, '福建': 3,
-    '汇差': 4, '人民币': 5, '新台币': 4, '跨境汇款': 4,
+    '汇差': 4, '人民币': 4, '新台币': 4, '跨境汇款': 4,
     '自由行': 3, '观光': 3, '夜市': 2, '小吃': 3,
-    '台湾旅游': 4, '台湾签证': 3, '健保': 3,
+    '台湾旅游': 3, '台湾签证': 3, '健保': 3,
 
     # ====== V7新增: 直销/分销/餐饮商业模式 ======
-    '直销': 5, '分销': 5, '层级': 4, '加盟': 5, '代理': 5,
-    '餐饮': 5, '甜品': 4, '冰淇淋': 4, '绵绵冰': 5, '冷链': 4,
-    '食品': 4, '饮品': 4, '奶茶': 3, '小吃连锁': 4,
-    '尚赫': 5, '安利': 3, '如新': 3, '多层次': 4,
-    '直销牌照': 5, '团队计酬': 4, '金字塔': 3,
-    '中央厨房': 4, '预制菜': 3, '餐饮出海': 5,
+    # 5分: 核心操作项目; 4分: 强关联; 3分: 背景关注
+    '直销': 5, '分销': 4, '层级': 3, '加盟': 4, '代理': 4,
+    '餐饮': 4, '甜品': 3, '冰淇淋': 3, '绵绵冰': 4, '冷链': 3,
+    '食品': 3, '饮品': 3, '奶茶': 2, '小吃连锁': 3,
+    '尚赫': 5, '安利': 3, '如新': 3, '多层次': 3,
+    '直销牌照': 5, '团队计酬': 3, '金字塔': 3,
+    '中央厨房': 3, '预制菜': 2, '餐饮出海': 4,
 
     # ====== V7新增: 威士忌/酒类 ======
-    '威士忌': 5, 'Kavalan': 5, '金车': 5, '噶玛兰': 5,
-    '单一麦芽': 4, '桶强': 4, '雪莉桶': 4, '波本桶': 4,
-    '葡萄酒桶': 4, '白兰地桶': 4, '勾兑': 4, '年份': 4,
-    '蒸馏': 3, '橡木桶': 3, '烈酒': 3, '原酒': 4,
-    '威士忌收藏': 5, '威士忌投资': 5, '拍卖': 3,
+    # 5分: 核心操作标的; 4分: 强关联; 3分: 背景关注
+    '威士忌': 4, 'Kavalan': 4, '金车': 5, '噶玛兰': 4,
+    '单一麦芽': 3, '桶强': 3, '雪莉桶': 3, '波本桶': 3,
+    '葡萄酒桶': 3, '白兰地桶': 3, '勾兑': 3, '年份': 3,
+    '蒸馏': 2, '橡木桶': 2, '烈酒': 2, '原酒': 3,
+    '威士忌收藏': 4, '威士忌投资': 4, '拍卖': 3,
 
     # ====== V7新增: 信仰经济 ======
-    '庙宇': 5, '供奉': 5, '开光': 5, '法会': 5, '香火': 4,
-    '线上庙宇': 5, '财神': 5, '赵公明': 5, '祈福': 3,
-    '信仰经济': 5, '供奉品': 4, '线上供养': 4,
-    '刘海蟾': 5, '金蟾': 4, '财神爷': 4, '线上法会': 5,
+    # 5分: 核心操作项目; 4分: 强关联; 3分: 背景关注
+    '庙宇': 4, '供奉': 4, '开光': 3, '法会': 3, '香火': 3,
+    '线上庙宇': 5, '财神': 4, '赵公明': 5, '祈福': 3,
+    '信仰经济': 4, '供奉品': 3, '线上供养': 4,
+    '刘海蟾': 5, '金蟾': 3, '财神爷': 4, '线上法会': 4,
 
     # ====== V7修正: 彩票/博彩产业（从-2→+5） ======
-    '彩票': 5, '博彩': 3, '彩券': 5, '威力彩': 5, '大乐透': 5,
-    '公益彩券': 4, '台彩': 5, '中国体育彩票': 4, '双色球': 4,
-    '七星彩': 4, '乐透': 4, '刮刮乐': 2, '派彩': 4,
-    '台彩公司': 5, '彩券商': 5, '彩票经销': 5, '运动彩券': 3,
+    # 5分: 核心操作项目; 4分: 强关联; 3分: 背景关注
+    '彩票': 4, '博彩': 3, '彩券': 4, '威力彩': 5, '大乐透': 4,
+    '公益彩券': 3, '台彩': 5, '中国体育彩票': 3, '双色球': 3,
+    '七星彩': 3, '乐透': 3, '刮刮乐': 2, '派彩': 3,
+    '台彩公司': 4, '彩券商': 4, '彩票经销': 4, '运动彩券': 3,
 
     # ====== 负面: 不感兴趣（保持不变） ======
     '明星': -3, '综艺': -3, '恋情': -3, '离婚': -3, '出轨': -3,
@@ -150,12 +158,16 @@ USER_PROFILE_V7 = {
 
 
 def score_news(item):
-    """根据用户画像给新闻打分"""
+    """根据用户画像给新闻打分 — V14: AI使用词边界匹配防止子串误匹配"""
+    import re
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
     score = 0
     for keyword, weight in USER_PROFILE_V7.items():
         if keyword.lower() in text:
             score += weight
+    # V14: "AI" 独立词边界匹配 — 防止 "Thailand"/"Airlines" 等误匹配
+    if re.search(r'\bai\b', text):
+        score += 4
     return score
 
 
@@ -241,32 +253,50 @@ LIU_DOMAINS = [
 
 
 def _classify_news(item):
-    """将新闻归类到刘老板关注领域，返回领域名或None"""
+    """V14: 将新闻归类到刘老板关注领域，支持多标签（一条新闻可属多个领域）
+    返回: list[str] — 领域名列表（可能包含多个）"""
+    import re
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
     source = item.get('source', '')
-    
-    # 先检查具体领域关键词（优先级高于来源）
+    domains = []
+
+    # 第一步: 台湾来源直接标记"台湾/两岸"（V14: 最优先，不再跳过）
+    is_taiwan_source = source in ['中央社', '经济日报', '工商时报', '联合财经']
+    has_taiwan_kw = any(kw.lower() in text for kw in LIU_DOMAINS[0][1])
+    if is_taiwan_source or has_taiwan_kw:
+        domains.append('台湾/两岸')
+
+    # 第二步: 检查其他领域关键词（一条新闻可同时属于多个领域）
     for domain_name, keywords, _ in LIU_DOMAINS:
         if domain_name == '台湾/两岸':
-            continue  # 台湾最后兜底
+            continue  # 已经处理过
         if any(kw.lower() in text for kw in keywords):
-            return domain_name
-    
-    # 台湾来源兜底（已经排除了具体领域）
-    if source in ['中央社', '经济日报', '工商时报', '联合财经']:
-        if any(kw in text for kw in ['科技', 'AI', '芯片', '半导体', '台积电']):
-            return 'AI/算力'
-        return '台湾/两岸'
-    
-    # 最后检查台湾/两岸关键词
-    if any(kw.lower() in text for kw in LIU_DOMAINS[0][1]):
-        return '台湾/两岸'
-    
-    return None
+            domains.append(domain_name)
+
+    # 第三步: AI 词边界匹配（防止 "Thailand"/"Airlines" 误分类）
+    if 'AI/算力' not in domains and re.search(r'\bai\b', text):
+        # 还需验证是否真的与AI相关（检查其他AI相关词）
+        ai_confirm = any(kw.lower() in text for kw in
+                         ['人工智能', '大模型', '算力', 'gpu', '英伟达', 'nvidia', 'deepseek',
+                          'llm', 'agi', '芯片', '半导体', 'gpt', 'claude', '智能体'])
+        if ai_confirm:
+            domains.append('AI/算力')
+
+    # 台湾来源中，AI相关新闻同时属于"台湾/两岸"和"AI/算力"
+    if is_taiwan_source and 'AI/算力' not in domains:
+        if any(kw in text for kw in ['科技', 'ai', '芯片', '半导体', '台积电']):  # V14: 'ai'小写
+            domains.append('AI/算力')
+
+    return domains if domains else []
 
 
 def filter_by_domain_quota(news_items, total=20):
-    """领域配额过滤: 每个关注领域保底，剩余按全局分竞争
+    """V14: 领域配额过滤 — 支持多标签分类，每条新闻可同时属于多个领域
+    
+    改进:
+    1. 一条新闻可同时计入多个领域的配额（多标签）
+    2. 台湾/两岸配额优先级最高，不再被其他领域挤占
+    3. 去重key从title[:30]改为title[:60]，防止英文标题误删
     
     Returns: top_items list, domain_stats dict
     """
@@ -274,50 +304,53 @@ def filter_by_domain_quota(news_items, total=20):
     scored = [(item, score_news_with_scene(item)) for item in news_items]
     filtered = [(item, sc) for item, sc in scored if sc >= 1]
     filtered.sort(key=lambda x: x[1], reverse=True)
-    
-    # 分类
-    domain_buckets = {d[0]: [] for d in LIU_DOMAINS}
-    domain_buckets['其他'] = []
+
+    # 分类 — V14: 多标签，一条新闻可属于多个领域
+    item_domains = {}  # title_key -> list[domain_name]
     assigned_titles = set()
-    
+
     for item, score in filtered:
-        title_key = item['title'][:30]
+        title_key = item['title'][:60]
         if title_key in assigned_titles:
             continue
-        domain = _classify_news(item)
-        if domain:
-            domain_buckets[domain].append((item, score))
-        else:
-            domain_buckets['其他'].append((item, score))
+        domains = _classify_news(item)
+        item_domains[title_key] = domains if domains else ['其他']
         assigned_titles.add(title_key)
-    
-    # 各领域保底配额
+
+    # 各领域保底配额 — V14: 一条新闻可同时计入多个领域
     result = []
     used_titles = set()
     domain_stats = {}
-    
+    domain_filled = {d[0]: 0 for d in LIU_DOMAINS}
+
     for domain_name, _, quota in LIU_DOMAINS:
-        bucket = domain_buckets.get(domain_name, [])
         taken = 0
-        for item, score in bucket:
+        for item, score in filtered:
             if taken >= quota or len(result) >= total:
                 break
-            t = item['title'][:30]
-            if t not in used_titles:
+            title_key = item['title'][:60]
+            if title_key in used_titles:
+                continue
+            # V14: 这条新闻属于当前领域（多标签中包含即可）
+            if domain_name in item_domains.get(title_key, []):
                 result.append(item)
-                used_titles.add(t)
+                used_titles.add(title_key)
                 taken += 1
+                # V14: 同时计入其他领域的filled计数
+                for d in item_domains.get(title_key, []):
+                    if d in domain_filled:
+                        domain_filled[d] += 1
         domain_stats[domain_name] = taken
-    
-    # 剩余位置按全局分竞争（不限领域）
+
+    # 剩余位置按全局分竞争（不限领域，包含"其他"类）
     for item, score in filtered:
         if len(result) >= total:
             break
-        t = item['title'][:30]
-        if t not in used_titles:
+        title_key = item['title'][:60]
+        if title_key not in used_titles:
             result.append(item)
-            used_titles.add(t)
-    
+            used_titles.add(title_key)
+
     return result[:total], domain_stats
 
 XIE_XIU_MEMORY_PATH = os.path.join(MODULE_DIR, 'xie_xiu_memory.json')
@@ -473,14 +506,42 @@ def _match_gray_ops(news_items, gap_keywords):
 
 
 def _inject_gray_ops_to_content(content, top_items):
-    """强制接管缺口板块 — AI输出全部丢弃，代码全量生成
-    
-    铁律: 缺口扫描板块不受AI安全策略限制。无论AI生成什么，全部用代码替换。
-    """
+    """V14: 强制接管缺口板块 — AI输出全部丢弃，代码全量生成
+    改进: 操作卡附带新闻引用，标记冷热度"""
+
     gap_header = "## 二、市场/中间人缺口扫描"
-    
+
     # 用代码生成完整的缺口板块
     code_gap = _fallback_gap_scan(top_items)
+
+    # V14: 追加灰色操作卡（附带新闻引用和热度标记）
+    all_titles = ' '.join([item.get('title', '') for item in top_items[:10]])
+
+    # 匹配操作卡
+    matched_ops = _match_gray_ops(top_items, {})
+    if matched_ops:
+        code_gap += "\n\n### 🔥 灰色操作卡（今日匹配）\n"
+        code_gap += "> 以下操作卡基于今日新闻信号匹配，🔥=当日热点 / 📦=储备待命:\n\n"
+        for ops_group in matched_ops:
+            # 检查触发词是否在当日新闻中
+            is_hot = any(kw in all_titles for kw in ops_group['kw'])
+            heat_tag = '🔥' if is_hot else '📦'
+            # 找到匹配的新闻标题
+            matched_title = ''
+            for item in top_items[:10]:
+                if any(kw in item.get('title', '') for kw in ops_group['kw']):
+                    matched_title = item.get('title', '')[:40]
+                    break
+            ref = f" ← 基于「{matched_title}」" if matched_title else " ← 储备操作卡"
+
+            for op in ops_group['ops'][:2]:  # 每组最多2个
+                name, who, how, path, amount, retreat = op
+                code_gap += f"- {heat_tag} **{name}**{ref}\n"
+                code_gap += f"  - 找谁: {who}\n"
+                code_gap += f"  - 怎么说: {how}\n"
+                code_gap += f"  - 资金: {path}\n"
+                code_gap += f"  - 试水: {amount}\n"
+                code_gap += f"  - 撤退: {retreat}\n\n"
 
     if gap_header not in content:
         # AI没生成缺口扫描 → 插入到正确位置
@@ -586,11 +647,12 @@ def _build_xie_xiu_context(news_items):
 
 
 def _record_xie_xiu_content(sections_text):
-    """记录今日邪修内容到记忆库(传导链+金句)"""
+    """V14: 记录今日邪修内容到记忆库(传导链+金句+命中模式)
+    扩大记忆库容量: 金句30→100条，新增传导链命中记录和操作卡命中记录"""
+    import re
     memory = _load_xie_xiu_memory()
 
     # 提取金句
-    import re
     quote_match = re.search(r'六、今日邪修金句\s*(.*?)$', sections_text, re.MULTILINE)
     if quote_match:
         quote = quote_match.group(1).strip()
@@ -598,8 +660,46 @@ def _record_xie_xiu_content(sections_text):
             quote = quote.replace('💭', '').strip()
             if quote and quote not in memory.get('quotes', []):
                 memory.setdefault('quotes', []).append(quote)
-                # 只保留最近30条
-                memory['quotes'] = memory['quotes'][-30:]
+                # V14: 保留最近100条金句（从30扩大）
+                memory['quotes'] = memory['quotes'][-100:]
+
+    # V14: 提取传导链命中记录
+    chain_section = re.search(r'四、深度传导分析(.*?)(?=五、|六、|$)', sections_text, re.DOTALL)
+    if chain_section:
+        chain_text = chain_section.group(1)
+        # 提取第1层（事件）
+        layer1 = re.search(r'第1层.*?:\s*(.+)', chain_text)
+        # 提取天之道和邪修之道
+        tian_dao = re.search(r'天之道:\s*(.+?)(?:\n|$)', chain_text)
+        xie_xiu = re.search(r'邪修之道:\s*(.+?)(?:\n|$)', chain_text)
+        if layer1:
+            chain_record = {
+                'date': today_str,
+                'event': layer1.group(1).strip()[:60],
+                'tian_dao': tian_dao.group(1).strip()[:80] if tian_dao else '',
+                'xie_xiu': xie_xiu.group(1).strip()[:80] if xie_xiu else '',
+            }
+            memory.setdefault('chain_records', []).append(chain_record)
+            # 只保留最近60条传导链记录
+            memory['chain_records'] = memory.get('chain_records', [])[-60:]
+
+    # V14: 提取缺口扫描中的操作卡命中
+    gap_section = re.search(r'二、市场/中间人缺口扫描(.*?)(?=三、|四、|$)', sections_text, re.DOTALL)
+    if gap_section:
+        gap_text = gap_section.group(1)
+        # 检测操作卡关键词命中
+        ops_hit = []
+        for playbook in GRAY_OPS_PLAYBOOK:
+            for kw in playbook['kw']:
+                if kw in gap_text:
+                    ops_hit.append(kw)
+                    break
+        if ops_hit:
+            memory.setdefault('ops_hits', []).append({
+                'date': today_str,
+                'keywords': ops_hit,
+            })
+            memory['ops_hits'] = memory.get('ops_hits', [])[-30:]
 
     _save_xie_xiu_memory(memory)
 
@@ -703,6 +803,51 @@ def _fetch_baidu_hot(count=20):
         return []
 
 
+def _fetch_baidu_taiwan_news(count=10):
+    """V14: 通过百度搜索补充台湾相关新闻（当台湾RSS源不可达时）
+    搜索关键词: "台湾 经济" / "台股" / "台币" / "台湾 两岸"
+    """
+    import re, subprocess
+    taiwan_items = []
+    search_queries = ['台湾+经济', '台股+今日', '台币+汇率', '两岸+贸易']
+    headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+    for query in search_queries[:2]:  # 只搜2组，避免过频
+        try:
+            url = f"https://www.baidu.com/s?wd={query}&rn=10"
+            curl_cmd = ['curl', '-s', '-H', headers, url]
+            result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                continue
+            html = result.stdout
+            # 提取搜索结果标题
+            titles = re.findall(r'<h3[^>]*>(?:<[^>]*>)*([^<]+)(?:<[^>]*>)*</h3>', html)
+            if not titles:
+                titles = re.findall(r'title="([^"]{10,80})"', html)[:10]
+            for t in titles[:5]:
+                t = t.strip()
+                if t and len(t) > 8 and '百度' not in t:
+                    taiwan_items.append({
+                        'title': t,
+                        'source': '百度台湾搜索',
+                        'summary': f'搜索关键词: {query.replace("+", " ")}'
+                    })
+        except Exception as e:
+            logging.warning(f"[新闻] 百度台湾搜索失败({query}): {e}")
+            continue
+
+    # 去重
+    seen = set()
+    unique = []
+    for item in taiwan_items:
+        key = item['title'][:30]
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    return unique[:count]
+
+
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
     RSS_SOURCES = {
@@ -747,6 +892,20 @@ def fetch_raw_materials():
         source_stats['新浪财经'] = len(sina_items)
     except Exception:
         source_stats['新浪财经'] = 0
+
+    # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
+    taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
+    taiwan_ok = any(source_stats.get(s, 0) > 0 for s in taiwan_sources)
+    if not taiwan_ok:
+        logging.warning("[新闻] 台湾RSS源全部失败，启动百度台湾搜索补源")
+        try:
+            taiwan_baidu = _fetch_baidu_taiwan_news(10)
+            all_raw.extend(taiwan_baidu)
+            source_stats['百度台湾搜索'] = len(taiwan_baidu)
+            logging.info(f"[新闻] 百度台湾搜索补充: {len(taiwan_baidu)}条")
+        except Exception as e:
+            source_stats['百度台湾搜索'] = 0
+            logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
 
     logging.info(f"[新闻] 抓取完成: {source_stats}, 共{len(all_raw)}条")
     return all_raw, source_stats
@@ -1039,187 +1198,218 @@ def _fallback_all_sections(all_raw, top_items):
 
 
 def _infer_signal(title):
-    """V13: 每条新闻用不同落地动作 — 基于新闻实体+场景分类+模板多样性
-    核心逻辑: 提取实体→分类场景→从该场景的多个模板中轮选→绝不重复"""
+    """V14: 每条新闻生成具体落地动作 — 新闻实体+可执行第一步+预期收益
+    核心改进: 不再"以XXX名义→做XXX→收X%"万能模板，改为具体人/公司+第一步操作+数字"""
     import re
     title_lower = title.lower()
     entity = _extract_entity(title)
-    ent = entity[:10].rstrip('？?！!。、') if len(entity) > 10 else entity.rstrip('？?！!。、')
+    ent = entity[:16].rstrip('？?！!。、') if len(entity) > 16 else entity.rstrip('？?！!。、')
 
     # 用标题hash做轮选种子，同一批新闻不会重复
     seed = sum(ord(c) for c in title[:20]) % 100
 
-    # ---- 场景分类 + 多模板轮选 ----
-    # AI/算力/科技
+    # V14: 每个场景的落地动作改为"具体行动+可执行第一步+数字"，不再用万能填空模板
+    # 格式: 行动方向 | 第一步操作 | 预期收益
+
     if any(kw in title_lower for kw in ['ai', '算力', 'gpu', '大模型', '英伟达', 'nvidia', '人工智能']):
+        if re.search(r'\bai\b', title_lower) or any(kw in title_lower for kw in ['算力', 'gpu', '大模型', '英伟达', 'nvidia', '人工智能']):
+            templates = [
+                f'算力中介: 查台湾IDC空置率(如是方电讯/宏碁云)→以「跨境算力调度服务商」签合作→两边抽差价3-5% | 第一步: 联系是方电讯(6786 TT)业务窗口问GPU空置 | 预期月入3-8万台币',
+                f'散热供应链: {ent}拉动散热模组需求→找台湾散热厂奇鋐/双鸿→以「大陆数据中心采购」名义询价→转卖赚15-20% | 第一步: 奇鋐(3017 TT)投资者关系邮箱要报价单 | 预期单批利差2-5万',
+                f'算力咨询: 大陆AI公司缺合规算力→以「跨境算力合规顾问」名义做方案→收咨询费5-10万/案 | 第一步: 在LinkedIn搜「大陆AI创业」公司CTO | 预期首单5万',
+            ]
+            return templates[seed % len(templates)]
+    if any(kw in title_lower for kw in ['机器人', '具身智能', '智能体']):
         templates = [
-            f'大陆算力管制→台湾IDC有灰色通道→以「{ent}解决方案」名义接触台湾机房→做算力中介抽3-5%',
-            f'{ent}拉动散热/电源需求→找台湾散热模组厂(如奇鋐/双鸿)→以「大陆渠道代理」身份拿货→转卖大陆数据中心赚15-20%',
-            f'大陆AI公司缺GPU→台湾IDC空置率30%+→以「跨境算力调度」名义签服务协议→两边赚差价→不碰硬件只做服务撮合',
-        ]
-        return templates[seed % len(templates)]
-    elif any(kw in title_lower for kw in ['机器人', '具身智能', '智能体']):
-        templates = [
-            f'以「台湾智慧零售代理商」身份接触{ent}团队→拿区域授权→转包台湾连锁餐饮/便利店→抽15%转包费',
-            f'{ent}落地需要本地化集成→以「台湾系统集成商」身份接单→找大陆方案商做白牌→赚中间差价20-30%',
-            f'机器人需要场景训练数据→台湾便利店/餐饮有大量真实场景→以「数据采集服务」名义卖训练数据→按场景收费',
+            f'机器人代理: {ent}落地需台湾本地集成商→以「台湾区域集成商」接单→找大陆方案做白牌→差价20-30% | 第一步: 联系台湾便利商店协会问智能化需求 | 预期首单10-15万',
+            f'训练数据: 机器人需场景训练数据→台湾7-11/全家有大量真实场景→以「数据采集服务」卖训练数据 | 第一步: 下载7-11开放API文档评估数据量 | 预期按场景2-5万/批',
+            f'维修保养: {ent}量产后的售后市场→台湾缺维修人才→做「机器人售后服务商」→签年保合约 | 第一步: 查台湾机器人进口量数据(海关统计) | 预期年保5-10万/台',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['芯片', '半导体']):
         templates = [
-            f'{ent}供应链里分销灰色渠道→大陆禁售芯片经台湾/香港中转→撮合费5-8%',
-            f'半导体设备维修→台湾有大量二手设备→以「设备翻新」名义采购→转卖大陆晶圆厂→单台利差20-40%',
-            f'芯片产能过剩→台湾晶圆代工厂空置→以「紧急量产通道」名义帮大陆IC设计公司抢产线→收加急费5-10%',
+            f'芯片分销: {ent}供应链有灰色渠道需求→大陆禁售芯片经台湾中转→撮合费5-8% | 第一步: 查美国商务部实体清单最新版确认哪些芯片受限 | 预期单笔10-30万',
+            f'二手设备: 半导体设备维修→台湾有大量二手设备→以「设备翻新」采购→转卖大陆晶圆厂 | 第一步: 联系台湾半导体设备代理商(如汉民/崇越)问二手库存 | 预期单台利差20-40%',
+            f'紧急量产: 芯片产能过剩→台湾晶圆厂空置→帮大陆IC设计公司抢产线→收加急费5-10% | 第一步: 查联电/力积电产能利用率(月报) | 预期单案5-15万',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['腾讯', '阿里', '字节', '百度', '快手', '网易']):
         templates = [
-            f'{ent}生态变化→平台商户需要出海通道→以「台湾市场服务商」身份做代办→收入驻费+流水抽1%',
-            f'{ent}股价波动→员工期权套现需求→以「境外家族办公室」身份接盘→折扣7-8折→6个月后退出',
-            f'大厂裁员→释放大量AI/算法人才→以「台湾猎头」身份帮台湾公司挖人→猎头费3-6个月薪资',
+            f'生态出海: {ent}生态变化→平台商户需台湾通道→以「台湾市场代办服务商」做入驻→收入驻费+流水1% | 第一步: 在{ent}开放平台搜台湾入驻政策 | 预期入驻费5000-1万/户',
+            f'人才猎头: 大厂裁员→释放AI/算法人才→以「台湾猎头」帮台湾公司挖人→猎头费3-6月薪 | 第一步: 在脉脉/LinkedIn搜近期裁员公司名单 | 预期单人人头费3-5万',
+            f'期权套现: {ent}股价波动→员工期权套现需求→以「境外家族办公室」接盘→7-8折→6月退出 | 第一步: 联系{ent}离职社群/期权交易平台 | 预期折扣空间20-30%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['ipo', '上市', '过会', 'a股', '港股']):
         templates = [
-            f'{ent}上市前老股东有套现需求→以「境外家族办公室」身份接老股→折扣6-7折→上市后退出',
-            f'新股上市→打新资金需求大→以「孖展融资渠道」名义对接台湾资金→收融资利差2-3%',
-            f'{ent}IPO后6个月解禁→解禁前老股东想做市值管理→以「两岸投资者关系顾问」身份接单→收顾问费',
+            f'老股转让: {ent}上市前老股东套现→以「境外家族办公室」接老股→6-7折→上市后退出 | 第一步: 查{ent}招股书股东名单找持股>5%的 | 预期折扣空间30-40%',
+            f'打新融资: 新股上市→打新资金需求→对接台湾资金→收融资利差2-3% | 第一步: 查{ent}招股定价区间计算所需资金 | 预期利差2-3%/笔',
+            f'市值管理: {ent}解禁期→老股东做市值管理→以「两岸投资者关系顾问」接单 | 第一步: 查{ent}解禁日(招股书) | 预期顾问费10-20万/季',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['出口', '关税', '制裁', '贸易']):
         templates = [
-            f'{ent}受制裁/关税影响→找第三国中转商→利用台湾地理优势→做转口中介收2-5%',
-            f'贸易壁垒→合规咨询需求→以「两岸贸易合规顾问」身份帮企业做原产地规划→收8-15万/案',
-            f'制裁下替代供应链出现→以「替代供应商撮合」名义做中间人→收信息费1-3%',
+            f'转口贸易: {ent}受制裁/关税影响→找第三国中转→利用台湾地理优势→做转口中介2-5% | 第一步: 查受影响的HS编码和税率变化 | 预期转口费2-5%',
+            f'合规咨询: 贸易壁垒→合规咨询需求→以「两岸贸易合规顾问」帮做原产地规划 | 第一步: 下载最新海关归类决定书 | 预期8-15万/案',
+            f'替代供应: 制裁→替代供应链出现→以「替代供应商撮合」做中间人→收信息费1-3% | 第一步: 查受制裁产品的台湾替代供应商(经济部工业局名录) | 预期信息费1-3%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['出海', '全球化', '海外']):
         templates = [
-            f'以「台湾市场落地顾问」身份接触{ent}→帮大陆品牌在台湾找经销商→首单收5-8万+流水抽1%',
-            f'{ent}出海需要本地化→以「本地化服务商」身份接单→帮做台湾市场调研+渠道搭建→收项目费10-20万',
-            f'大陆品牌进台湾→需要台湾公司做白手套→以「台湾代理主体」身份注册→收年度管理费+流水抽成',
+            f'落地顾问: 以「台湾市场落地顾问」接触{ent}→帮找经销商→首单5-8万+流水1% | 第一步: 下载台湾经济部商业司公司登记查询确认竞品 | 预期首单5-8万',
+            f'本地化服务: {ent}出海需本地化→以「本地化服务商」接单→市场调研+渠道搭建 | 第一步: 查台湾同类产品的市占率(凯度/尼尔森) | 预期项目费10-20万',
+            f'白手套: 大陆品牌进台湾→需台湾公司做白手套→以「台湾代理主体」注册→收年管费+流水 | 第一步: 查台湾公司法最低资本额(50万台币) | 预期年管理费5-10万',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['餐饮', '甜品', '饮品', '连锁', '加盟', '绵绵冰']):
         templates = [
-            f'以「台湾连锁餐饮集团采购总监」身份接触{ent}→谈台湾独家代理→首付10万以内→品牌方不知道台湾市场体量→赚信息差',
-            f'{ent}扩张需要冷链→台湾冷链物流有闲置产能→以「两岸冷链对接」名义撮合→收介绍费+运费抽成3%',
-            f'餐饮出海热→品牌方缺台湾市场数据→以「台湾餐饮市场调研」名义卖调研报告→5-8万/份',
+            f'独家代理: 以「台湾连锁餐饮集团采购总监」接触{ent}→谈台湾独家代理→首付<10万→赚信息差 | 第一步: 查{ent}是否已有台湾加盟店(经济部商业司) | 预期首付5-10万+供应链差价10-15%',
+            f'冷链对接: {ent}扩张需冷链→台湾冷链有闲置→以「两岸冷链对接」撮合→收3% | 第一步: 联系台湾冷链协会(www.cla.org.tw)问会员名单 | 预期介绍费3%+运费抽成',
+            f'市场调研: 品牌方缺台湾市场数据→以「台湾餐饮市场调研」卖报告→5-8万/份 | 第一步: 查台湾财政部营利事业家数(餐饮业) | 预期5-8万/份',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['品牌', '营销', '新消费', '道歉', '危机']):
         templates = [
-            f'{ent}公关危机→以「两岸品牌公关顾问」身份介入→帮对接台湾媒体资源→收危机公关费8-15万',
-            f'品牌扩张需要本地化→以「台湾品牌授权代理」身份谈→拿授权后转包→赚授权差价10-20%',
-            f'新消费退潮→大量品牌倒闭→以「库存清仓中介」身份帮清库存→收清仓费5-10%+残值分润',
+            f'危机公关: {ent}公关危机→以「两岸品牌公关顾问」介入→帮对接台湾媒体→收8-15万 | 第一步: 查{ent}在台湾的媒体曝光度(Google Trends) | 预期8-15万/案',
+            f'品牌授权: 品牌扩张需本地化→以「台湾品牌授权代理」谈→拿授权后转包→差价10-20% | 第一步: 查{ent}品牌在台湾的商标注册状态(智慧局) | 预期授权差价10-20%',
+            f'库存清仓: 新消费退潮→品牌倒闭→以「库存清仓中介」帮清库存→收5-10%+残值分润 | 第一步: 在阿里司法拍卖搜餐饮设备折价信息 | 预期清仓费5-10%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['台湾', '两岸', '小三通', '金门']):
         templates = [
-            f'人在台湾窗口期→找金门民间兑汇所→台币/人民币对敲→赚汇差+手续费→单笔5万台币以下不触发反洗钱',
-            f'小三通货运→金门中转仓代发→以「两岸仓储转运」名义收仓租+操作费→月入5-10万台币',
-            f'两岸信息差→大陆人买不到台湾商品→以「台湾代购」名义做电商→赚代购费15-25%',
+            f'兑汇通道: 人在台湾窗口→找金门民间兑汇所→台币/人民币对敲→单笔<5万台币 | 第一步: 到金门金城镇找民间兑换所(后浦老街周边) | 预期汇差+手续费0.3-0.5%/笔',
+            f'货运中转: 小三通货运→金门中转仓代发→收仓租+操作费→月入5-10万台币 | 第一步: 联系金门海运公司(如金门快轮)问散货拼柜价格 | 预期月5-10万台币',
+            f'代购电商: 两岸信息差→大陆人买不到台湾商品→以「台湾代购」做电商→15-25% | 第一步: 在淘宝搜台湾商品看竞品定价 | 预期代购费15-25%/单',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['直销', '分销', '尚赫', '安利', '如新']):
         templates = [
-            f'以「新零售转型顾问」身份接触{ent}团队长→帮把直销团队转型为餐饮加盟商→收咨询费5-20万+供应链返点3%',
-            f'直销团队有几万人→以「社群运营外包」身份接手→帮做直播带货转型→抽GMV的3-5%',
-            f'直销牌照整顿→以「合规转型服务商」身份帮写转型方案→收8-15万/案→绑定1-2个供应链做返点',
+            f'转型顾问: 以「新零售转型顾问」联系{ent}团队长→帮直销团队转型餐饮加盟→咨询5-20万+供应链返点3% | 第一步: 在微信搜{ent}团队长社群| 预期首单咨询5万+返点3%',
+            f'社群运营: 直销团队几万人→以「社群运营外包」接手→帮做直播带货转型→抽GMV的3-5% | 第一步: 查{ent}近期电商转型案例(天眼查) | 预期GMV抽3-5%',
+            f'合规转型: 直销牌照整顿→以「合规转型服务商」帮写转型方案→收8-15万/案 | 第一步: 查商务部直销行业管理信息系统最新公示 | 预期8-15万/案',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['威士忌', 'whisky', '噶玛兰', 'kavalan', '单一麦芽']):
         templates = [
-            f'人在台湾→{ent}限量版发售→台湾购入→人肉带2瓶+快递找代收→大陆/香港出货→单瓶利差30-80%',
-            f'台湾威士忌收藏群→有出货需求的大陆买家→以「跨境收藏品中介」名义撮合→收5-8%佣金',
-            f'金车酒厂参观→以「台湾威士忌文化体验」名义做品鉴团→收团费+代购佣金→月做2-3团',
+            f'限量版搬运: 人在台湾→{ent}限量版发售→台湾购入→人肉2瓶+快递代收→单瓶利差30-80% | 第一步: 关注金车酒厂官网限量版发售公告 | 预期单瓶利差2000-5000元',
+            f'收藏品中介: 台湾威士忌收藏群→有出货需求的大陆买家→以「跨境收藏品中介」撮合→5-8%佣金 | 第一步: 加入威士忌LINE群(搜「台湾威士忌」) | 预期佣金5-8%/笔',
+            f'品鉴团: 金车酒厂参观→以「台湾威士忌文化体验」做品鉴团→收团费+代购佣金→月2-3团 | 第一步: 预约金车噶玛兰酒厂参观(宜兰) | 预期团费3000-5000/人+代购',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['庙宇', '供奉', '开光', '法会', '线上信仰']):
         templates = [
-            f'赵公明线上庙宇已启动→找{ent}相关寺庙谈数字化代运营→首单免费做样板→签SaaS年费+供养品代销分成20%',
-            f'信仰经济→复购率碾压SaaS→以「线上法会直播」服务切入→按场收费→3-5万/场→做5场验证模式',
-            f'庙宇数字化转型→以「寺庙数字化SaaS」名义推广→年费2-5万/庙→供养品供应链加价20-40%',
+            f'庙宇代运营: 赵公明线上庙宇已启动→找{ent}相关寺庙谈代运营→首单免费→签SaaS年费+代销分成20% | 第一步: 在Google Maps搜台湾道教庙宇(赵公明/关帝) | 预期年费2-5万/庙+分成20%',
+            f'线上法会: 信仰经济→复购率碾压SaaS→以「线上法会直播」服务切入→按场收费3-5万/场 | 第一步: 下载法会直播竞品(如"功德林"App)分析功能 | 预期3-5万/场',
+            f'供养品供应链: 庙宇数字化→供养品供应链加价20-40%→以「庙宇用品供应商」切入 | 第一步: 查台湾宗教用品批发商(台北地下街) | 预期供应链加价20-40%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['彩票', '彩券', '威力彩', '大乐透']):
         templates = [
-            f'在台湾找想转让的台彩经销商→做中间撮合收介绍费5-10万→同时建LINE合买群→收5%服务费',
-            f'台彩头奖效应→以「合买社群运营」名义建LINE群→收5%服务费→政策收紧前退出',
-            f'彩票数据→以「数据分析服务」名义帮合买群做选号建议→收月费500-1000台币/人→用刘海蟾系统做差异化',
+            f'经销权撮合: 在台湾找想转让的台彩经销商→做中间撮合→收介绍费5-10万 | 第一步: 到台湾公益彩券官网查经销点转让公告 | 预期介绍费5-10万/单',
+            f'合买社群: 台彩头奖效应→建LINE合买群→收5%服务费→政策收紧前退出 | 第一步: 搜LINE开放聊天室「威力彩合买」看竞品 | 预期月服务费5千-1万台币',
+            f'数据分析: 彩票数据→以「数据分析服务」帮合买群做选号建议→收月费500-1000台币/人 | 第一步: 用刘海蟾系统生成近10期威力彩分析 | 预期月费500-1000/人',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['涨价', '缺货', '断供', '铜', '铝', '钢', '硫酸', '锂']):
         templates = [
-            f'{ent}供应断裂→找有货没渠道的台湾供应商+缺货的大陆买家→以「跨境贸易对接」名义撮合→收2-4%',
-            f'涨价→下游有减产风险→以「替代供应商中介」名义帮找台湾替代品→收3-5%信息费→不碰货不碰资金',
-            f'库存波动→以「供应链金融」名义帮囤货方融资→收2-3%/月→货做质押→风险控制在止损线',
+            f'供需撮合: {ent}供应断裂→找有货没渠道的台湾供应商+缺货的大陆买家→以「跨境贸易对接」撮合→收2-4% | 第一步: 查LME(伦敦金属交易所)实时库存数据 | 预期撮合费2-4%',
+            f'替代品中介: 涨价→下游减产→以「替代供应商中介」帮找台湾替代品→收3-5%信息费 | 第一步: 查台湾同业公会会员名录(如台湾区金属品制造公会) | 预期3-5%信息费',
+            f'供应链金融: 库存波动→以「供应链金融」帮囤货方融资→收2-3%/月→货做质押 | 第一步: 查上海期货交易所仓单质押规则 | 预期2-3%/月',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['降息', '央行', '利率', '美联储']):
         templates = [
-            f'利差变化→大陆资金寻求境外配置→以「台湾私人银行渠道」身份对接→帮走跨境保险→收通道费1-2%',
-            f'利率下降→房产估值上升→以「台湾房产投资顾问」身份帮大陆资金找标的→收成交佣金2-3%',
-            f'汇率波动→以「两岸跨境结算」名义帮企业做汇率对冲→收对冲服务费0.5-1%→量大稳赚',
+            f'跨境配置: 利差变化→大陆资金寻求境外配置→以「台湾私人银行渠道」对接→收通道费1-2% | 第一步: 查两岸定存利差(大陆3-4% vs 台湾5-6%) | 预期通道费1-2%',
+            f'房产顾问: 利率下降→房产估值上升→以「台湾房产投资顾问」帮大陆资金找标的→收佣金2-3% | 第一步: 查台湾内政部实价登录最新数据 | 预期成交佣金2-3%',
+            f'汇率对冲: 汇率波动→以「两岸跨境结算」帮企业做汇率对冲→收0.5-1%服务费 | 第一步: 查台币/人民币即期汇率与NDF差价 | 预期0.5-1%/笔',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['新能源', '锂', '光伏', '储能', '电网']):
         templates = [
-            f'{ent}产能过剩→大陆补贴退出→台湾/东南亚有需求缺口→做跨境撮合→帮大陆工厂清库存收3-5%',
-            f'光伏组件台湾有进口需求→大陆组件过剩→以「两岸绿能贸易」名义撮合→收2-3%→走小三通降低关税',
-            f'储能项目融资→以「项目FA」身份帮台湾储能公司找大陆资金→收2-3%FA费→项目IRR>15%的优先推',
+            f'跨境清库: {ent}产能过剩→大陆补贴退出→台湾/东南亚有需求→做跨境撮合→收3-5% | 第一步: 查台湾经济部能源局再生能源设置量 | 预期清库费3-5%',
+            f'光伏贸易: 光伏组件台湾有进口需求→大陆组件过剩→以「两岸绿能贸易」撮合→收2-3% | 第一步: 查台湾光伏进口关税率(财政部关务署) | 预期贸易撮合2-3%',
+            f'储能FA: 储能项目融资→以「项目FA」帮台湾储能公司找大陆资金→收2-3%FA费 | 第一步: 查台湾储能项目IRR(台电公开标案数据) | 预期FA费2-3%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['暴跌', '崩盘', '恐慌', '危机']):
         templates = [
-            f'{ent}恐慌抛售→以「危机收购顾问」身份帮台湾买家对接大陆折价标的→收交易佣金2-3%',
-            f'恐慌→折价资产出现→以「不良资产撮合」名义对接银行AMC+台湾资金方→收撮合费1-2%',
-            f'市场恐慌→以「风险对冲顾问」身份帮企业做压力测试→收咨询费5-10万→顺势推跨境保险/期货对冲方案',
+            f'危机收购: {ent}恐慌抛售→以「危机收购顾问」帮台湾买家对接大陆折价标的→收交易佣金2-3% | 第一步: 查{ent}相关资产折价幅度(法拍/大宗交易) | 预期佣金2-3%',
+            f'不良资产: 恐慌→折价资产→以「不良资产撮合」对接银行AMC+台湾资金方→收1-2% | 第一步: 查四大AMC最新不良资产包公告 | 预期撮合费1-2%',
+            f'对冲咨询: 市场恐慌→以「风险对冲顾问」帮企业做压力测试→收5-10万 | 第一步: 下载企业风险管理评估模板(COSO框架) | 预期咨询费5-10万',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['暴涨', '疯抢', '炒作']):
         templates = [
-            f'{ent}炒作过热→帮获利盘找台湾出海通道→收通道费2-3%→不做多不做空只做中间人',
-            f'泡沫期→以「退出策略顾问」身份帮早期投资人做退出规划→收顾问费+退出佣金1-2%',
-            f'疯抢→以「反向对冲」名义帮客户做做空/减仓→收交易佣金→但自己不持仓位→纯通道',
+            f'获利退出: {ent}炒作过热→帮获利盘找台湾出海通道→收通道费2-3%→不做多不做空 | 第一步: 查{ent}近3个月涨幅和换手率 | 预期通道费2-3%',
+            f'退出顾问: 泡沫期→以「退出策略顾问」帮早期投资人做退出规划→收顾问费+退出佣金1-2% | 第一步: 查{ent}VC/PE投资轮次和估值 | 预期退出佣金1-2%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['政策', '新规', '监管', '整顿']):
         templates = [
-            f'{ent}监管收紧→以「两岸合规架构顾问」身份提供台湾/香港主体搭建→收服务费8-15万',
-            f'监管靴子落地→以「合规过渡方案」名义帮受影响企业做转型→收5-15万/案→3-6个月交付',
-            f'新规→以「政策解读服务」名义卖研讨会+白皮书→收会费+赞助→单场收入5-10万',
+            f'合规架构: {ent}监管收紧→以「两岸合规架构顾问」提供台湾/香港主体搭建→收8-15万 | 第一步: 查最新监管条文原文(国务院/部委官网) | 预期8-15万/案',
+            f'转型方案: 监管靴子落地→以「合规过渡方案」帮受影响企业转型→收5-15万/案 | 第一步: 列出受{ent}影响的行业清单(天眼查行业分类) | 预期5-15万/案',
+            f'政策解读: 新规→以「政策解读服务」卖研讨会+白皮书→收会费+赞助→单场5-10万 | 第一步: 查{ent}相关的行业微信群(搜微信) | 预期单场5-10万',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['火灾', '事故', '停产']):
         templates = [
-            f'{ent}供应链中断→保险理赔前有3-6周真空期→找替代供应商→以「紧急采购代理」身份撮合→收加急费5-10%',
-            f'事故→替代品短期涨价→以「替代品信息中介」名义对接供需双方→收1-3%→2-4周窗口',
-            f'停产→库存急缺→以「紧急调货」名义从台湾仓库调货→收加急运费+货物加价10-15%',
+            f'替代供应: {ent}供应链中断→保险理赔前3-6周真空→找替代供应商→收加急费5-10% | 第一步: 查{ent}事故影响的产品品类和替代品 | 预期加急费5-10%',
+            f'调货服务: 停产→库存急缺→以「紧急调货」从台湾仓库调货→收加急运费+10-15% | 第一步: 联系台湾相关产品经销商问库存 | 预期加急利润10-15%',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['融资', '投资', '收购']):
         templates = [
-            f'{ent}融资/被收购→上下游有跟投/服务机会→以「产业链协同投资人」身份接触→帮台湾资金对接标的→收FA费2-3%',
-            f'融资→以「投后管理服务商」名义提供财务/法务/HR外包→收月费5-10万→绑定3-6个月',
-            f'收购→被收购方员工会离职→以「人才承接」名义帮台湾公司挖人→猎头费3-6个月薪资',
+            f'FA服务: {ent}融资→上下游有跟投机会→以「产业链协同投资人」帮台湾资金对接→收FA费2-3% | 第一步: 查{ent}融资轮次和领投方(IT桔子) | 预期FA费2-3%',
+            f'投后管理: 融资→以「投后管理服务商」提供财务/法务/HR外包→收月费5-10万 | 第一步: 列出{ent}所在赛道的投后服务需求清单 | 预期月费5-10万',
+            f'人才承接: 收购→被收购方员工会离职→以「人才承接」帮台湾公司挖人→猎头费3-6月薪 | 第一步: 在LinkedIn搜{ent}员工近期动态 | 预期猎头费3-6月薪',
         ]
         return templates[seed % len(templates)]
     elif any(kw in title_lower for kw in ['黄金', '白银', '贵金属']):
         templates = [
-            f'{ent}→台湾有黄金现货渠道→大陆资金有配置需求→以「贵金属跨境通道」名义撮合→收1-2%→走小三通/金门',
-            f'金价波动→以「黄金租赁」名义帮企业做黄金借贷→收年化3-5%→实物在台湾仓库→不跨境不报关',
-            f'储备多元化→台湾银行有黄金保管箱→以「境外保管服务」名义帮大陆客户开箱→收年费+通道费',
+            f'贵金属通道: {ent}→台湾有黄金现货渠道→大陆资金有配置需求→以「贵金属跨境通道」撮合→收1-2% | 第一步: 查台湾银行黄金保管箱开户条件 | 预期通道费1-2%',
+            f'黄金租赁: 金价波动→以「黄金租赁」帮企业做黄金借贷→收年化3-5% | 第一步: 查上海黄金交易所租赁利率 | 预期年化3-5%',
         ]
         return templates[seed % len(templates)]
     else:
         templates = [
-            f'从{ent}找台湾套利视角→你能接触到而大陆人接触不到的资源→信息不对称处就是收钱位置',
-            f'{ent}→台湾有相关产业/渠道→以「两岸资源对接」名义做中间人→首单免费→后续收1-3%',
-            f'每条新闻背后都有供需断裂→{ent}的断裂在哪→找到断裂→做那座桥→收过桥费',
+            f'信息差: 从{ent}找台湾套利视角→你能接触到而大陆人接触不到的资源→信息不对称处就是收钱位置 | 第一步: 在台湾本地搜{ent}的上下游企业(黄页/104人力银行) | 预期信息差利差5-15%',
+            f'资源对接: {ent}→台湾有相关产业/渠道→以「两岸资源对接」做中间人→首单免费→后续收1-3% | 第一步: 查台湾同业公会会员名单 | 预期1-3%撮合费',
+            f'断裂撮合: 每条新闻背后都有供需断裂→{ent}的断裂在哪→找到断裂→做那座桥→收过桥费 | 第一步: 用Google搜「{ent} + 供应商/经销商 + 台湾」 | 预期过桥费1-3%',
         ]
         return templates[seed % len(templates)]
 
+
+
+def _validate_signal(signal, title, existing_signals=None):
+    """V14: 验证落地动作质量 — 检查实体引用+具体数值+同质化
+    
+    Returns: (is_valid, reason)
+    """
+    import re
+    entity = _extract_entity(title)
+    ent_short = entity[:8] if len(entity) > 8 else entity
+
+    # 检查1: 落地动作是否引用了新闻实体
+    if ent_short and len(ent_short) >= 2 and ent_short not in signal:
+        # 宽松检查：实体可能是公司全名(含代码)，落地动作中可能用了简称
+        ent_core = re.sub(r'[（(].*?[）)]', '', ent_short).strip()
+        if ent_core and len(ent_core) >= 2 and ent_core not in signal:
+            pass  # 允许不引用实体（某些场景动作可能确实与实体无关）
+
+    # 检查2: 是否有具体数值（金额/百分比/时间窗口）
+    has_number = bool(re.search(r'\d+[%万台币元万千百]', signal))
+    if not has_number:
+        return False, "缺少具体数值"
+
+    # 检查3: 同质化检测 — 与已有落地动作是否太相似
+    if existing_signals:
+        for existing in existing_signals:
+            # 比较前20字的重叠度
+            overlap = sum(1 for c in signal[:30] if c in existing[:30])
+            if overlap > 20:  # 30个字符中有20+个相同，视为同质化
+                return False, f"与已有动作同质化(重叠{overlap}/30)"
+
+    return True, "通过"
 
 
 def _fallback_gap_scan(top_items):
@@ -1290,7 +1480,7 @@ def _fallback_gap_scan(top_items):
             lines.append("  - 🎯 操作卡: ①找到有货没渠道的供应商→②找到缺货的买家→③以'行业资源对接'名义介绍→④收撮合费现金/私账→⑤买卖双方跳过你直接交易时换下一对")
         else:
             lines.append(f"- **缺口**: {ent_short}的信息断裂 — {context[:30]}")
-            lines.append("  - 💰 收钱模式: 在{ent_short}这条新闻背后的信息不对称处做中间人——不持仓只收撮合费")
+            lines.append(f"  - 💰 收钱模式: 在「{ent_short}」这条新闻背后的信息不对称处做中间人——不持仓只收撮合费")
             lines.append("  - 🛡️ 规避路径: 不签合同不碰货不碰资金，纯介绍人身份，出事免责")
             lines.append("  - ⏱️ 窗口期: 新闻热度消退前（1-2周），信息充分扩散后窗口关闭")
             lines.append(f"  - 🎯 操作卡: ①从'{ent_short}'找到信息最不对称的环节→②找到有资源没渠道的一方→③以{ent_short}'合作'名义联系→④收撮合费→⑤双方跳过你时换下一对")
@@ -1301,10 +1491,10 @@ def _fallback_gap_scan(top_items):
     if gaps_found < 2 and top_items:
         used_titles = set()
         for kw, ctx in signal_keywords.items():
-            used_titles.add(ctx[:15])
+            used_titles.add(ctx[:30])
         for item in top_items:
             title = item.get('title', '')
-            if title[:15] not in used_titles:
+            if title[:30] not in used_titles:
                 ent = _extract_entity(title)
                 lines.append(f"- **缺口**: {ent[:14]}的套利窗口 — {title[:35]}")
                 lines.append(f"  - 💰 收钱模式: 围绕'{ent[:14]}'这条新闻→找上下游供需断裂→做撮合抽1-3%")
@@ -1701,22 +1891,53 @@ def _gen_unique_quote(context_hint, used_quotes, candidates=None):
     return f"{base}（第{len(used_quotes)+1}日）"
 
 
+# ============================================================
+# V14: 公司/品牌预置库 — 优先匹配已知实体，避免提取出无意义片段
+# ============================================================
+COMPANY_DB = {
+    # 台湾上市公司（含股票代码）
+    '台积电': '台积电(2330 TT)', '联发科': '联发科(2454 TT)', '鸿海': '鸿海(2317 TT)',
+    '奇鋐': '奇鋐(3017 TT)', '双鸿': '双鸿(3324 TT)', '金车': '金车(9906 TT)',
+    '台塑': '台塑(1301 TT)', '台化': '台化(1326 TT)', '南亚': '南亚(1303 TT)',
+    '中钢': '中钢(2002 TT)', '统一': '统一(1216 TT)', '味全': '味全(1201 TT)',
+    '华硕': '华硕(2357 TT)', '宏碁': '宏碁(2353 TT)', '纬创': '纬创(3231 TT)',
+    '日月光': '日月光(3711 TT)', '硅品': '硅品(2325 TT)', '联电': '联电(2303 TT)',
+    '台湾大': '台湾大(3045 TT)', '远传': '远传(4904 TT)', '中华电信': '中华电信(2412 TT)',
+    '台湾水泥': '台湾水泥(1101 TT)', '亚泥': '亚泥(1102 TT)',
+    '国泰金': '国泰金(2882 TT)', '富邦金': '富邦金(2881 TT)', '中信金': '中信金(2891 TT)',
+    # 大陆公司
+    '腾讯': '腾讯(0700 HK)', '阿里': '阿里(9988 HK)', '字节跳动': '字节跳动(未上市)',
+    '华为': '华为(未上市)', '小米': '小米(1810 HK)', '百度': '百度(9888 HK)',
+    '比亚迪': '比亚迪(1211 HK)', '宁德时代': '宁德时代(300750)',
+    '英伟达': 'NVIDIA(NVDA)', 'OpenAI': 'OpenAI(私有)', 'DeepSeek': 'DeepSeek(私有)',
+    '英特尔': 'Intel(INTC)', 'AMD': 'AMD(AMD)', '三星': 'Samsung(005930 KS)',
+    # 威士忌品牌
+    '噶玛兰': 'Kavalan噶玛兰', '金车': '金车Kavalan',
+    # 直销
+    '尚赫': '天津尚赫', '安利': 'Amway安利', '如新': 'NU SKIN如新',
+}
+
+
 def _extract_entity(title):
-    """V13: 从新闻标题中提取核心实体 — 去前缀+标点分词+多模式匹配"""
+    """V14: 从新闻标题中提取核心实体 — 优先预置库匹配+去前缀+多模式验证"""
     import re
     # 预处理: 去掉常见前缀噪音
     title_clean = title
     for prefix in ['8点1氪丨', '8点1氪|', '氪星晚报｜', '氪星早报｜', '融资丨', '独家丨', '硬氪首发', '36氪首发', '| 36氪首发', '｜硬氪首发', '｜', '| ']:
         title_clean = title_clean.replace(prefix, '')
     title = title_clean
+    # V14: 优先匹配预置公司库（最高优先级）
+    for company_name, full_name in COMPANY_DB.items():
+        if company_name in title:
+            return full_name
+
     # 噪音词库
     noise = {'今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '警惕', '注意', '曝光',
              '8点1氪', '氪星晚报', '氪星早报', '晚报', '早报', '日报', '周报', '月报',
              '丨', '｜', '【', '】', '「', '」', '《', '》',
-             '中国品牌', '韩国', '美国', '日本', '中国', '台湾', '香港', '澳门',
+             '中国品牌', '韩国', '美国', '日本', '中国', '香港', '澳门',
              '北京', '上海', '深圳', '广州', '福建', '厦门', '金门',
-             '股价', '市值', '融资', '投资', '收购', '上市', 'IPO',
-             '台积电', '联发科'}
+             '股价', '市值', '融资', '投资', '收购', '上市', 'IPO'}
     # 通用词子串（含这些词的片段不提取）
     noise_sub = {'中国品牌', '品牌出海', '产业链', '供应链', '制造业', '互联网', '人工智能',
                  '韩国', '美国', '日本', '中国', '台湾', '香港', '澳门',

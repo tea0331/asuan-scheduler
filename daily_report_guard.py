@@ -172,6 +172,33 @@ def validate_report(content: str) -> dict:
         if "窗口期" not in gap_section:
             warnings.append("⚠️ [缺口] 缺少'窗口期'")
 
+    # 8. V14: 落地动作质量检查 — 是否有具体数值
+    news_section = _extract_section(content, "一、每日资讯")
+    if news_section:
+        # 统计落地动作条数
+        action_lines = [l for l in news_section.split('\n') if '💰' in l or '落地动作' in l]
+        if action_lines:
+            # 检查有多少条落地动作包含具体数值（金额/百分比）
+            action_with_numbers = [l for l in action_lines if re.search(r'\d+[%万台币元万]', l)]
+            if len(action_with_numbers) < 3 and len(action_lines) >= 3:
+                warnings.append(f"⚠️ [落地动作] 含具体数值的落地动作不足3条({len(action_with_numbers)}/{len(action_lines)})，可能过于空泛")
+
+    # 9. V14: 去模板化检查 — "以「」名义"句式重复>2次视为模板化
+    template_pattern = re.findall(r'以「[^」]{2,15}」(名义|身份|背景)', content)
+    if len(template_pattern) > 4:
+        warnings.append(f"⚠️ [模板化] 检测到{len(template_pattern)}次'以「XX」名义/身份'句式，落地动作可能模板化")
+
+    # 10. V14: 邪修传导链实体引用检查 — 每层是否引用了具体新闻实体
+    if chain_section:
+        chain_lines = [l.strip() for l in chain_section.split('\n') if re.match(r'^-.*第\d+层', l.strip())]
+        # 检查每层是否包含引号内容（引用具体实体）或数字
+        layers_with_detail = 0
+        for cl in chain_lines:
+            if re.search(r'[「」""]', cl) or re.search(r'\d+', cl):
+                layers_with_detail += 1
+        if len(chain_lines) >= 3 and layers_with_detail < 2:
+            warnings.append(f"⚠️ [邪修] 传导链{len(chain_lines)}层中仅{layers_with_detail}层有具体实体引用，可能过于模板化")
+
     return {
         "valid": len(errors) == 0,
         "errors": errors,
