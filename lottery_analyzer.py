@@ -418,15 +418,49 @@ def fetch_qxc_history(periods=15):
     return FALLBACK_QXC[:periods]
 
 
-def fetch_pln_history(periods=15):
-    """抓取台湾威力彩(PLN)历史数据"""
+def _fetch_gdf99(game_key, period_start, periods=15):
+    """从 gdf99.com 抓取台湾彩种数据（PLN=super, LTN=big）"""
+    results = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'zh-TW,zh;q=0.9'
+    }
+    for period_num in range(period_start, period_start - periods * 2, -1):
+        if len(results) >= periods:
+            break
+        period = str(period_num)
+        try:
+            url = f'https://gdf99.com/lottery/{game_key}/no/{period}'
+            resp = requests.get(url, timeout=15, headers=headers)
+            resp.encoding = 'utf-8'
+            text = resp.text
+            if resp.status_code != 200 or '開獎結果' not in text:
+                continue
+            balls = re.findall(r'class="[^"]*ball[^"]*"[^>]*>\s*(\d{1,2})\s*<', text)
+            if len(balls) < 7:
+                match = re.search(r'開獎結果為[「"」]?(\d{1,2})[、,](\d{1,2})[、,](\d{1,2})[、,](\d{1,2})[、,](\d{1,2})[、,](\d{1,2})', text)
+                if match:
+                    balls = list(match.groups())
+                    sp = re.search(r'特別號[「"」]?(\d{1,2})', text)
+                    if sp:
+                        balls.append(sp.group(1))
+            if len(balls) >= 7:
+                results.append({'period': period, 'balls': [int(b) for b in balls[:7]]})
+            time.sleep(0.3)
+        except Exception:
+            continue
+    return results
+
+
+def _pln_csv_fallback(periods=15):
+    """PLN CSV降级读取"""
     import csv
     try:
-        with open('data/pln_history.csv', 'r', encoding='utf-8') as f:
+        csv_path = os.path.join(os.path.dirname(__file__), 'data', 'pln_history.csv')
+        with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             result = []
             for row in reader:
-                # 兼容两种格式: num1-num6 或 numbers
                 if 'numbers' in row:
                     nums = [int(x) for x in row['numbers'].split(',')]
                 else:
@@ -439,14 +473,48 @@ def fetch_pln_history(periods=15):
             result.sort(key=lambda x: x['period'], reverse=True)
             return result[:periods]
     except Exception as e:
-        print(f"[PLN] CSV读取失败: {e}，使用空数据")
+        print(f"[PLN] CSV降级也失败: {e}")
         return []
 
-def fetch_ltn_history(periods=15):
-    """抓取台湾大乐透(LTN)历史数据"""
+
+def fetch_pln_history(periods=15):
+    """抓取台湾威力彩(PLN)历史数据 — gdf99.com联网 + CSV降级"""
+    # 1) 联网抓取 gdf99.com
+    try:
+        # 推算最新期号: 2026年从115000001开始, ~每周2期
+        # 简单起见从 115000060 往前搜(覆盖到最新)
+        now = datetime.now(timezone(timedelta(hours=8)))
+        # 2025-12-31 = 第1期, 到今天约 115000001 + (天数差/3.5)期
+        days_since_start = (now - datetime(2025, 12, 31, tzinfo=timezone(timedelta(hours=8)))).days
+        estimated_latest = 115000001 + int(days_since_start / 3.5)
+        search_start = min(estimated_latest + 5, 115000999)
+
+        raw = _fetch_gdf99('super', search_start, periods)
+        if raw and len(raw) >= 5:
+            result = []
+            for r in raw[:periods]:
+                balls = r['balls']
+                result.append({
+                    'period': r['period'],
+                    'numbers': sorted(balls[:6]),
+                    'special': balls[6]
+                })
+            print(f"[PLN] ✅ gdf99联网抓取: {len(result)}期 (最新{result[0]['period']})")
+            return result
+    except Exception as e:
+        print(f"[PLN] gdf99联网失败: {e}")
+
+    # 2) CSV降级
+    print("[PLN] ⚠️ 联网失败，降级到CSV")
+    return _pln_csv_fallback(periods)
+
+
+def _ltn_csv_fallback(periods=15):
+    """LTN CSV降级读取"""
     import csv
     try:
-        with open('data/ltn_history.csv', 'r', encoding='utf-8') as f:
+        csv_path = os.path.join(os.path.dirname(__file__), 'data', 'ltn_history.csv')
+        with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             result = []
             for row in reader:
@@ -458,8 +526,42 @@ def fetch_ltn_history(periods=15):
             result.sort(key=lambda x: x['period'], reverse=True)
             return result[:periods]
     except Exception as e:
-        print(f"[LTN] CSV读取失败: {e}，使用空数据")
+        print(f"[LTN] CSV降级也失败: {e}")
         return []
+
+
+def fetch_ltn_history(periods=15):
+    """抓取台湾大乐透(LTN)历史数据 — gdf99.com联网 + CSV降级"""
+    # 1) 联网抓取 gdf99.com
+    try:
+        now = datetime.now(timezone(timedelta(hours=8)))
+        days_since_start = (now - datetime(2025, 12, 31, tzinfo=timezone(timedelta(hours=8)))).days
+        estimated_latest = 115000001 + int(days_since_start / 3.0)
+        search_start = min(estimated_latest + 5, 115000999)
+
+        raw = _fetch_gdf99('big', search_start, periods)
+        if raw and len(raw) >= 5:
+            result = []
+            for r in raw[:periods]:
+                balls = r['balls']
+                main6 = sorted(balls[:6])
+                special = balls[6]
+                # LTN项目格式: front(5) + back(第6主号+特别号)
+                front5 = main6[:5]
+                back2 = sorted([main6[5], special])
+                result.append({
+                    'period': r['period'],
+                    'front': front5,
+                    'back': back2
+                })
+            print(f"[LTN] ✅ gdf99联网抓取: {len(result)}期 (最新{result[0]['period']})")
+            return result
+    except Exception as e:
+        print(f"[LTN] gdf99联网失败: {e}")
+
+    # 2) CSV降级
+    print("[LTN] ⚠️ 联网失败，降级到CSV")
+    return _ltn_csv_fallback(periods)
 
 def _scrapling_fallback_get(url, referer='', timeout=15):
     """🟢 v7.2: scrapling降级请求 - 当requests被封/超时时自动启用
