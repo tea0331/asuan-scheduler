@@ -54,13 +54,13 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _run_with_timeout(func, timeout=60):
-    """用subprocess执行AI调用，超时则跳过（避免线程池卡死）"""
-    import multiprocessing
-    with multiprocessing.Pool(processes=1) as pool:
-        result = pool.apply_async(func)
+    """用线程池执行func，超时则跳过（避免卡死）— V17-fix: 改用ThreadPoolExecutor"""
+    from concurrent.futures import ThreadPoolExecutor as TPE, TimeoutError as TError
+    with TPE(max_workers=1) as pool:
+        future = pool.submit(func)
         try:
-            return result.get(timeout=timeout)
-        except multiprocessing.TimeoutError:
+            return future.result(timeout=timeout)
+        except TError:
             raise TimeoutError(f"AI调用超时({timeout}秒)")
 
 
@@ -642,20 +642,34 @@ def _fetch_rss(url, count=15, timeout=12):
     """从RSS源获取新闻（V11: 修复GBK编码，超时12秒）"""
     try:
         import xml.etree.ElementTree as ET
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
-        if resp.status_code != 200:
-            logging.warning(f"[新闻] RSS下载失败({url}): HTTP {resp.status_code}")
+        import subprocess
+        # V17-fix: 用curl代替requests，确保timeout能真正生效（DNS解析也受控）
+        curl_cmd = [
+            'curl', '-s', '-L', '--max-time', str(timeout),
+            '-H', 'User-Agent: Mozilla/5.0',
+            url
+        ]
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=timeout+5)
+        if result.returncode != 0:
+            logging.warning(f"[新闻] RSS下载失败({url}): curl error {result.returncode}")
             return []
-        # 使用 resp.text (自动处理编码) 而非 resp.content (GBK等编码会报错)
+        resp_text = result.stdout
+        if not resp_text.strip():
+            logging.warning(f"[新闻] RSS下载失败({url}): 空响应")
+            return []
+        # 使用 resp_text (自动处理编码) 而非 resp.content (GBK等编码会报错)
         try:
-            root = ET.fromstring(resp.text)
+            root = ET.fromstring(resp_text)
         except ET.ParseError:
             # 某些RSS源编码特殊，尝试手动检测
             import re as _re
-            enc_match = _re.search(r'encoding=["\']([^"\']+)["\']', resp.text[:200])
+            enc_match = _re.search(r'encoding=["\']([^"\']+)["\']', resp_text[:200])
             if enc_match:
-                resp.encoding = enc_match.group(1)
-                root = ET.fromstring(resp.text)
+                enc = enc_match.group(1)
+                try:
+                    root = ET.fromstring(resp_text.encode('utf-8').decode(enc))
+                except Exception:
+                    root = ET.fromstring(resp_text)
             else:
                 raise
         results = []
@@ -672,7 +686,7 @@ def _fetch_rss(url, count=15, timeout=12):
                     'summary': summary[:200]
                 })
         return results
-    except requests.exceptions.Timeout:
+    except subprocess.TimeoutExpired:
         logging.warning(f"[新闻] RSS下载超时({url}, {timeout}秒)")
         return []
     except Exception as e:
@@ -683,16 +697,21 @@ def _fetch_rss(url, count=15, timeout=12):
 
 def _fetch_sina_finance(count=20):
     """从新浪财经JSON API抓取新闻"""
-    import json
+    import json, subprocess
     url = 'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k=&num=' + str(count) + '&r=0.1'
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        if resp.status_code != 200:
+        curl_cmd = [
+            'curl', '-s', '-L', '--max-time', '12',
+            '-H', 'User-Agent: Mozilla/5.0',
+            url
+        ]
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
             return []
-        data = json.loads(resp.text)
+        data = json.loads(result.stdout)
         items = []
-        result = data.get('result', {})
-        news_list = result.get('data', [])
+        result_data = data.get('result', {})
+        news_list = result_data.get('data', [])
         for n in news_list:
             title = n.get('title', '') or n.get('intro', '')
             if title and len(title) > 5:
@@ -704,6 +723,9 @@ def _fetch_sina_finance(count=20):
                     'score': 5,  # 默认分
                 })
         return items[:count]
+    except subprocess.TimeoutExpired:
+        logging.warning("[新闻] 新浪财经抓取超时")
+        return []
     except Exception as e:
         logging.warning(f"[新闻] 新浪财经抓取失败: {e}")
         return []
@@ -781,84 +803,91 @@ def _fetch_baidu_taiwan_news(count=10):
 
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
-    RSS_SOURCES = {
-    # 大陆科技/商业
-    '36氪': 'https://36kr.com/feed',
-    '36氪快讯': 'https://36kr.com/feed-newsflash',
-    '虎嗅': 'https://www.huxiu.com/rss/0.xml',
-    '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    '创业邦': 'https://www.cyzone.cn/rss/',
-    # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
-    '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
-    '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
-    '工商时报': 'https://ctee.com.tw/rss',
-    '联合财经': 'https://udn.com/rssfeed/news/2/6642',
-}
-
-    all_raw = []
-    source_stats = {}
-    with ThreadPoolExecutor(max_workers=12) as pool:
-        rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
-        hot_future = pool.submit(_fetch_baidu_hot, 20)
-
-        for name, future in rss_futures.items():
-            try:
-                raw = future.result(timeout=15)
-                all_raw.extend(raw)
-                source_stats[name] = len(raw)
-            except Exception:
-                source_stats[name] = 0
-
-        try:
-            hot_raw = hot_future.result(timeout=15)
-            all_raw.extend(hot_raw)
-            source_stats['百度热搜'] = len(hot_raw)
-        except Exception:
-            source_stats['百度热搜'] = 0
-
-    # 新浪财经 (JSON API, 非RSS)
+    import socket
+    # V17-fix: DNS解析本身没有timeout，设置全局socket超时防止线程永久阻塞
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(10)
     try:
-        sina_items = _fetch_sina_finance(20)
-        all_raw.extend(sina_items)
-        source_stats['新浪财经'] = len(sina_items)
-    except Exception:
-        source_stats['新浪财经'] = 0
+        RSS_SOURCES = {
+        # 大陆科技/商业
+        '36氪': 'https://36kr.com/feed',
+        '36氪快讯': 'https://36kr.com/feed-newsflash',
+        '虎嗅': 'https://www.huxiu.com/rss/0.xml',
+        '钛媒体': 'https://www.tmtpost.com/rss.xml',
+        '创业邦': 'https://www.cyzone.cn/rss/',
+        # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
+        '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
+        '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
+        '工商时报': 'https://ctee.com.tw/rss',
+        '联合财经': 'https://udn.com/rssfeed/news/2/6642',
+        }
 
-    # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
-    taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
-    taiwan_ok = any(source_stats.get(s, 0) > 0 for s in taiwan_sources)
-    if not taiwan_ok:
-        logging.warning("[新闻] 台湾RSS源全部失败，启动百度台湾搜索补源")
+        all_raw = []
+        source_stats = {}
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
+            hot_future = pool.submit(_fetch_baidu_hot, 20)
+
+            for name, future in rss_futures.items():
+                try:
+                    raw = future.result(timeout=15)
+                    all_raw.extend(raw)
+                    source_stats[name] = len(raw)
+                except Exception:
+                    source_stats[name] = 0
+
+            try:
+                hot_raw = hot_future.result(timeout=15)
+                all_raw.extend(hot_raw)
+                source_stats['百度热搜'] = len(hot_raw)
+            except Exception:
+                source_stats['百度热搜'] = 0
+
+        # 新浪财经 (JSON API, 非RSS)
         try:
-            taiwan_baidu = _fetch_baidu_taiwan_news(10)
-            all_raw.extend(taiwan_baidu)
-            source_stats['百度台湾搜索'] = len(taiwan_baidu)
-            logging.info(f"[新闻] 百度台湾搜索补充: {len(taiwan_baidu)}条")
-        except Exception as e:
-            source_stats['百度台湾搜索'] = 0
-            logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
+            sina_items = _fetch_sina_finance(20)
+            all_raw.extend(sina_items)
+            source_stats['新浪财经'] = len(sina_items)
+        except Exception:
+            source_stats['新浪财经'] = 0
 
-    # V17: 统一解码HTML实体 (&ldquo; &rdquo; &middot; 等)
-    import html as html_mod
-    for item in all_raw:
-        if 'title' in item:
-            item['title'] = html_mod.unescape(item['title'])
+        # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
+        taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
+        taiwan_ok = any(source_stats.get(s, 0) > 0 for s in taiwan_sources)
+        if not taiwan_ok:
+            logging.warning("[新闻] 台湾RSS源全部失败，启动百度台湾搜索补源")
+            try:
+                taiwan_baidu = _fetch_baidu_taiwan_news(10)
+                all_raw.extend(taiwan_baidu)
+                source_stats['百度台湾搜索'] = len(taiwan_baidu)
+                logging.info(f"[新闻] 百度台湾搜索补充: {len(taiwan_baidu)}条")
+            except Exception as e:
+                source_stats['百度台湾搜索'] = 0
+                logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
 
-    logging.info(f"[新闻] 抓取完成: {source_stats}, 共{len(all_raw)}条")
-    return all_raw, source_stats
+        # V17: 统一解码HTML实体 (&ldquo; &rdquo; &middot; 等)
+        import html as html_mod
+        for item in all_raw:
+            if 'title' in item:
+                item['title'] = html_mod.unescape(item['title'])
+
+        logging.info(f"[新闻] 抓取完成: {source_stats}, 共{len(all_raw)}条")
+        return all_raw, source_stats
+    finally:
+        socket.setdefaulttimeout(old_timeout)  # 恢复原始设置
 
 
 # ============================================================
 # AI调用
 # ============================================================
 def _call_hunyuan_api(system_msg, user_msg, timeout=90):
-    """调用混元API，单次调用带timeout"""
-    api_key = os.getenv('HUNYUAN_API_KEY', '[HUNYUAN_API_KEY]')
+    """调用混元API，单次调用带timeout — V17-fix: 用curl代替requests"""
+    import json, subprocess
+    api_key = os.getenv('HUNYUAN_API_KEY')
+    if not api_key:
+        logging.warning('[AI] HUNYUAN_API_KEY 未设置，AI调用将失败')
+        return None
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
     payload = {
         "model": "hunyuan-turbos-latest",
         "messages": [
@@ -868,12 +897,30 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
         "max_tokens": 6000,
         "temperature": 0.75,
     }
+    payload_json = json.dumps(payload, ensure_ascii=False)
 
+    # 构造curl命令，用--max-time控制总超时
+    curl_cmd = [
+        'curl', '-s', '-L',
+        '--max-time', str(timeout),
+        '-X', 'POST',
+        '-H', f'Authorization: Bearer {api_key}',
+        '-H', 'Content-Type: application/json',
+        '-d', payload_json,
+        url
+    ]
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            result = resp.json()
-            content = result['choices'][0]['message']['content']
+        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=timeout+10)
+        if result.returncode != 0:
+            logging.warning(f"[AI] 混元API curl error {result.returncode}: {result.stderr[:100]}")
+            return None
+        resp_text = result.stdout
+        if not resp_text.strip():
+            logging.warning("[AI] 混元API返回空响应")
+            return None
+        resp = json.loads(resp_text)
+        if 'choices' in resp and len(resp['choices']) > 0:
+            content = resp['choices'][0]['message']['content']
             content = content.strip()
             # 清理markdown代码块包裹
             if content.startswith('```markdown'):
@@ -883,20 +930,26 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
             if content.endswith('```'):
                 content = content[:-3]
             return content.strip()
-        elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
-            logging.warning("[AI] 混元API限流，等待5秒重试...")
-            import time; time.sleep(5)
-            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-            if resp.status_code == 200:
-                result = resp.json()
-                return result['choices'][0]['message']['content'].strip()
+        elif resp.get('error'):
+            err = resp['error']
+            if isinstance(err, dict):
+                err_msg = err.get('message', '')
             else:
-                logging.warning(f"[AI] 重试仍失败: {resp.status_code}")
-                return None
-        else:
-            logging.warning(f"[AI] 混元API失败: {resp.status_code} {resp.text[:200]}")
+                err_msg = str(err)
+            if 'rate_limit' in err_msg.lower() or '429' in str(resp.get('status')):
+                logging.warning("[AI] 混元API限流，等待5秒重试...")
+                import time; time.sleep(5)
+                result2 = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=timeout+10)
+                if result2.returncode == 0:
+                    resp2 = json.loads(result2.stdout)
+                    if 'choices' in resp2:
+                        return resp2['choices'][0]['message']['content'].strip()
+            logging.warning(f"[AI] 混元API错误: {err_msg[:200]}")
             return None
-    except requests.exceptions.Timeout:
+        else:
+            logging.warning(f"[AI] 混元API返回异常: {resp_text[:200]}")
+            return None
+    except subprocess.TimeoutExpired:
         logging.warning(f"[AI] 混元API超时({timeout}秒)")
         return None
     except Exception as e:
@@ -1138,8 +1191,8 @@ def _infer_signal(title):
     import re
     title_lower = title.lower()
     entity = _extract_entity(title)
-    # V17: 实体名最长8字，去掉介词前缀
-    ent_raw = entity[:8] if len(entity) > 8 else entity
+    # V17: 实体名最长12字，去掉介词前缀
+    ent_raw = entity[:12] if len(entity) > 12 else entity
     ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('？?！!。、')
 
     # 用标题hash做轮选种子，同一批新闻不会重复
@@ -1310,7 +1363,7 @@ def _validate_signal(signal, title, existing_signals=None):
     """
     import re
     entity = _extract_entity(title)
-    ent_short = entity[:8] if len(entity) > 8 else entity
+    ent_short = entity[:12] if len(entity) > 12 else entity
 
     # 检查1: 落地动作是否引用了新闻实体
     if ent_short and len(ent_short) >= 2 and ent_short not in signal:
@@ -1454,8 +1507,8 @@ def _fallback_contra_tide(top_items):
 
     title = best.get('title', '')
     entity = _extract_entity(title)
-    # V17: 实体名最长8字，去掉介词前缀
-    ent_raw = entity[:8] if len(entity) > 8 else entity
+    # V17: 实体名最长12字，去掉介词前缀
+    ent_raw = entity[:12] if len(entity) > 12 else entity
     ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('？?！!。、')
     title_lower = title.lower()
 
@@ -1563,8 +1616,8 @@ def _fallback_deep_chain(top_items):
     title_lower = title.lower()
     source = best.get('source', '')
     entity = _extract_entity(title)
-    # V17: 实体名最长8字，去掉介词前缀
-    ent_raw = entity[:8] if len(entity) > 8 else entity
+    # V17: 实体名最长12字，去掉介词前缀
+    ent_raw = entity[:12] if len(entity) > 12 else entity
     ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw)
 
     # 从辅助新闻提取实体
@@ -1729,8 +1782,8 @@ def _fallback_pitfall(top_items):
             break
         title = item.get('title', '')
         entity = _extract_entity(title)
-        # V17: 实体名最长8字，去掉介词前缀
-        ent_raw = entity[:8] if len(entity) > 8 else entity
+        # V17: 实体名最长12字，去掉介词前缀
+        ent_raw = entity[:12] if len(entity) > 12 else entity
         ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw)
         title_lower = title.lower()
 
