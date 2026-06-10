@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""生成完整日报 V6 — 6板块齐全 + 邪修进化引擎
+"""生成完整日报 V6 - 6板块齐全 + 邪修进化引擎
 
 V6 核心升级:
   1. AI一次生成全部6板块(不是只生成板块一)
-  2. 降级也有6板块(关键词推断，不是空壳占位)
+  2. 降级也有6板块(关键词推断,不是空壳占位)
   3. 邪修进化: 传导链记忆 + 缺口信号匹配 + 逆潮模式库
   4. 板块完整性守护: 发送前自动验证
 
@@ -27,6 +27,13 @@ from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import requests
+
+# V17-fix: 加载 .env 文件支持
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 # ============================================================
@@ -54,7 +61,7 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _run_with_timeout(func, timeout=60):
-    """用线程池执行func，超时则跳过（避免卡死）— V17-fix: 改用ThreadPoolExecutor"""
+    """用线程池执行func,超时则跳过(避免卡死)- V17-fix: 改用ThreadPoolExecutor"""
     from concurrent.futures import ThreadPoolExecutor as TPE, TimeoutError as TError
     with TPE(max_workers=1) as pool:
         future = pool.submit(func)
@@ -82,7 +89,7 @@ USER_PROFILE_V7 = {
     '人工智能': 4, '大模型': 4, 'DeepSeek': 4,
     'GPT': 3, 'Claude': 3, 'AGI': 3, 'LLM': 3, '开源模型': 3,
     'AI应用': 3, 'AI Agent': 3, '智能体': 3, '自动化': 2,
-    # V14: AI关键词单独处理(词边界匹配)，不放在USER_PROFILE_V7中
+    # V14: AI关键词单独处理(词边界匹配),不放在USER_PROFILE_V7中
     # ====== 算力/芯片 ======
     '算力': 4, 'GPU': 4, '英伟达': 3, 'NVIDIA': 3, '黄仁勋': 2,
     '芯片': 3, '半导体': 3, '台积电': 3, '光刻': 2, '晶圆': 2,
@@ -101,13 +108,13 @@ USER_PROFILE_V7 = {
     '政策': 4, '补贴': 3, '免税': 3, '减税': 2, '新规': 4,
     '央行': 4, '降息': 4, '加息': 4, '流动性': 3,
     '裁员': 2, '亏损': 3, '逆势': 3, '关停': 4,
-    # ====== 科技/产业（调整） ======
+    # ====== 科技/产业(调整) ======
     '手机': 1, '华为': 2, '小米': 1, '苹果': 1,
     '机器人': 3, '无人驾驶': 2, '自动驾驶': 2,
     '5G': 1, '通信': 1, '数字化': 1,
     '腾讯': 4, '互联网大厂': 3, '平台经济': 3, '社交电商': 3,
 
-    # ====== V7新增: 台湾/两岸套利（刘老板专属战场） ======
+    # ====== V7新增: 台湾/两岸套利(刘老板专属战场) ======
     # 5分: 直接可操作窗口; 4分: 强关联信号; 3分: 背景关注
     '台湾': 5, '台北': 4, '高雄': 3, '台中': 3, '台南': 3,
     '两岸': 5, '台海': 4, '陆资': 4, '台资': 3, '台商': 4,
@@ -123,49 +130,49 @@ USER_PROFILE_V7 = {
     '信仰经济': 4, '供奉品': 3, '线上供养': 4,
     '刘海蟾': 5, '金蟾': 3, '财神爷': 4, '线上法会': 4,
 
-    # ====== V7修正: 彩票/博彩产业（从-2→+5） ======
+    # ====== V7修正: 彩票/博彩产业(从-2→+5) ======
     # 5分: 核心操作项目; 4分: 强关联; 3分: 背景关注
     '彩票': 4, '博彩': 3, '彩券': 4, '威力彩': 5, '大乐透': 4,
     '公益彩券': 3, '台彩': 5, '中国体育彩票': 3, '双色球': 3,
     '七星彩': 3, '乐透': 3, '刮刮乐': 2, '派彩': 3,
     '台彩公司': 4, '彩券商': 4, '彩票经销': 4, '运动彩券': 3,
 
-    # ====== 负面: 不感兴趣（保持不变） ======
+    # ====== 负面: 不感兴趣(保持不变) ======
     '明星': -3, '综艺': -3, '恋情': -3, '离婚': -3, '出轨': -3,
     '八卦': -4, '饭圈': -4, '偶像': -3, '选秀': -3, '粉丝': -2,
     '娱乐圈': -4, '网红': -2, '直播带货': -1,
     '体育': -1, '足球': -1, '篮球': -1, 'NBA': -1, '世界杯': -1,
-    '赌博': -3,  # 赌博仍然负面，彩票已单独提升
+    '赌博': -3,  # 赌博仍然负面,彩票已单独提升
     '剧情': -2, '电视剧': -2, '电影': -1, '追剧': -2,
     '减肥': -1, '美容': -1, '美妆': -1,
 }
 
 
 def score_news(item):
-    """根据用户画像给新闻打分 — V14: AI使用词边界匹配防止子串误匹配"""
+    """根据用户画像给新闻打分 - V14: AI使用词边界匹配防止子串误匹配"""
     import re
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
     score = 0
     for keyword, weight in USER_PROFILE_V7.items():
         if keyword.lower() in text:
             score += weight
-    # V14: "AI" 独立词边界匹配 — 防止 "Thailand"/"Airlines" 等误匹配
+    # V14: "AI" 独立词边界匹配 - 防止 "Thailand"/"Airlines" 等误匹配
     if re.search(r'\bai\b', text):
         score += 4
     return score
 
 
 def score_news_with_scene(item):
-    """画像打分 + 场景加权（V8新增）
-    
+    """画像打分 + 场景加权(V8新增)
+
     场景加权规则:
-    - 台湾相关 +5（人在台湾，可实地操作）
-    - 200-300万操作级别 +3（资金匹配）
-    - 灰色/套利/价差/监管差 +3（邪修偏好）
-    - 大陆餐饮/加盟 +2（餐饮出海关联）
-    - 信仰/庙宇/法会 +3（赵公明项目关联）
-    - 彩票/台彩 +3（刘海蟾点金核心业务）
-    - 小额/轻资产/中间人 +3（刘老板操作偏好）
+    - 台湾相关 +5(人在台湾,可实地操作)
+    - 200-300万操作级别 +3(资金匹配)
+    - 灰色/套利/价差/监管差 +3(邪修偏好)
+    - 大陆餐饮/加盟 +2(餐饮出海关联)
+    - 信仰/庙宇/法会 +3(赵公明项目关联)
+    - 彩票/台彩 +3(刘海蟾点金核心业务)
+    - 小额/轻资产/中间人 +3(刘老板操作偏好)
     """
     base_score = score_news(item)
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
@@ -179,7 +186,7 @@ def score_news_with_scene(item):
     if any(kw in text for kw in ['台湾', '台北', '高雄', '台中', '台南', '两岸', '台商']):
         scene_bonus += 5
 
-    # 资金匹配（200-300万级别）
+    # 资金匹配(200-300万级别)
     if any(kw in text for kw in ['百万', '200万', '300万', '小额', '试水', '轻资产']):
         scene_bonus += 3
 
@@ -197,7 +204,7 @@ def score_news_with_scene(item):
                                    '经销', '派彩']):
         scene_bonus += 3
 
-    # 操作偏好（小额/轻资产/中间人模式）
+    # 操作偏好(小额/轻资产/中间人模式)
     if any(kw in text for kw in ['小额', '试水', '中间人', '撮合', '代理', '服务费',
                                    '信息费', '抽成', '流水']):
         scene_bonus += 3
@@ -206,7 +213,7 @@ def score_news_with_scene(item):
 
 
 def filter_by_profile(news_list, min_score=0, top_n=None):
-    """过滤+排序: 删负分，按画像得分降序"""
+    """过滤+排序: 删负分,按画像得分降序"""
     filtered = [n for n in news_list if score_news_with_scene(n) >= min_score]
     filtered.sort(key=score_news_with_scene, reverse=True)
     if top_n:
@@ -215,7 +222,7 @@ def filter_by_profile(news_list, min_score=0, top_n=None):
 
 
 # ============================================================
-# V9 领域配额制 — 保证刘老板每个关注领域都有新闻
+# V9 领域配额制 - 保证刘老板每个关注领域都有新闻
 # ============================================================
 # 领域定义: (领域名, [匹配关键词], 最低条数)
 LIU_DOMAINS = [
@@ -229,36 +236,36 @@ LIU_DOMAINS = [
 
 
 def _classify_news(item):
-    """V14: 将新闻归类到刘老板关注领域，支持多标签（一条新闻可属多个领域）
-    返回: list[str] — 领域名列表（可能包含多个）"""
+    """V14: 将新闻归类到刘老板关注领域,支持多标签(一条新闻可属多个领域)
+    返回: list[str] - 领域名列表(可能包含多个)"""
     import re
     text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
     source = item.get('source', '')
     domains = []
 
-    # 第一步: 台湾来源直接标记"台湾/两岸"（V14: 最优先，不再跳过）
+    # 第一步: 台湾来源直接标记"台湾/两岸"(V14: 最优先,不再跳过)
     is_taiwan_source = source in ['中央社', '经济日报', '工商时报', '联合财经']
     has_taiwan_kw = any(kw.lower() in text for kw in LIU_DOMAINS[0][1])
     if is_taiwan_source or has_taiwan_kw:
         domains.append('台湾/两岸')
 
-    # 第二步: 检查其他领域关键词（一条新闻可同时属于多个领域）
+    # 第二步: 检查其他领域关键词(一条新闻可同时属于多个领域)
     for domain_name, keywords, _ in LIU_DOMAINS:
         if domain_name == '台湾/两岸':
             continue  # 已经处理过
         if any(kw.lower() in text for kw in keywords):
             domains.append(domain_name)
 
-    # 第三步: AI 词边界匹配（防止 "Thailand"/"Airlines" 误分类）
+    # 第三步: AI 词边界匹配(防止 "Thailand"/"Airlines" 误分类)
     if 'AI/算力' not in domains and re.search(r'\bai\b', text):
-        # 还需验证是否真的与AI相关（检查其他AI相关词）
+        # 还需验证是否真的与AI相关(检查其他AI相关词)
         ai_confirm = any(kw.lower() in text for kw in
                          ['人工智能', '大模型', '算力', 'gpu', '英伟达', 'nvidia', 'deepseek',
                           'llm', 'agi', '芯片', '半导体', 'gpt', 'claude', '智能体'])
         if ai_confirm:
             domains.append('AI/算力')
 
-    # 台湾来源中，AI相关新闻同时属于"台湾/两岸"和"AI/算力"
+    # 台湾来源中,AI相关新闻同时属于"台湾/两岸"和"AI/算力"
     if is_taiwan_source and 'AI/算力' not in domains:
         if any(kw in text for kw in ['科技', 'ai', '芯片', '半导体', '台积电']):  # V14: 'ai'小写
             domains.append('AI/算力')
@@ -267,13 +274,13 @@ def _classify_news(item):
 
 
 def filter_by_domain_quota(news_items, total=20):
-    """V14: 领域配额过滤 — 支持多标签分类，每条新闻可同时属于多个领域
-    
+    """V14: 领域配额过滤 - 支持多标签分类,每条新闻可同时属于多个领域
+
     改进:
-    1. 一条新闻可同时计入多个领域的配额（多标签）
-    2. 台湾/两岸配额优先级最高，不再被其他领域挤占
-    3. 去重key从title[:30]改为title[:60]，防止英文标题误删
-    
+    1. 一条新闻可同时计入多个领域的配额(多标签)
+    2. 台湾/两岸配额优先级最高,不再被其他领域挤占
+    3. 去重key从title[:30]改为title[:60],防止英文标题误删
+
     Returns: top_items list, domain_stats dict
     """
     # 打分并排序
@@ -281,7 +288,7 @@ def filter_by_domain_quota(news_items, total=20):
     filtered = [(item, sc) for item, sc in scored if sc >= 1]
     filtered.sort(key=lambda x: x[1], reverse=True)
 
-    # 分类 — V14: 多标签，一条新闻可属于多个领域
+    # 分类 - V14: 多标签,一条新闻可属于多个领域
     item_domains = {}  # title_key -> list[domain_name]
     assigned_titles = set()
 
@@ -293,7 +300,7 @@ def filter_by_domain_quota(news_items, total=20):
         item_domains[title_key] = domains if domains else ['其他']
         assigned_titles.add(title_key)
 
-    # 各领域保底配额 — V14: 一条新闻可同时计入多个领域
+    # 各领域保底配额 - V14: 一条新闻可同时计入多个领域
     result = []
     used_titles = set()
     domain_stats = {}
@@ -307,7 +314,7 @@ def filter_by_domain_quota(news_items, total=20):
             title_key = item['title'][:60]
             if title_key in used_titles:
                 continue
-            # V14: 这条新闻属于当前领域（多标签中包含即可）
+            # V14: 这条新闻属于当前领域(多标签中包含即可)
             if domain_name in item_domains.get(title_key, []):
                 result.append(item)
                 used_titles.add(title_key)
@@ -318,7 +325,7 @@ def filter_by_domain_quota(news_items, total=20):
                         domain_filled[d] += 1
         domain_stats[domain_name] = taken
 
-    # 剩余位置按全局分竞争（不限领域，包含"其他"类）
+    # 剩余位置按全局分竞争(不限领域,包含"其他"类)
     for item, score in filtered:
         if len(result) >= total:
             break
@@ -333,7 +340,7 @@ XIE_XIU_MEMORY_PATH = os.path.join(MODULE_DIR, 'xie_xiu_memory.json')
 
 # 传导链模板库: 从信号到终端的完整路径
 CHAIN_TEMPLATES = [
-    # ====== 通用大宗/科技传导链（保留，调整为9条） ======
+    # ====== 通用大宗/科技传导链(保留,调整为9条) ======
     {'trigger': ['铜价', '铜', '铜矿'], 'chain': ['铜矿减产/涨价', '冶炼加工费压缩', 'PCB/电机成本上升', '电动车/家电涨价', '替代材料(铝)需求增'], 'gap': '铜铝价差套利/废铜回收/台湾冶炼厂中间人', 'tide': '铜价涨→大家看空需求→实际中国基建托底'},
     {'trigger': ['AI', '算力', 'GPU', '英伟达'], 'chain': ['大模型训练需求爆发', 'GPU/HBM供不应求', '散热/电源/PCB配套涨', '数据中心建设加速', '电力消耗激增→核电/绿电'], 'gap': '算力中间商/散热材料/数据中心电力', 'tide': 'AI概念过热→短期回调→但算力需求是实打实的'},
     {'trigger': ['锂价', '电池', '新能源'], 'chain': ['锂价暴跌/暴涨', '电池成本变化', '电动车定价策略', '传统车企转型压力', '充电桩/储能配套'], 'gap': '锂价波动对冲/电池回收/储能系统集成', 'tide': '锂价跌→短期看空→但储能需求是新增量'},
@@ -348,13 +355,13 @@ CHAIN_TEMPLATES = [
     {'trigger': ['台湾', '两岸', '小三通', '金门', '台海'],
      'chain': ['两岸政策松动/收紧', '小三通/直航流量变化', '金门中转仓储角色', '台商资金流调整', '大陆商品→台湾渠道重组或台湾→大陆反套利'],
      'gap': '两岸小额贸易中间人/跨境支付渠道/金门仓储中转/台币人民币汇差套利',
-     'tide': '政策收紧→短期恐慌→但民间灰色渠道利润更高；政策宽松→表面利好→但竞争加剧'},
+     'tide': '政策收紧→短期恐慌→但民间灰色渠道利润更高;政策宽松→表面利好→但竞争加剧'},
 
     # 链10: 信仰经济变现
     {'trigger': ['线上庙宇', '信仰经济', '供奉', '开光', '法会', '财神', '赵公明'],
-     'chain': ['线上信仰服务平台涌现', '用户付费意愿验证（ARPU高得惊人）', '平台抽成/佣金/会员模式', '线下寺庙被迫数字化', '信仰+电商/直播/AI开光新形态'],
+     'chain': ['线上信仰服务平台涌现', '用户付费意愿验证(ARPU高得惊人)', '平台抽成/佣金/会员模式', '线下寺庙被迫数字化', '信仰+电商/直播/AI开光新形态'],
      'gap': '线上供养平台代运营/庙宇数字化SaaS/信仰商品供应链/AI法会技术输出',
-     'tide': '线上信仰→被看作小众→但复购率和客单价远超预期，沉默的百亿市场'},
+     'tide': '线上信仰→被看作小众→但复购率和客单价远超预期,沉默的百亿市场'},
 
     # 链14: 彩票产业套利
     {'trigger': ['彩票', '彩券', '威力彩', '大乐透', '台彩', '公益彩券'],
@@ -365,34 +372,34 @@ CHAIN_TEMPLATES = [
 
 # 逆潮模式库: 市场共识 vs 逆向可能
 CONTRA_TIDE_PATTERNS = [
-    {'consensus': '涨', 'reverse': '跌', 'logic': '涨过头必有回调，关注库存积压信号'},
-    {'consensus': '跌', 'reverse': '涨', 'logic': '恐慌出清后供给收缩，关注减产信号'},
+    {'consensus': '涨', 'reverse': '跌', 'logic': '涨过头必有回调,关注库存积压信号'},
+    {'consensus': '跌', 'reverse': '涨', 'logic': '恐慌出清后供给收缩,关注减产信号'},
     {'consensus': '政策利好', 'reverse': '执行打折', 'logic': '政策从发文到落地有时间差和执行衰减'},
-    {'consensus': '产能过剩', 'reverse': '龙头垄断', 'logic': '过剩淘汰小厂，龙头市占率反升'},
+    {'consensus': '产能过剩', 'reverse': '龙头垄断', 'logic': '过剩淘汰小厂,龙头市占率反升'},
     {'consensus': '技术突破', 'reverse': '商业化迟缓', 'logic': '实验室到量产有3-5年鸿沟'},
     {'consensus': '需求萎缩', 'reverse': '替代需求', 'logic': '旧需求萎缩常伴随新需求爆发'},
 ]
 
 # ============================================================
-# V8 灰色操作引擎 — 代码层生成，不受AI安全策略限制
+# V8 灰色操作引擎 - 代码层生成,不受AI安全策略限制
 # 每张操作卡 = 独立可执行的最小灰色动作单元
 # 格式: (触发词, 操作名, 找谁, 怎么说, 资金路径, 试水金额, 撤退信号)
 # ============================================================
 GRAY_OPS_PLAYBOOK = [
     # 两岸套利
     {'kw': ['台湾', '两岸', '小三通', '金门'], 'ops': [
-        ("小三通散货拼柜", "金门/厦门民间货代", "以'代购集运'名义谈合作，每公斤收15-30元服务费",
-         "大陆→金门→台湾散件不报关，单批货值控制在2万台币内",
+        ("小三通散货拼柜", "金门/厦门民间货代", "以'代购集运'名义谈合作,每公斤收15-30元服务费",
+         "大陆→金门→台湾散件不报关,单批货值控制在2万台币内",
          "试水2000元", "任一端口海关严查或金门中转仓被抄"),
-        ("台币人民币对敲", "台湾银楼/大陆兑换商", "以'代付货款'名目谈，每笔收0.3-0.5%手续费",
-         "A台付台币→B陆付人民币，微信/支付宝私账，不走银行",
+        ("台币人民币对敲", "台湾银楼/大陆兑换商", "以'代付货款'名目谈,每笔收0.3-0.5%手续费",
+         "A台付台币→B陆付人民币,微信/支付宝私账,不走银行",
          "试水10万台币", "反洗钱新规要求单笔5万以上报备"),
     ]},
     # 信仰经济
     {'kw': ['庙宇', '供奉', '开光', '法会', '线上', '信仰', '财神', '赵公明'], 'ops': [
         ("线上供养平台代运营", "有线上化需求的线下庙宇", "以'数字化服务商'名义谈→收年费2-5万+供养品代销抽20%",
          "科技公司主体签服务合同→不碰宗教经营→只做技术和电商→赵公明庙宇已有基础",
-         "试水5-10万", "宗教政策收紧→停新拓只做存量；复购率低→3月验证后评估"),
+         "试水5-10万", "宗教政策收紧→停新拓只做存量;复购率低→3月验证后评估"),
         ("AI法会/开光SaaS", "寺庙/道观/民间信仰组织", "以'科技赋能传统信仰'名义→AI法会直播+线上开光预约→抽流水5%",
          "搭建SaaS→庙宇入驻→信众预约→你抽技术服务费",
          "试水5-10万", "合规风险→定位'技术服务'非'宗教服务'"),
@@ -401,7 +408,7 @@ GRAY_OPS_PLAYBOOK = [
     {'kw': ['彩票', '彩券', '台彩', '威力彩', '大乐透', '公益彩券'], 'ops': [
         ("线上合买社群抽水", "台湾彩票玩家/LINE群主", "以'好友集资合买'名义建LINE群→每期组织合买→收5%服务费",
          "群主发起合买方案→群友跟单→中奖按比例分→你抽管理费",
-         "试水5千台币", "台彩明文禁止→改名'集资'；被举报→解散换群"),
+         "试水5千台币", "台彩明文禁止→改名'集资';被举报→解散换群"),
         ("台彩经销权中间撮合", "想转让的台彩经销商", "以'朋友介绍'名义联系→收转让价5-10%介绍费",
          "买方付卖方→你收现金介绍费→不签合同不留痕迹",
          "试水1单", "台彩禁止私下转让→转'承包经营'名目"),
@@ -410,49 +417,49 @@ GRAY_OPS_PLAYBOOK = [
     {'kw': ['涨价', '缺货', '断供', '减产', '铜', '铝', '钢', '硫酸', '锂'], 'ops': [
         ("供需断裂中间撮合", "有货没渠道的供应商+缺货的买家", "以'行业资源对接'名义介绍→成交收1-3%撮合费→你不签合同不碰货",
          "拿供应商报价→加1-3%报买方→双方直接交易→你收撮合费现金",
-         "试水1单3千-1万", "买卖双方跳过你→换下一对；一方违约→你是介绍人免责"),
+         "试水1单3千-1万", "买卖双方跳过你→换下一对;一方违约→你是介绍人免责"),
     ]},
     # 汇率/资金套利
     {'kw': ['汇率', '人民币', '新台币', '降息', '加息', '流动性'], 'ops': [
         ("两岸利率差套利", "台湾银行+大陆银行", "利用两岸定存利差→台币定存利率高于人民币→低息借人民币→换台币存高息",
          "大陆低息借款(3-4%)→换台币→存台湾定存(5-6%)→锁汇对冲风险",
-         "试水50万", "汇率反向波动超2%→立刻平仓；两岸资金管制→走合规QDII"),
+         "试水50万", "汇率反向波动超2%→立刻平仓;两岸资金管制→走合规QDII"),
     ]},
 ]
 
 
 def _match_gray_ops(news_items, gap_keywords):
-    """根据缺口关键词匹配灰色操作卡，返回匹配结果列表"""
+    """根据缺口关键词匹配灰色操作卡,返回匹配结果列表"""
     all_kw = ' '.join([item.get('title', '') for item in news_items[:10]])
     all_kw += ' ' + ' '.join(gap_keywords.keys()) if gap_keywords else ''
-    
+
     matched_ops = []
     for playbook in GRAY_OPS_PLAYBOOK:
         hit = sum(1 for kw in playbook['kw'] if kw in all_kw)
         if hit > 0:
             matched_ops.append({**playbook, 'hit': hit})
-    
+
     matched_ops.sort(key=lambda x: x['hit'], reverse=True)
     return matched_ops[:3]  # 最多3组
 
 
 def _inject_gray_ops_to_content(content, top_items):
-    """V14: 强制接管缺口板块 — AI输出全部丢弃，代码全量生成
-    改进: 操作卡附带新闻引用，标记冷热度"""
+    """V14: 强制接管缺口板块 - AI输出全部丢弃,代码全量生成
+    改进: 操作卡附带新闻引用,标记冷热度"""
 
     gap_header = "## 二、市场/中间人缺口扫描"
 
     # 用代码生成完整的缺口板块
     code_gap = _fallback_gap_scan(top_items)
 
-    # V14: 追加灰色操作卡（附带新闻引用和热度标记）
+    # V14: 追加灰色操作卡(附带新闻引用和热度标记)
     all_titles = ' '.join([item.get('title', '') for item in top_items[:10]])
 
     # 匹配操作卡
     matched_ops = _match_gray_ops(top_items, {})
     if matched_ops:
-        code_gap += "\n\n### 🔥 灰色操作卡（今日匹配）\n"
-        code_gap += "> 以下操作卡基于今日新闻信号匹配，🔥=当日热点 / 📦=储备待命:\n\n"
+        code_gap += "\n\n### 🔥 灰色操作卡(今日匹配)\n"
+        code_gap += "> 以下操作卡基于今日新闻信号匹配,🔥=当日热点 / 📦=储备待命:\n\n"
         for ops_group in matched_ops:
             # 检查触发词是否在当日新闻中
             is_hot = any(kw in all_titles for kw in ops_group['kw'])
@@ -502,7 +509,7 @@ def _inject_gray_ops_to_content(content, top_items):
 
 
 def _load_xie_xiu_memory():
-    """加载邪修记忆库（冷启动自动初始化）"""
+    """加载邪修记忆库(冷启动自动初始化)"""
     if os.path.exists(XIE_XIU_MEMORY_PATH):
         try:
             with open(XIE_XIU_MEMORY_PATH, 'r', encoding='utf-8') as f:
@@ -518,9 +525,9 @@ def _load_xie_xiu_memory():
             {'date': '2026-06-02', 'trigger': '系统冷启动', 'chain': '初始化→画像V7→台湾切入→邪修专属战场→每日进化'},
         ],
         'quotes': [
-            "邪修之道：在有余和不足之间收过路费",
-            "天之道损有余补不足，邪修之道损有余为己用",
-            "所有人看新闻，邪修看新闻背后的钱流",
+            "邪修之道:在有余和不足之间收过路费",
+            "天之道损有余补不足,邪修之道损有余为己用",
+            "所有人看新闻,邪修看新闻背后的钱流",
         ],
         'validated_patterns': [],
     }
@@ -540,7 +547,7 @@ def _save_xie_xiu_memory(memory):
 
 
 def _match_chains(news_items):
-    """从新闻中匹配传导链模板，返回相关传导链上下文"""
+    """从新闻中匹配传导链模板,返回相关传导链上下文"""
     all_text = ' '.join([item.get('title', '') for item in news_items[:20]])
     matched = []
     for template in CHAIN_TEMPLATES:
@@ -562,24 +569,24 @@ def _build_xie_xiu_context(news_items):
         'validated_patterns': memory.get('validated_patterns', []),
     }
 
-    # 传导链上下文 (供AI参考，不强制使用)
+    # 传导链上下文 (供AI参考,不强制使用)
     chain_ctx = ""
     if matched_chains:
-        chain_ctx = "\n\n【邪修传导链参考】(以下为今日新闻匹配到的传导链，必须结合今日具体新闻内容生成传导分析，禁止照搬):\n"
+        chain_ctx = "\n\n【邪修传导链参考】(以下为今日新闻匹配到的传导链,必须结合今日具体新闻内容生成传导分析,禁止照搬):\n"
         for i, ch in enumerate(matched_chains):
             chain_ctx += f"\n链{i+1}: {' → '.join(ch['chain'])}\n"
             chain_ctx += f"  缺口: {ch['gap']}\n"
             chain_ctx += f"  逆潮: {ch['tide']}\n"
 
-    # 避免重复金句
-    used_quotes = memory.get('quotes', [])[-7:]
+    # 避免重复金句: 扩大去重范围到最近30条
+    used_quotes = memory.get('quotes', [])[-30:]
 
     return chain_ctx, used_quotes
 
 
 def _record_xie_xiu_content(sections_text):
     """V14: 记录今日邪修内容到记忆库(传导链+金句+命中模式)
-    扩大记忆库容量: 金句30→100条，新增传导链命中记录和操作卡命中记录"""
+    扩大记忆库容量: 金句30→100条,新增传导链命中记录和操作卡命中记录"""
     import re
     memory = _load_xie_xiu_memory()
 
@@ -591,14 +598,14 @@ def _record_xie_xiu_content(sections_text):
             quote = quote.replace('💭', '').strip()
             if quote and quote not in memory.get('quotes', []):
                 memory.setdefault('quotes', []).append(quote)
-                # V14: 保留最近100条金句（从30扩大）
+                # V14: 保留最近100条金句(从30扩大)
                 memory['quotes'] = memory['quotes'][-100:]
 
     # V14: 提取传导链命中记录
     chain_section = re.search(r'四、深度传导分析(.*?)(?=五、|六、|$)', sections_text, re.DOTALL)
     if chain_section:
         chain_text = chain_section.group(1)
-        # 提取第1层（事件）
+        # 提取第1层(事件)
         layer1 = re.search(r'第1层.*?:\s*(.+)', chain_text)
         # 提取天之道和邪修之道
         tian_dao = re.search(r'天之道:\s*(.+?)(?:\n|$)', chain_text)
@@ -639,11 +646,11 @@ def _record_xie_xiu_content(sections_text):
 # 新闻抓取
 # ============================================================
 def _fetch_rss(url, count=15, timeout=12):
-    """从RSS源获取新闻（V11: 修复GBK编码，超时12秒）"""
+    """从RSS源获取新闻(V11: 修复GBK编码,超时12秒)"""
     try:
         import xml.etree.ElementTree as ET
         import subprocess
-        # V17-fix: 用curl代替requests，确保timeout能真正生效（DNS解析也受控）
+        # V17-fix: 用curl代替requests,确保timeout能真正生效(DNS解析也受控)
         curl_cmd = [
             'curl', '-s', '-L', '--max-time', str(timeout),
             '-H', 'User-Agent: Mozilla/5.0',
@@ -661,7 +668,7 @@ def _fetch_rss(url, count=15, timeout=12):
         try:
             root = ET.fromstring(resp_text)
         except ET.ParseError:
-            # 某些RSS源编码特殊，尝试手动检测
+            # 某些RSS源编码特殊,尝试手动检测
             import re as _re
             enc_match = _re.search(r'encoding=["\']([^"\']+)["\']', resp_text[:200])
             if enc_match:
@@ -757,7 +764,7 @@ def _fetch_baidu_hot(count=20):
 
 
 def _fetch_baidu_taiwan_news(count=10):
-    """V14: 通过百度搜索补充台湾相关新闻（当台湾RSS源不可达时）
+    """V14: 通过百度搜索补充台湾相关新闻(当台湾RSS源不可达时)
     搜索关键词: "台湾 经济" / "台股" / "台币" / "台湾 两岸"
     """
     import re, subprocess
@@ -765,7 +772,7 @@ def _fetch_baidu_taiwan_news(count=10):
     search_queries = ['台湾+经济', '台股+今日', '台币+汇率', '两岸+贸易']
     headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
-    for query in search_queries[:2]:  # 只搜2组，避免过频
+    for query in search_queries[:2]:  # 只搜2组,避免过频
         try:
             url = f"https://www.baidu.com/s?wd={query}&rn=10"
             curl_cmd = ['curl', '-s', '-H', headers, url]
@@ -802,9 +809,9 @@ def _fetch_baidu_taiwan_news(count=10):
 
 
 def fetch_raw_materials():
-    """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
+    """并发抓取所有新闻素材,返回(raw_items, source_stats)"""
     import socket
-    # V17-fix: DNS解析本身没有timeout，设置全局socket超时防止线程永久阻塞
+    # V17-fix: DNS解析本身没有timeout,设置全局socket超时防止线程永久阻塞
     old_timeout = socket.getdefaulttimeout()
     socket.setdefaulttimeout(10)
     try:
@@ -815,7 +822,7 @@ def fetch_raw_materials():
         '虎嗅': 'https://www.huxiu.com/rss/0.xml',
         '钛媒体': 'https://www.tmtpost.com/rss.xml',
         '创业邦': 'https://www.cyzone.cn/rss/',
-        # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
+        # 台湾综合/财经(注:大陆服务器可能被墙,失败时自动跳过)
         '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
         '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
         '工商时报': 'https://ctee.com.tw/rss',
@@ -851,11 +858,11 @@ def fetch_raw_materials():
         except Exception:
             source_stats['新浪财经'] = 0
 
-        # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
+        # V14: 台湾RSS源失败时,用百度搜索补充台湾新闻
         taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
         taiwan_ok = any(source_stats.get(s, 0) > 0 for s in taiwan_sources)
         if not taiwan_ok:
-            logging.warning("[新闻] 台湾RSS源全部失败，启动百度台湾搜索补源")
+            logging.warning("[新闻] 台湾RSS源全部失败,启动百度台湾搜索补源")
             try:
                 taiwan_baidu = _fetch_baidu_taiwan_news(10)
                 all_raw.extend(taiwan_baidu)
@@ -881,11 +888,11 @@ def fetch_raw_materials():
 # AI调用
 # ============================================================
 def _call_hunyuan_api(system_msg, user_msg, timeout=90):
-    """调用混元API，单次调用带timeout — V17-fix: 用curl代替requests"""
+    """调用混元API,单次调用带timeout - V17-fix: 用curl代替requests"""
     import json, subprocess
     api_key = os.getenv('HUNYUAN_API_KEY')
     if not api_key:
-        logging.warning('[AI] HUNYUAN_API_KEY 未设置，AI调用将失败')
+        logging.warning('[AI] HUNYUAN_API_KEY 未设置,AI调用将失败')
         return None
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
     payload = {
@@ -899,7 +906,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
-    # 构造curl命令，用--max-time控制总超时
+    # 构造curl命令,用--max-time控制总超时
     curl_cmd = [
         'curl', '-s', '-L',
         '--max-time', str(timeout),
@@ -937,7 +944,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
             else:
                 err_msg = str(err)
             if 'rate_limit' in err_msg.lower() or '429' in str(resp.get('status')):
-                logging.warning("[AI] 混元API限流，等待5秒重试...")
+                logging.warning("[AI] 混元API限流,等待5秒重试...")
                 import time; time.sleep(5)
                 result2 = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=timeout+10)
                 if result2.returncode == 0:
@@ -961,7 +968,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
 # 核心: 生成全部6板块
 # ============================================================
 def generate_all_sections():
-    """生成日报全部6大板块 — V6核心函数
+    """生成日报全部6大板块 - V6核心函数
 
     主路径: AI一次生成6板块
     降级路径: 基于关键词推断生成6板块
@@ -969,38 +976,38 @@ def generate_all_sections():
     # 1. 抓取新闻素材
     all_raw, source_stats = fetch_raw_materials()
 
-    # 2. 领域配额过滤 — 保证各关注领域都有新闻，不被AI/算力挤占
+    # 2. 领域配额过滤 - 保证各关注领域都有新闻,不被AI/算力挤占
     top_items, domain_stats = filter_by_domain_quota(all_raw, total=20)
     logging.info(f"[日报] 领域配额: {domain_stats} | 共{len(top_items)}条")
 
     # 3. 构建邪修上下文
     chain_ctx, used_quotes = _build_xie_xiu_context(top_items)
 
-    # 4. 构建AI Prompt — 6板块完整版
+    # 4. 构建AI Prompt - 6板块完整版
     news_digest = "\n".join([
         f"【{item.get('source', '')}】{item['title']} (画像分:{score_news_with_scene(item)})"
-        + (f" — {item.get('summary', '')[:60]}" if item.get('summary') else "")
+        + (f" - {item.get('summary', '')[:60]}" if item.get('summary') else "")
         for item in top_items
     ])
 
     used_quotes_warn = ""
     if used_quotes:
-        used_quotes_warn = f"\n\n⚠️ 以下金句近期已使用，禁止重复:\n" + "\n".join([f"- {q}" for q in used_quotes])
+        used_quotes_warn = f"\n\n⚠️ 以下金句绝对禁止重复（已包含日期验证）：\n" + "\n".join([f"- {q}" for q in used_quotes]) + f"\n\n请生成{today_str}专属金句，必须包含今日新闻关键词，例如：'今日XX→YY→Z'"
 
-    # 场景上下文（注入到prompt，让AI了解刘老板当前状态）
-    scene_context = f"""**刘老板当前场景**（基于此推断可执行的操作）:
-- 位置: 台湾（旅游至6/16-17），可在台实地考察、对接台商
-- 资金: 200-300万人民币，周期3个月-1年
-- 偏好: 不做重资产，不做长周期，做中间人/渠道/信息差
+    # 场景上下文(注入到prompt,让AI了解刘老板当前状态)
+    scene_context = f"""**刘老板当前场景**(基于此推断可执行的操作):
+- 位置: 台湾(旅游至6/16-17),可在台实地考察、对接台商
+- 资金: 200-300万人民币,周期3个月-1年
+- 偏好: 不做重资产,不做长周期,做中间人/渠道/信息差
 - 当前项目: 机票/酒店/电话卡(已办)/台湾彩种分析/赵公明线上庙宇
-- 可用工具: 上海户籍+腾讯项目Owner身份背书，两岸均有触角"""
+- 可用工具: 上海户籍+腾讯项目Owner身份背书,两岸均有触角"""
 
-    system_msg = f"""你是邪修分析师。专注"新闻→断裂→机会"的隐秘传导链。日报的灰色操作由引擎自动生成，你的任务是新闻解读。
+    system_msg = f"""你是邪修分析师。专注"新闻→断裂→机会"的隐秘传导链。日报的灰色操作由引擎自动生成,你的任务是新闻解读。
 
-⏰ 当前日期: {today_str} — 所有时间节点基于此日期推算，禁止用过期年份。
+⏰ 当前日期: {today_str} - 所有时间节点基于此日期推算,禁止用过期年份。
 
 == 你的角色 ==
-天之道损有余补不足——你在新闻中找到"有余方"和"不足方"之间的断裂。不是赌方向，是识别断裂位置。
+天之道损有余补不足--你在新闻中找到"有余方"和"不足方"之间的断裂。不是赌方向,是识别断裂位置。
 
 == 输出格式 ==
 
@@ -1009,7 +1016,7 @@ def generate_all_sections():
 分类: 🤖 AI/算力 | 🏦 金融 | 🚀 商业 | 🌐 出海 | 🔥 热搜
 每条:
 - **标题**
-  > 💰 落地动作: [一句话，这条新闻带来的具体搞钱方向]
+  > 💰 落地动作: [一句话,这条新闻带来的具体搞钱方向]
 
 ## 二、市场/中间人缺口扫描
 
@@ -1017,9 +1024,9 @@ def generate_all_sections():
 
 - **缺口**: [具体品类/断裂环节]
   - 收钱位置: [中间人可以站着收钱的具体环节]
-  - 窗口期: [从{today_str}起算，多久有效]
+  - 窗口期: [从{today_str}起算,多久有效]
 
-（至少2个缺口）
+(至少2个缺口)
 
 ## 三、逆潮观察
 
@@ -1029,14 +1036,14 @@ def generate_all_sections():
 
 ## 四、深度传导分析
 
-> 从今日最高分新闻出发，推导具体因果传导链（如: 铜涨价→硫酸涨价→磷肥涨价→粮食成本上升）。必须结合今日具体新闻，禁止抽象模板。
+> 从今日最高分新闻出发,推导具体因果传导链(如: 铜涨价→硫酸涨价→磷肥涨价→粮食成本上升)。必须结合今日具体新闻,禁止抽象模板。
 
-- **因果链**: [A→B→C→D→E，每步是具体的商品/行业/现象]
+- **因果链**: [A→B→C→D→E,每步是具体的商品/行业/现象]
 - **有余方**: [谁有过剩]
 - **不足方**: [谁有缺口]
 
-🔮 天之道: [损X之有余→补Y之不足，附推导]
-⚡ 邪修之道: [在哪个断裂位置收过路费，附具体操作]
+🔮 天之道: [损X之有余→补Y之不足,附推导]
+⚡ 邪修之道: [在哪个断裂位置收过路费,附具体操作]
 
 ## 五、避坑提醒
 
@@ -1045,21 +1052,24 @@ def generate_all_sections():
 
 ## 六、今日邪修金句
 
-💭 [1句话，结合今日新闻主题。要冷、要利、有画面感。禁止鸡汤、禁止格言式。]{used_quotes_warn}
+💭 [1句话,结合今日新闻主题。要冷、要利、有画面感。禁止鸡汤、禁止格言式。]{used_quotes_warn}
 
 == 铁律 ==
-1. 6板块齐全，每板块有实质内容，不需要操作细节(引擎会补充)
-2. 传导链必须基于今日新闻，禁止铜→PCB→电动车模板
-3. 金句每天不同，结合当日主题
+1. 6板块齐全,每板块有实质内容,不需要操作细节(引擎会补充)
+2. 传导链必须基于今日新闻,禁止铜→PCB→电动车模板
+3. 金句每天不同,结合当日主题
 4. 总字数2000-3000字
 5. ⏰ 所有时间窗口基于{today_str}推算
 6. 📍 优先挖掘台湾相关机会
 {scene_context}
 {chain_ctx}"""
 
-    user_msg = f"""今日新闻素材（已按画像打分排序）:
+    user_msg = f"""今日新闻素材(已按画像打分排序):
 
 {news_digest}
+
+⚠️ 金句禁止重复,以下金句绝对不能再生成:
+{chr(10).join([f'- {q}' for q in used_quotes]) if used_quotes else ''}
 
 请生成今日完整6板块日报。"""
 
@@ -1082,13 +1092,13 @@ def generate_all_sections():
             missing = [h for h in section_headers if h not in content]
             if not missing:
                 logging.info(f"[日报] ✅ AI生成6板块齐全: {len(content)}字符")
-                # V8: 注入灰色操作卡（代码层生成，不受AI安全限制）
+                # V8: 注入灰色操作卡(代码层生成,不受AI安全限制)
                 content = _inject_gray_ops_to_content(content, top_items)
                 # 记录邪修内容
                 _record_xie_xiu_content(content)
                 return content
             else:
-                logging.warning(f"[日报] AI生成缺板块: {missing}，补齐后使用")
+                logging.warning(f"[日报] AI生成缺板块: {missing},补齐后使用")
                 # 补齐缺失板块
                 content = _patch_missing_sections(content, top_items, missing)
                 # V8: 注入灰色操作卡
@@ -1096,13 +1106,13 @@ def generate_all_sections():
                 _record_xie_xiu_content(content)
                 return content
         else:
-            logging.warning("[日报] AI生成内容过短或为空，使用降级模式")
+            logging.warning("[日报] AI生成内容过短或为空,使用降级模式")
             return _fallback_all_sections(all_raw, top_items)
     except TimeoutError:
-        logging.warning("[日报] AI生成超时(180秒)，使用降级模式")
+        logging.warning("[日报] AI生成超时(180秒),使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
     except Exception as e:
-        logging.warning(f"[日报] AI生成异常: {e}，使用降级模式")
+        logging.warning(f"[日报] AI生成异常: {e},使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
 
 
@@ -1122,9 +1132,9 @@ def _patch_missing_sections(content, top_items, missing_headers):
         else:
             continue
         content += "\n\n" + patch
-        # 扩展金句（确保≥50字）
+        # 扩展金句(确保≥50字)
         if len(candidate) < 50:
-            candidate += " —— 邪修原则：不赌涨跌，只吃信息费；不追热点，只找断层。"
+            candidate += " -- 邪修原则:不赌涨跌,只吃信息费;不追热点,只找断层。"
     return content
 
 
@@ -1186,24 +1196,24 @@ def _fallback_all_sections(all_raw, top_items):
 
 
 def _infer_signal(title):
-    """V14: 每条新闻生成具体落地动作 — 新闻实体+可执行第一步+预期收益
-    核心改进: 不再"以XXX名义→做XXX→收X%"万能模板，改为具体人/公司+第一步操作+数字"""
+    """V14: 每条新闻生成具体落地动作 - 新闻实体+可执行第一步+预期收益
+    核心改进: 不再"以XXX名义→做XXX→收X%"万能模板,改为具体人/公司+第一步操作+数字"""
     import re
     title_lower = title.lower()
     entity = _extract_entity(title)
-    # V17: 实体名最长12字，去掉介词前缀
+    # V17: 实体名最长12字,去掉介词前缀
     ent_raw = entity[:12] if len(entity) > 12 else entity
-    ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('？?！!。、')
+    ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('??!!。、')
 
-    # 用标题hash做轮选种子，同一批新闻不会重复
+    # 用标题hash做轮选种子,同一批新闻不会重复
     seed = sum(ord(c) for c in title[:20]) % 100
 
-    # V14: 每个场景的落地动作改为"具体行动+可执行第一步+数字"，不再用万能填空模板
+    # V14: 每个场景的落地动作改为"具体行动+可执行第一步+数字",不再用万能填空模板
     # 格式: 行动方向 | 第一步操作 | 预期收益
 
-    # V17: AI分支匹配逻辑修复 — 'ai'子串匹配后用词边界或组合词验证
+    # V17: AI分支匹配逻辑修复 - 'ai'子串匹配后用词边界或组合词验证
     if any(kw in title_lower for kw in ['ai', '算力', 'gpu', '大模型', '英伟达', 'nvidia', '人工智能', '机器学习', '深度学习']):
-        # 验证：词边界\bAI\b 或 AI+跨界组合词 或 其他AI强相关词
+        # 验证:词边界\bAI\b 或 AI+跨界组合词 或 其他AI强相关词
         ai_combo_words = ['跨境电商', '客服', '写作', '编程', '医疗', '教育', '金融', '电商',
                           '工具', '助手', '搜索', '芯片', '平台', '应用', 'agent']
         is_real_ai = (re.search(r'\bai\b', title_lower) or
@@ -1357,8 +1367,8 @@ def _infer_signal(title):
 
 
 def _validate_signal(signal, title, existing_signals=None):
-    """V14: 验证落地动作质量 — 检查实体引用+具体数值+同质化
-    
+    """V14: 验证落地动作质量 - 检查实体引用+具体数值+同质化
+
     Returns: (is_valid, reason)
     """
     import re
@@ -1367,29 +1377,29 @@ def _validate_signal(signal, title, existing_signals=None):
 
     # 检查1: 落地动作是否引用了新闻实体
     if ent_short and len(ent_short) >= 2 and ent_short not in signal:
-        # 宽松检查：实体可能是公司全名(含代码)，落地动作中可能用了简称
-        ent_core = re.sub(r'[（(].*?[）)]', '', ent_short).strip()
+        # 宽松检查:实体可能是公司全名(含代码),落地动作中可能用了简称
+        ent_core = re.sub(r'[((].*?[))]', '', ent_short).strip()
         if ent_core and len(ent_core) >= 2 and ent_core not in signal:
-            pass  # 允许不引用实体（某些场景动作可能确实与实体无关）
+            pass  # 允许不引用实体(某些场景动作可能确实与实体无关)
 
-    # 检查2: 是否有具体数值（金额/百分比/时间窗口）
+    # 检查2: 是否有具体数值(金额/百分比/时间窗口)
     has_number = bool(re.search(r'\d+[%万台币元万千百]', signal))
     if not has_number:
         return False, "缺少具体数值"
 
-    # 检查3: 同质化检测 — 与已有落地动作是否太相似
+    # 检查3: 同质化检测 - 与已有落地动作是否太相似
     if existing_signals:
         for existing in existing_signals:
             # 比较前20字的重叠度
             overlap = sum(1 for c in signal[:30] if c in existing[:30])
-            if overlap > 20:  # 30个字符中有20+个相同，视为同质化
+            if overlap > 20:  # 30个字符中有20+个相同,视为同质化
                 return False, f"与已有动作同质化(重叠{overlap}/30)"
 
     return True, "通过"
 
 
 def _fallback_gap_scan(top_items):
-    """降级: 缺口扫描 — V10版含新闻实体注入，操作卡不泛泛而谈"""
+    """降级: 缺口扫描 - V10版含新闻实体注入,操作卡不泛泛而谈"""
     lines = ["## 二、市场/中间人缺口扫描\n"]
     lines.append("> 基于今日新闻的供需断裂 + 具体操作路径:\n")
 
@@ -1413,39 +1423,39 @@ def _fallback_gap_scan(top_items):
 
         # 基于关键词推断缺口
         if kw in ['台湾', '两岸', '小三通']:
-            lines.append(f"- **缺口**: {ent_short}→两岸通道 — {context[:30]}")
+            lines.append(f"- **缺口**: {ent_short}→两岸通道 - {context[:30]}")
             lines.append("  - 💰 收钱模式: 小三通货运不报关/台币人民币民间兑汇/金门中转仓代发")
             lines.append("  - 🛡️ 规避路径: 单笔5万以下不触发反洗钱、走金门民间兑换所不走银行、货拆散件入境")
-            lines.append("  - ⏱️ 窗口期: 政策收紧前（ECFA/小三通评估节点），通常3-6个月为一轮")
-            lines.append(f"  - 🎯 操作卡: ①到金门/厦门找民间兑汇商→②以'{ent_short}'合作名义谈→③首笔试水5万台币→④走微信/支付宝对敲结算→⑤两岸任一端口严查就停")
+            lines.append("  - ⏱️ 窗口期: 政策收紧前(ECFA/小三通评估节点),通常3-6个月为一轮")
+            lines.append(f"  - 🎯 操作卡: 1到金门/厦门找民间兑汇商→2以'{ent_short}'合作名义谈→3首笔试水5万台币→4走微信/支付宝对敲结算→5两岸任一端口严查就停")
         elif kw in ['线上庙宇', '信仰经济', '供奉', '开光']:
-            lines.append(f"- **缺口**: 线上信仰平台代运营 — {context[:30]}")
+            lines.append(f"- **缺口**: 线上信仰平台代运营 - {context[:30]}")
             lines.append("  - 💰 收钱模式: 平台抽成15-30%/SaaS年费2-5万/庙/信仰商品供应链加价20-40%")
-            lines.append("  - 🛡️ 规避路径: 不做宗教场所经营（需要审批）、只做'技术服务'和'电商代运营'、用科技公司主体")
-            lines.append("  - ⏱️ 窗口期: 线上信仰还在跑马圈地阶段，预计2-3年跑出头部")
-            lines.append("  - 🎯 操作卡: ①赵公明线上庙宇已启动→②找3-5家线下庙宇谈数字化合作→③首单免费做样板→④签年费SaaS+供养品代销→⑤复购率验证3个月后扩规模")
+            lines.append("  - 🛡️ 规避路径: 不做宗教场所经营(需要审批)、只做'技术服务'和'电商代运营'、用科技公司主体")
+            lines.append("  - ⏱️ 窗口期: 线上信仰还在跑马圈地阶段,预计2-3年跑出头部")
+            lines.append("  - 🎯 操作卡: 1赵公明线上庙宇已启动→2找3-5家线下庙宇谈数字化合作→3首单免费做样板→4签年费SaaS+供养品代销→5复购率验证3个月后扩规模")
         elif kw in ['彩票', '彩券', '台彩', '威力彩']:
-            lines.append(f"- **缺口**: 台彩经销权/合买平台 — {context[:30]}")
-            lines.append("  - 💰 收钱模式: 经销权转让中间费（5-15万）/线上合买抽佣（5-10%）")
+            lines.append(f"- **缺口**: 台彩经销权/合买平台 - {context[:30]}")
+            lines.append("  - 💰 收钱模式: 经销权转让中间费(5-15万)/线上合买抽佣(5-10%)")
             lines.append("  - 🛡️ 规避路径: 合买以'社群团购'名义组织、不走官方平台抽成、用个人收款码分散入账")
-            lines.append("  - ⏱️ 窗口期: 合买/代购处于灰色地带，政策明朗前快速收割")
-            lines.append("  - 🎯 操作卡: ①在台湾找想转让的台彩经销商→②做中间撮合收介绍费→③同时建LINE群做合买→④收5%服务费→⑤台彩公司明文禁止合买时立刻停")
+            lines.append("  - ⏱️ 窗口期: 合买/代购处于灰色地带,政策明朗前快速收割")
+            lines.append("  - 🎯 操作卡: 1在台湾找想转让的台彩经销商→2做中间撮合收介绍费→3同时建LINE群做合买→4收5%服务费→5台彩公司明文禁止合买时立刻停")
         elif kw in ['涨价', '缺货', '断供', '铜', '铝', '钢', '硫酸', '锂']:
-            lines.append(f"- **缺口**: 供需断裂撮合 — {context[:30]}")
-            lines.append("  - 💰 收钱模式: 撮合费（按交易额1-3%），自己不持仓不囤货")
-            lines.append("  - 🛡️ 规避路径: 纯信息撮合（不签买卖合同、不碰货、不碰资金），出了问题你是介绍人不是交易方")
-            lines.append("  - ⏱️ 窗口期: 供给冲击后2-4周最活跃，替代方案出现后关闭")
-            lines.append("  - 🎯 操作卡: ①找到有货没渠道的供应商→②找到缺货的买家→③以'行业资源对接'名义介绍→④收撮合费现金/私账→⑤买卖双方跳过你直接交易时换下一对")
+            lines.append(f"- **缺口**: 供需断裂撮合 - {context[:30]}")
+            lines.append("  - 💰 收钱模式: 撮合费(按交易额1-3%),自己不持仓不囤货")
+            lines.append("  - 🛡️ 规避路径: 纯信息撮合(不签买卖合同、不碰货、不碰资金),出了问题你是介绍人不是交易方")
+            lines.append("  - ⏱️ 窗口期: 供给冲击后2-4周最活跃,替代方案出现后关闭")
+            lines.append("  - 🎯 操作卡: 1找到有货没渠道的供应商→2找到缺货的买家→3以'行业资源对接'名义介绍→4收撮合费现金/私账→5买卖双方跳过你直接交易时换下一对")
         else:
-            lines.append(f"- **缺口**: {ent_short}的信息断裂 — {context[:30]}")
-            lines.append(f"  - 💰 收钱模式: 在「{ent_short}」这条新闻背后的信息不对称处做中间人——不持仓只收撮合费")
-            lines.append("  - 🛡️ 规避路径: 不签合同不碰货不碰资金，纯介绍人身份，出事免责")
-            lines.append("  - ⏱️ 窗口期: 新闻热度消退前（1-2周），信息充分扩散后窗口关闭")
-            lines.append(f"  - 🎯 操作卡: ①从'{ent_short}'找到信息最不对称的环节→②找到有资源没渠道的一方→③以{ent_short}'合作'名义联系→④收撮合费→⑤双方跳过你时换下一对")
+            lines.append(f"- **缺口**: {ent_short}的信息断裂 - {context[:30]}")
+            lines.append(f"  - 💰 收钱模式: 在「{ent_short}」这条新闻背后的信息不对称处做中间人--不持仓只收撮合费")
+            lines.append("  - 🛡️ 规避路径: 不签合同不碰货不碰资金,纯介绍人身份,出事免责")
+            lines.append("  - ⏱️ 窗口期: 新闻热度消退前(1-2周),信息充分扩散后窗口关闭")
+            lines.append(f"  - 🎯 操作卡: 1从'{ent_short}'找到信息最不对称的环节→2找到有资源没渠道的一方→3以{ent_short}'合作'名义联系→4收撮合费→5双方跳过你时换下一对")
 
         gaps_found += 1
 
-    # 如果不足2条缺口，用最高分未使用的新闻补1条（必须绑定具体新闻标题）
+    # 如果不足2条缺口,用最高分未使用的新闻补1条(必须绑定具体新闻标题)
     if gaps_found < 2 and top_items:
         used_titles = set()
         for kw, ctx in signal_keywords.items():
@@ -1454,28 +1464,28 @@ def _fallback_gap_scan(top_items):
             title = item.get('title', '')
             if title[:30] not in used_titles:
                 ent = _extract_entity(title)
-                lines.append(f"- **缺口**: {ent[:8]}的套利窗口 — {title[:35]}")
+                lines.append(f"- **缺口**: {ent[:8]}的套利窗口 - {title[:35]}")
                 lines.append(f"  - 💰 收钱模式: 围绕'{ent[:8]}'这条新闻→找上下游供需断裂→做撮合抽1-3%")
                 lines.append("  - 🛡️ 规避路径: 纯撮合不持仓不碰货→介绍人身份")
                 lines.append("  - ⏱️ 窗口期: 新闻热度1-2周内")
-                lines.append(f"  - 🎯 操作卡: ①从'{ent[:8]}'找到供需断裂→②找有货没渠道方→③以'行业对接'名义→④收现金撮合费→⑤失效换下一对")
+                lines.append(f"  - 🎯 操作卡: 1从'{ent[:8]}'找到供需断裂→2找有货没渠道方→3以'行业对接'名义→4收现金撮合费→5失效换下一对")
                 gaps_found += 1
                 break
 
     # 用户当前可行动标记
-    lines.append(f"\n> 📍 **行动提示**: 以上缺口按热度排序，优先考察自己能快速触达的环节，不碰货不碰资金，只做信息撮合。")
+    lines.append(f"\n> 📍 **行动提示**: 以上缺口按热度排序,优先考察自己能快速触达的环节,不碰货不碰资金,只做信息撮合。")
 
     return "\n".join(lines)
 
 
 def _fallback_contra_tide(top_items):
-    """V13: 逆潮观察 — 选最有话题性的新闻(非top_items[0])，输出具体判断"""
+    """V13: 逆潮观察 - 选最有话题性的新闻(非top_items[0]),输出具体判断"""
     lines = ["## 三、逆潮观察\n"]
-    lines.append("> 市场共识可能在错，找到逆向下注的方向:\n")
+    lines.append("> 市场共识可能在错,找到逆向下注的方向:\n")
 
     if not top_items:
         lines.append("- **市场共识**: 当前主流叙事")
-        lines.append("  - 逆向可能: 共识越强，反转越猛")
+        lines.append("  - 逆向可能: 共识越强,反转越猛")
         lines.append("  - 逆向下注: 在恐慌中找折价资产")
         lines.append("  - 止损线: 共识持续强化2周则认错")
         return "\n".join(lines)
@@ -1507,44 +1517,44 @@ def _fallback_contra_tide(top_items):
 
     title = best.get('title', '')
     entity = _extract_entity(title)
-    # V17: 实体名最长12字，去掉介词前缀
+    # V17: 实体名最长12字,去掉介词前缀
     ent_raw = entity[:12] if len(entity) > 12 else entity
-    ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('？?！!。、')
+    ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('??!!。、')
     title_lower = title.lower()
 
-    # 检测共识倾向 — V16: 扩充关键词覆盖+else分支生成具体逆向分析
+    # 检测共识倾向 - V16: 扩充关键词覆盖+else分支生成具体逆向分析
     if any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN', '新高', '历史最高', '飙升', '翻倍', '大涨']):
         consensus = f"'{title[:25]}' → 市场共识偏向狂热"
-        reverse = "涨过头必有回调——关注库存积压/产能释放信号"
-        bet = "做空或减仓相关资产，等回调20%以上再入场"
-        stop = "价格再涨15%且基本面持续强化，则逆向判断错误"
+        reverse = "涨过头必有回调--关注库存积压/产能释放信号"
+        bet = "做空或减仓相关资产,等回调20%以上再入场"
+        stop = "价格再涨15%且基本面持续强化,则逆向判断错误"
     elif any(kw in title_lower for kw in ['暴跌', '崩', '恐慌', '裁', '关停', '新低', '腰斩', '闪崩', '暴跌', '崩盘']):
         consensus = f"'{title[:25]}' → 市场共识偏向恐慌"
-        reverse = "恐慌出清后强势玩家市占率上升——关注龙头"
-        bet = "在恐慌底部布局行业龙头/核心资产，分批建仓"
-        stop = "负面信号持续3周无缓和，则恐慌不是暂时的"
+        reverse = "恐慌出清后强势玩家市占率上升--关注龙头"
+        bet = "在恐慌底部布局行业龙头/核心资产,分批建仓"
+        stop = "负面信号持续3周无缓和,则恐慌不是暂时的"
     elif any(kw in title_lower for kw in ['新规', '政策', '监管', '整顿', '审查', '备案', '合规', '限制', '禁令']):
         consensus = f"'{title[:25]}' → 市场共识偏向悲观"
-        reverse = "政策从发文到执行有时间差，且执行往往打折"
+        reverse = "政策从发文到执行有时间差,且执行往往打折"
         bet = "趁市场过度反应时反向布局受影响资产"
-        stop = "政策细则出台后确实严格，则逆向判断错误"
+        stop = "政策细则出台后确实严格,则逆向判断错误"
     elif any(kw in title_lower for kw in ['发布', '推出', '首发', '突破', '创新', '技术', '量子', '上线']):
         consensus = f"'{title[:25]}' → 市场共识偏向乐观期待"
         reverse = f"新技术/新产品发布→PPT到量产差18-24个月→市场高估短期影响→{ent}的实际商业化进度远慢于预期"
-        bet = f"做空{ent}概念股的短期溢价，或在发布后1-2周买入被连带错杀的竞争对手"
-        stop = f"如果6个月内{ent}真的达到量产里程碑，则逆向判断错误"
+        bet = f"做空{ent}概念股的短期溢价,或在发布后1-2周买入被连带错杀的竞争对手"
+        stop = f"如果6个月内{ent}真的达到量产里程碑,则逆向判断错误"
     elif any(kw in title_lower for kw in ['融资', '投资', '收购', '合并', '并购', '定增', '募资']):
         consensus = f"'{title[:25]}' → 市场共识偏向看好融资方"
         reverse = f"融资≠盈利→{ent}拿钱烧补贴→估值虚高→下一轮融资可能down round→早期投资人锁定期后抛售"
-        bet = f"不投{ent}本身→投其供应链（被融资方需求拉动的上游）→确定性更高"
-        stop = f"如果{ent}融资后6个月内营收增长>100%，则融资方确实在吃市场"
+        bet = f"不投{ent}本身→投其供应链(被融资方需求拉动的上游)→确定性更高"
+        stop = f"如果{ent}融资后6个月内营收增长>100%,则融资方确实在吃市场"
     elif any(kw in title_lower for kw in ['出口', '关税', '制裁', '贸易', '禁运', '脱钩']):
         consensus = f"'{title[:25]}' → 市场共识偏向悲观脱钩"
         reverse = "脱钩越狠→灰色通道利润越高→官方越堵→民间越钻→供需不会断只会变形"
-        bet = "布局转口贸易/替代供应链中间人角色，脱钩程度=利润空间"
-        stop = "替代供应链完全建立（6-12个月），中间人窗口关闭"
+        bet = "布局转口贸易/替代供应链中间人角色,脱钩程度=利润空间"
+        stop = "替代供应链完全建立(6-12个月),中间人窗口关闭"
     else:
-        # V16: else分支不再说空话，基于新闻实体生成具体逆向判断
+        # V16: else分支不再说空话,基于新闻实体生成具体逆向判断
         # 提取行业关键词推断
         industry_hints = []
         if any(kw in title_lower for kw in ['科技', '技术', '软件', '硬件', '互联网', '平台']):
@@ -1559,14 +1569,14 @@ def _fallback_contra_tide(top_items):
         if industry_hints:
             consensus = f"'{title[:25]}' → {industry_hints[0]}行业共识偏乐观"
             reverse = industry_hints[1]
-            bet = f"在{ent}的热度消退期（3-6个月后）低价布局真正受益的上游"
-            stop = f"如果{ent}所在行业基本面持续改善3个月，则行业趋势确实成立"
+            bet = f"在{ent}的热度消退期(3-6个月后)低价布局真正受益的上游"
+            stop = f"如果{ent}所在行业基本面持续改善3个月,则行业趋势确实成立"
         else:
-            # 最终兜底：基于实体生成具体判断而非空话
-            consensus = f"'{title[:25]}' → 市场正在消化{ent}信息，方向未定"
+            # 最终兜底:基于实体生成具体判断而非空话
+            consensus = f"'{title[:25]}' → 市场正在消化{ent}信息,方向未定"
             reverse = f"方向未定=还有人没下注→邪修先于共识布局{ent}的上下游断裂点"
-            bet = f"找{ent}供应链中信息不对称最大的环节（有货没渠道/有需求没供给）→做中间人"
-            stop = f"如果{ent}方向在2周内被大资金明确表态（涨停/跌停），则跟风窗口关闭"
+            bet = f"找{ent}供应链中信息不对称最大的环节(有货没渠道/有需求没供给)→做中间人"
+            stop = f"如果{ent}方向在2周内被大资金明确表态(涨停/跌停),则跟风窗口关闭"
 
     lines.append(f"- **市场共识**: {consensus}")
     lines.append(f"  - 逆向可能: {reverse}")
@@ -1577,14 +1587,14 @@ def _fallback_contra_tide(top_items):
 
 
 def _fallback_deep_chain(top_items):
-    """V15: 具体因果链传导 — 铜涨价→硫酸涨价→磷酸涨价，而非抽象的"第N层影响"
-    核心思路: 从CHAIN_TEMPLATES中匹配具体因果链，注入新闻实体，生成传导路径
-    格式: A→B→C→D→E (每步是具体的商品/行业/现象，不是抽象概念)"""
+    """V15: 具体因果链传导 - 铜涨价→硫酸涨价→磷酸涨价,而非抽象的"第N层影响"
+    核心思路: 从CHAIN_TEMPLATES中匹配具体因果链,注入新闻实体,生成传导路径
+    格式: A→B→C→D→E (每步是具体的商品/行业/现象,不是抽象概念)"""
     lines = ["## 四、深度传导分析\n"]
-    lines.append("> 从今日核心新闻出发，推导因果传导链:\n")
+    lines.append("> 从今日核心新闻出发,推导因果传导链:\n")
 
     if not top_items:
-        lines.append("🔮 **天之道: 损有余补不足 — 待数据补充**")
+        lines.append("🔮 **天之道: 损有余补不足 - 待数据补充**")
         lines.append("⚡ **邪修之道: 在有余和不足之间收过路费**")
         return "\n".join(lines)
 
@@ -1608,7 +1618,7 @@ def _fallback_deep_chain(top_items):
     if not best and top_items:
         best = top_items[0]
     if not best:
-        lines.append("🔮 **天之道: 损有余补不足 — 待数据补充**")
+        lines.append("🔮 **天之道: 损有余补不足 - 待数据补充**")
         lines.append("⚡ **邪修之道: 在有余和不足之间收过路费**")
         return "\n".join(lines)
 
@@ -1616,7 +1626,7 @@ def _fallback_deep_chain(top_items):
     title_lower = title.lower()
     source = best.get('source', '')
     entity = _extract_entity(title)
-    # V17: 实体名最长12字，去掉介词前缀
+    # V17: 实体名最长12字,去掉介词前缀
     ent_raw = entity[:12] if len(entity) > 12 else entity
     ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw)
 
@@ -1629,133 +1639,133 @@ def _fallback_deep_chain(top_items):
     aux_ent = aux_entities[0] if aux_entities else '关联方'
     aux_ent2 = aux_entities[1] if len(aux_entities) > 1 else '下游'
 
-    # V15: 具体因果链 — 每步传导是具体的商品/行业/现象
+    # V15: 具体因果链 - 每步传导是具体的商品/行业/现象
     if '台湾' in source or any(kw in title_lower for kw in ['台湾', '两岸', '台']):
         chain = f"{ent}事件 → 两岸物流/资金流短期调整 → 小三通货运量波动 → 台币/人民币民间汇兑需求激增 → 金门/厦门仓储转运需求上升 → 民间灰色通道取代部分官方渠道"
-        surplus = "官方渠道的过剩壁垒（审批慢/配额少/关税高）"
-        deficit = "民间通道的不足供给（快速通关/民间兑汇/拆散入境）"
+        surplus = "官方渠道的过剩壁垒(审批慢/配额少/关税高)"
+        deficit = "民间通道的不足供给(快速通关/民间兑汇/拆散入境)"
         tian_dao = f"天之道: 损官方壁垒之有余→补民间通道之不足\n  > 推导: 兑汇需求↑+仓储转运↑+灰色通道利润↑→有余在官方、不足在民间"
-        xie_xiu = f"邪修之道: 在金门/厦门之间做「民间桥梁」→①台币人民币对敲赚汇差②小三通货运不报关③金门中转仓代发→月入5-15万台币→两岸任一端口严查就停"
+        xie_xiu = f"邪修之道: 在金门/厦门之间做「民间桥梁」→1台币人民币对敲赚汇差2小三通货运不报关3金门中转仓代发→月入5-15万台币→两岸任一端口严查就停"
 
     elif any(kw in title_lower for kw in ['铜', '铜价']):
-        chain = f"铜矿减产/涨价 → 冶炼加工费压缩 → 硫酸涨价（铜冶炼副产） → 磷肥成本上升 → 粮食生产成本增加"
-        surplus = "铜库存过剩方（有货没渠道的供应商）"
-        deficit = "硫酸/磷肥需求方（缺货的生产企业）"
+        chain = f"铜矿减产/涨价 → 冶炼加工费压缩 → 硫酸涨价(铜冶炼副产) → 磷肥成本上升 → 粮食生产成本增加"
+        surplus = "铜库存过剩方(有货没渠道的供应商)"
+        deficit = "硫酸/磷肥需求方(缺货的生产企业)"
         tian_dao = f"天之道: 损铜库存之有余→补硫酸/磷肥之不足\n  > 推导: 铜涨价→硫酸涨价→磷肥涨价→粮食成本↑→有余在铜库存、不足在硫酸/磷肥"
-        xie_xiu = f"邪修之道: 不赌铜价涨跌→在铜→硫酸→磷肥的断裂处做中间人→①找有铜的供应商②找缺硫酸的磷肥厂③以「行业贸易对接」撮合→收2-4%→不碰货不碰资金"
+        xie_xiu = f"邪修之道: 不赌铜价涨跌→在铜→硫酸→磷肥的断裂处做中间人→1找有铜的供应商2找缺硫酸的磷肥厂3以「行业贸易对接」撮合→收2-4%→不碰货不碰资金"
 
     elif any(kw in title_lower for kw in ['出海', '全球化', '海外', '硬件出海', '跨境', '出海', '品牌出海']):
         chain = f"{ent}出海/跨境扩张 → 目标市场渠道缺口 → 本地化服务需求爆发 → 代理/经销商网络价值上升 → 售后/运营服务缺口"
-        surplus = f"{ent}出海后的过剩产能（产品有但渠道不通）"
-        deficit = f"本地化服务的不足供给（懂市场+懂产品的人极度稀缺）"
-        tian_dao = f"天之道: 损产能之有余（有产品没渠道）→补本地化之不足（缺服务缺人才）\n  > 推导: 出海→渠道缺口→本地化需求→有余在产品、不足在服务"
-        xie_xiu = f"邪修之道: 不做出海方→做出海服务商→①帮{ent}找目标市场经销商②做本地化咨询③收项目费5-15万+流水1%→出海方死掉换下一家"
+        surplus = f"{ent}出海后的过剩产能(产品有但渠道不通)"
+        deficit = f"本地化服务的不足供给(懂市场+懂产品的人极度稀缺)"
+        tian_dao = f"天之道: 损产能之有余(有产品没渠道)→补本地化之不足(缺服务缺人才)\n  > 推导: 出海→渠道缺口→本地化需求→有余在产品、不足在服务"
+        xie_xiu = f"邪修之道: 不做出海方→做出海服务商→1帮{ent}找目标市场经销商2做本地化咨询3收项目费5-15万+流水1%→出海方死掉换下一家"
 
     elif any(kw in title_lower for kw in ['涨价', '缺货', '断供', '铜', '铝', '硫酸', '锂']) or \
          ('价' in title_lower and not any(kw in title_lower for kw in ['性价比', '物美价廉', '降价', '平价', '评价'])):
         chain = f"{ent}供应变化 → 下游{aux_ent}成本上升 → 终端产品定价调整 → 替代材料需求上升 → {aux_ent2}利润暴增"
-        surplus = f"有{ent}库存的供应商（供给过剩）"
-        deficit = f"缺{ent}的买家（需求过剩）"
+        surplus = f"有{ent}库存的供应商(供给过剩)"
+        deficit = f"缺{ent}的买家(需求过剩)"
         tian_dao = f"天之道: 损库存之有余→补需求之不足\n  > 推导: {ent}涨价→下游减产→替代需求↑→供需断裂→有余在库存、不足在需求"
-        xie_xiu = f"邪修之道: 不赌价格涨跌→在供需断裂处做中间人→①找到有货没渠道的供应商②找到缺货的买家③以「行业贸易对接」撮合→收2-4%→不碰货不碰资金"
+        xie_xiu = f"邪修之道: 不赌价格涨跌→在供需断裂处做中间人→1找到有货没渠道的供应商2找到缺货的买家3以「行业贸易对接」撮合→收2-4%→不碰货不碰资金"
 
     elif any(kw in title_lower for kw in ['ai', '算力', 'gpu', '大模型', '英伟达', 'nvidia', '人工智能']):
         if not re.search(r'\bai\b', title_lower) and not any(kw in title_lower for kw in ['算力', 'gpu', '大模型', '英伟达', 'nvidia', '人工智能']):
-            # "ai" 子串误匹配，走通用路径
+            # "ai" 子串误匹配,走通用路径
             chain = f"{ent}事件 → 相关方利益重新分配 → 信息不对称出现 → 套利窗口 → 中间人机会"
             surplus = f"{ent}信息优势方"
             deficit = f"{ent}信息劣势方"
         else:
             chain = f"AI大模型训练需求爆发 → GPU/HBM供不应求 → 散热/电源/PCB配套涨价 → 数据中心建设加速 → 电力消耗激增→核电/绿电需求"
-            surplus = "IDC的过剩算力（有供给但找不到客户）"
-            deficit = "AI公司的不足算力（受出口管制/价格高买不到GPU）"
-            tian_dao = f"天之道: 损IDC之有余（空置算力）→补AI公司之不足（买不到GPU）\n  > 推导: GPU出口管制→IDC空置↑→算力饥渴→有余在供给端、不足在需求端"
-            xie_xiu = f"邪修之道: 做算力中间人→①接触有空置GPU的IDC机房②找到缺算力的AI公司③以「算力服务商」签服务协议④收中介费3-5%⑤只做服务撮合不做硬件走私"
+            surplus = "IDC的过剩算力(有供给但找不到客户)"
+            deficit = "AI公司的不足算力(受出口管制/价格高买不到GPU)"
+            tian_dao = f"天之道: 损IDC之有余(空置算力)→补AI公司之不足(买不到GPU)\n  > 推导: GPU出口管制→IDC空置↑→算力饥渴→有余在供给端、不足在需求端"
+            xie_xiu = f"邪修之道: 做算力中间人→1接触有空置GPU的IDC机房2找到缺算力的AI公司3以「算力服务商」签服务协议4收中介费3-5%5只做服务撮合不做硬件走私"
 
     elif any(kw in title_lower for kw in ['出口', '关税', '制裁', '贸易']):
         chain = f"出口管制/关税调整 → 供应链被迫重组 → 转口贸易/第三国中转 → 合规成本上升 → 替代市场开拓"
-        surplus = "受管制方的过剩产能（找不到渠道）"
-        deficit = "替代通道的不足供给（转口/合规服务）"
-        tian_dao = f"天之道: 损受管制方之有余（过剩产能）→补替代通道之不足（转口/合规）\n  > 推导: 管制→重组→转口→合规→有余在产能、不足在通道"
-        xie_xiu = f"邪修之道: 在管制和合规之间做「转口中间人」→①找受影响的出口商②找第三国中转渠道③以「转口贸易服务」收2-5%→管制越严利润越高"
+        surplus = "受管制方的过剩产能(找不到渠道)"
+        deficit = "替代通道的不足供给(转口/合规服务)"
+        tian_dao = f"天之道: 损受管制方之有余(过剩产能)→补替代通道之不足(转口/合规)\n  > 推导: 管制→重组→转口→合规→有余在产能、不足在通道"
+        xie_xiu = f"邪修之道: 在管制和合规之间做「转口中间人」→1找受影响的出口商2找第三国中转渠道3以「转口贸易服务」收2-5%→管制越严利润越高"
 
     elif any(kw in title_lower for kw in ['信仰', '庙宇', '供奉', '法会', '开光', '线上庙宇']):
         chain = f"线上信仰平台涌现 → 用户付费意愿验证(ARPU高) → 平台抽成/佣金模式 → 线下寺庙被迫数字化 → 信仰+电商/直播/AI开光新形态"
-        surplus = "线下庙宇的过剩流量（香客减少、年轻化不足）"
-        deficit = "线上信仰平台的不足供给（缺数字化工具和内容）"
-        tian_dao = f"天之道: 损线下庙宇之有余（闲置流量）→补线上信仰之不足（数字化平台）\n  > 推导: 线上付费↑+数字化焦虑↑+跑马圈地期→有余在线下、不足在线上"
-        xie_xiu = f"邪修之道: 赵公明线上庙宇已启动→①找3-5家线下庙宇谈代运营②首单免费做样板③签年费SaaS+代销分成20%④复购率验证3月→规模化"
+        surplus = "线下庙宇的过剩流量(香客减少、年轻化不足)"
+        deficit = "线上信仰平台的不足供给(缺数字化工具和内容)"
+        tian_dao = f"天之道: 损线下庙宇之有余(闲置流量)→补线上信仰之不足(数字化平台)\n  > 推导: 线上付费↑+数字化焦虑↑+跑马圈地期→有余在线下、不足在线上"
+        xie_xiu = f"邪修之道: 赵公明线上庙宇已启动→1找3-5家线下庙宇谈代运营2首单免费做样板3签年费SaaS+代销分成20%4复购率验证3月→规模化"
 
     elif any(kw in title_lower for kw in ['彩票', '彩券', '威力彩', '大乐透', '台彩']):
         chain = f"彩票热度上升 → 投注量激增 → 台彩经销商牌照价值变化 → 灰色合买/代购需求出现 → 政策风险累积"
-        surplus = "台湾彩票市场的过剩热度（头奖效应+投注潮）"
-        deficit = "彩票周边服务的不足供给（合买平台/经销商撮合/数据分析）"
+        surplus = "台湾彩票市场的过剩热度(头奖效应+投注潮)"
+        deficit = "彩票周边服务的不足供给(合买平台/经销商撮合/数据分析)"
         tian_dao = f"天之道: 损头奖热度之有余→补周边服务之不足\n  > 推导: 牌照价值变化+灰色合买↑+政策窗口→有余在热度、不足在服务"
-        xie_xiu = f"邪修之道: ①找想转让的台彩经销商→做撮合收5-10万②建LINE群做合买→收5%服务费③用刘海蟾系统做差异化④台彩禁止合买时停→转经销商撮合"
+        xie_xiu = f"邪修之道: 1找想转让的台彩经销商→做撮合收5-10万2建LINE群做合买→收5%服务费3用刘海蟾系统做差异化4台彩禁止合买时停→转经销商撮合"
 
     elif any(kw in title_lower for kw in ['降息', '央行', '利率', '美联储']):
         chain = f"利率变化 → 两岸定存利差扩大 → 跨境资金流动加速 → 汇率波动加剧 → 对冲工具需求激增"
-        surplus = "低利率方（资金成本低的地区）"
-        deficit = "高利率方（资金需求大的地区）"
-        tian_dao = f"天之道: 损低利率之有余（资金泛滥）→补高利率之不足（资金渴求）\n  > 推导: 利差→资金流动→汇率波动→有余在低利率端、不足在高利率端"
-        xie_xiu = f"邪修之道: 在两岸利差之间做「资金桥梁」→①低息借人民币②换台币存高息③收利差1-2%/年→锁汇对冲风险"
+        surplus = "低利率方(资金成本低的地区)"
+        deficit = "高利率方(资金需求大的地区)"
+        tian_dao = f"天之道: 损低利率之有余(资金泛滥)→补高利率之不足(资金渴求)\n  > 推导: 利差→资金流动→汇率波动→有余在低利率端、不足在高利率端"
+        xie_xiu = f"邪修之道: 在两岸利差之间做「资金桥梁」→1低息借人民币2换台币存高息3收利差1-2%/年→锁汇对冲风险"
 
     elif any(kw in title_lower for kw in ['新能源', '锂', '光伏', '储能', '电网']):
         chain = f"新能源装机量激增 → 储能配套不足 → 电网调度压力 → 虚拟电厂需求 → 电力市场化交易"
-        surplus = "光伏组件的过剩产能（工厂库存积压）"
-        deficit = "储能/消纳的不足供给（配套跟不上）"
+        surplus = "光伏组件的过剩产能(工厂库存积压)"
+        deficit = "储能/消纳的不足供给(配套跟不上)"
         tian_dao = f"天之道: 损光伏产能之有余→补储能消纳之不足\n  > 推导: 装机↑→储能不足→消纳瓶颈→有余在产能、不足在配套"
-        xie_xiu = f"邪修之道: 在产能和配套之间做中间人→①帮光伏厂清库存→②对接储能项目→③收3-5%撮合费"
+        xie_xiu = f"邪修之道: 在产能和配套之间做中间人→1帮光伏厂清库存→2对接储能项目→3收3-5%撮合费"
 
     elif any(kw in title_lower for kw in ['融资', '投资', '收购', '定增', '募资']):
         chain = f"{ent}获融资 → 产能扩张 → 上下游供需重新洗牌 → 供应链议价权转移 → 中间服务商(FA/合规/猎头)需求激增"
-        surplus = f"{ent}融资后的过剩产能（钱多项目少，烧钱期）"
-        deficit = f"配套服务的不足供给（投后管理/人才/合规跟不上融资速度）"
-        tian_dao = f"天之道: 损融资过剩之有余（烧钱期产能闲置）→补配套服务之不足（投后/人才/合规缺口）\n  > 推导: 融资→扩张→但人才/合规/渠道跟不上→有余在资金、不足在配套"
-        xie_xiu = f"邪修之道: 不投{ent}→投其配套缺口→①做{ent}的投后管理外包②做被融资挤出的竞争对手的转型顾问③收5-10万/月→融资方倒了你换下一家"
+        surplus = f"{ent}融资后的过剩产能(钱多项目少,烧钱期)"
+        deficit = f"配套服务的不足供给(投后管理/人才/合规跟不上融资速度)"
+        tian_dao = f"天之道: 损融资过剩之有余(烧钱期产能闲置)→补配套服务之不足(投后/人才/合规缺口)\n  > 推导: 融资→扩张→但人才/合规/渠道跟不上→有余在资金、不足在配套"
+        xie_xiu = f"邪修之道: 不投{ent}→投其配套缺口→1做{ent}的投后管理外包2做被融资挤出的竞争对手的转型顾问3收5-10万/月→融资方倒了你换下一家"
 
     elif any(kw in title_lower for kw in ['科技', '技术', '量子', '发布', '突破', '创新', '软件', '硬件', '平台', '系统']):
         chain = f"{ent}技术突破 → 早期采用者(大厂)率先部署 → 配套硬件/接口需求爆发 → 技能人才严重短缺 → 培训/咨询/外包市场出现"
-        surplus = f"{ent}技术的过剩宣传（PPT到量产差18个月）"
-        deficit = f"{ent}落地服务的不足供给（会部署的人/成熟的配套远不够）"
-        tian_dao = f"天之道: 损技术炒作之有余（宣传过剩）→补落地服务之不足（人才/配套缺口）\n  > 推导: 发布→大厂抢部署→但没人会装→配套跟不上→有余在宣传、不足在落地"
-        xie_xiu = f"邪修之道: 不做{ent}开发→做{ent}的落地服务→①找会{ent}的3-5个工程师②组外包团队③接大厂部署单→收项目费20-50万/单→技术过时换下一个"
+        surplus = f"{ent}技术的过剩宣传(PPT到量产差18个月)"
+        deficit = f"{ent}落地服务的不足供给(会部署的人/成熟的配套远不够)"
+        tian_dao = f"天之道: 损技术炒作之有余(宣传过剩)→补落地服务之不足(人才/配套缺口)\n  > 推导: 发布→大厂抢部署→但没人会装→配套跟不上→有余在宣传、不足在落地"
+        xie_xiu = f"邪修之道: 不做{ent}开发→做{ent}的落地服务→1找会{ent}的3-5个工程师2组外包团队3接大厂部署单→收项目费20-50万/单→技术过时换下一个"
 
     elif any(kw in title_lower for kw in ['金融', '银行', '保险', '证券', '基金', '利率']):
         chain = f"金融政策变化 → 资金成本调整 → 利差/汇差扩大 → 资金流动加速 → 合规通道需求激增"
-        surplus = "低利率区的过剩资金（找不到投资标的）"
-        deficit = "合规通道的不足供给（额度有限/审批慢）"
-        tian_dao = f"天之道: 损低利率资金之有余（资金泛滥）→补合规通道之不足（额度紧）\n  > 推导: 利差→资金流动→但通道有限→有余在资金、不足在通道"
-        xie_xiu = f"邪修之道: 在资金和通道之间做桥→①帮资金方找标的②帮需求方找合规渠道③收通道费0.5-2%→资金量越大赚越多"
+        surplus = "低利率区的过剩资金(找不到投资标的)"
+        deficit = "合规通道的不足供给(额度有限/审批慢)"
+        tian_dao = f"天之道: 损低利率资金之有余(资金泛滥)→补合规通道之不足(额度紧)\n  > 推导: 利差→资金流动→但通道有限→有余在资金、不足在通道"
+        xie_xiu = f"邪修之道: 在资金和通道之间做桥→1帮资金方找标的2帮需求方找合规渠道3收通道费0.5-2%→资金量越大赚越多"
 
     else:
-        # V16: else分支不再用抽象模板，基于新闻实体+辅助实体生成具体因果链
+        # V16: else分支不再用抽象模板,基于新闻实体+辅助实体生成具体因果链
         # 分析标题中的行业线索
         if any(kw in title_lower for kw in ['医药', '医疗', '生物', '药']):
             chain = f"{ent}医药动态 → 临床/审批进度变化 → 医保/集采政策联动 → 医药分销渠道调整 → 医疗服务/数字医疗机会"
-            surplus = f"{ent}研发管线（90%倒在临床，过剩投入）"
-            deficit = f"医疗服务的不足供给（看病难/基层缺医）"
+            surplus = f"{ent}研发管线(90%倒在临床,过剩投入)"
+            deficit = f"医疗服务的不足供给(看病难/基层缺医)"
         elif any(kw in title_lower for kw in ['汽车', '新能源', '电动', '电池', '充电']):
             chain = f"{ent}汽车/能源动态 → 电池/充电桩需求变化 → 原材料(锂/钴/镍)价格波动 → 供应链重组 → 二手车/回收市场机会"
-            surplus = f"新能源产能过剩（补贴退坡后库存积压）"
-            deficit = f"充电/回收配套不足（基础设施跟不上车量增长）"
+            surplus = f"新能源产能过剩(补贴退坡后库存积压)"
+            deficit = f"充电/回收配套不足(基础设施跟不上车量增长)"
         elif any(kw in title_lower for kw in ['地产', '房产', '土地', '楼盘', '物业']):
             chain = f"{ent}地产动态 → 资金链压力传导 → 上游建材/家电订单减少 → 法拍/不良资产增加 → 物业/运营转型机会"
-            surplus = f"地产库存过剩（卖不掉的房子）"
-            deficit = f"物业运营/改造升级服务不足（从卖房到运营的转变缺服务商）"
+            surplus = f"地产库存过剩(卖不掉的房子)"
+            deficit = f"物业运营/改造升级服务不足(从卖房到运营的转变缺服务商)"
         else:
-            # 最终兜底：用辅助实体构建传导链，每步是具体的而非抽象的
+            # 最终兜底:用辅助实体构建传导链,每步是具体的而非抽象的
             if aux_entities:
                 chain = f"{ent}事件 → {aux_ent}受直接影响 → {aux_ent2}间接受波及 → 供应链上下游重新议价 → 替代方案/中间人机会出现"
-                surplus = f"{ent}的过剩产能/信息（率先反应者的先发优势）"
-                deficit = f"{aux_ent}的不足应对（反应慢=需要中间人帮忙）"
+                surplus = f"{ent}的过剩产能/信息(率先反应者的先发优势)"
+                deficit = f"{aux_ent}的不足应对(反应慢=需要中间人帮忙)"
             else:
                 chain = f"{ent}事件 → 上游原料供应端受冲击 → 中游加工/制造环节成本变化 → 下游终端消费价格调整 → 跨区域套利窗口打开"
-                surplus = f"{ent}信息先知方（有消息但没渠道变现）"
-                deficit = f"{ent}信息后知方（有需求但不知道变化）"
+                surplus = f"{ent}信息先知方(有消息但没渠道变现)"
+                deficit = f"{ent}信息后知方(有需求但不知道变化)"
 
-        tian_dao = f"天之道: 损{surplus.split('（')[0] if '（' in surplus else surplus[:12]}之有余→补{deficit.split('（')[0] if '（' in deficit else deficit[:12]}之不足\n  > 推导: {chain.split('→')[0].strip()}→逐级传导→有余在先发端、不足在反应端"
-        xie_xiu = f"邪修之道: 在{ent}的传导断裂处收过路费→①找到{surplus.split('（')[0] if '（' in surplus else '有货方'}②找到{deficit.split('（')[0] if '（' in deficit else '缺货方'}③以「行业资源对接」撮合→收1-3%→断裂修复就换下一对"
+        tian_dao = f"天之道: 损{surplus.split('(')[0] if '(' in surplus else surplus[:12]}之有余→补{deficit.split('(')[0] if '(' in deficit else deficit[:12]}之不足\n  > 推导: {chain.split('→')[0].strip()}→逐级传导→有余在先发端、不足在反应端"
+        xie_xiu = f"邪修之道: 在{ent}的传导断裂处收过路费→1找到{surplus.split('(')[0] if '(' in surplus else '有货方'}2找到{deficit.split('(')[0] if '(' in deficit else '缺货方'}3以「行业资源对接」撮合→收1-3%→断裂修复就换下一对"
 
     lines.append(f"- **因果链**: {chain}")
     lines.append(f"- **有余方**: {surplus}")
@@ -1767,12 +1777,12 @@ def _fallback_deep_chain(top_items):
 
 
 def _fallback_pitfall(top_items):
-    """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
+    """V13: 避坑提醒 - 从多条新闻中找2个真实陷阱"""
     lines = ["## 五、避坑提醒\n"]
-    lines.append("> 看似机会实际是坑，别冲动:\n")
+    lines.append("> 看似机会实际是坑,别冲动:\n")
 
     if not top_items:
-        lines.append("- ⚠️ **陷阱**: 今日数据不足，暂无避坑提醒")
+        lines.append("- ⚠️ **陷阱**: 今日数据不足,暂无避坑提醒")
         return "\n".join(lines)
 
     # 从top_items前5条找2个不同角度的坑
@@ -1782,7 +1792,7 @@ def _fallback_pitfall(top_items):
             break
         title = item.get('title', '')
         entity = _extract_entity(title)
-        # V17: 实体名最长12字，去掉介词前缀
+        # V17: 实体名最长12字,去掉介词前缀
         ent_raw = entity[:12] if len(entity) > 12 else entity
         ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw)
         title_lower = title.lower()
@@ -1815,7 +1825,7 @@ def _fallback_pitfall(top_items):
             pitfall_count += 1
 
     if pitfall_count == 0:
-        lines.append("- ⚠️ **陷阱**: 任何新闻上头条时，机会窗口已经缩小了一半")
+        lines.append("- ⚠️ **陷阱**: 任何新闻上头条时,机会窗口已经缩小了一半")
         lines.append("  - 为什么是坑: 新闻是滞后指标→等你看到时早鸟已经进场2周了")
         lines.append("  - 止损建议: 用新闻找方向→用调研验证→用小额试水→不要All In")
 
@@ -1823,55 +1833,55 @@ def _fallback_pitfall(top_items):
 
 
 def _fallback_quote(top_items):
-    """降级: 邪修金句 — V7版结合新闻内容+记忆库去重"""
+    """降级: 邪修金句 - V7版结合新闻内容+记忆库去重"""
     memory = _load_xie_xiu_memory()
     used_quotes = memory.get('quotes', [])[-10:]  # 扩大去重窗口到10条
 
     if not top_items:
         quote = _gen_unique_quote("眼前的信息", used_quotes)
-        return f"## 六、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
+        return f"## 六、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示:信息差永远存在,关键是找到那个愿意为信息付费的人。"
 
     top = top_items[0]
     title = top.get('title', '未知')
-    # 提取标题核心名词（5-8字）
+    # 提取标题核心名词(5-8字)
     core = title[:12] if len(title) >= 8 else title
 
     title_lower = title.lower()
 
-    # 基于新闻主题从多个金句角度尝试，取第一个不重复的
+    # 基于新闻主题从多个金句角度尝试,取第一个不重复的
     candidates = []
 
     if any(kw in title_lower for kw in ['台湾', '两岸', '小三通']):
         candidates = [
-            f"两岸之间的空隙不是障碍——是邪修的收钱通道",
-            f"{core}的新闻出来时，邪修已经在算两岸价差",
-            f"政策筑墙越高，墙两边愿意付过墙费的人越多",
+            f"两岸之间的空隙不是障碍--是邪修的收钱通道",
+            f"{core}的新闻出来时,邪修已经在算两岸价差",
+            f"政策筑墙越高,墙两边愿意付过墙费的人越多",
         ]
     elif any(kw in title_lower for kw in ['涨价', '跌', '铜', '铝', '硫酸']):
         candidates = [
-            f"所有人都在看{core}的价格，邪修在看谁在为这个价格买单",
-            f"价格波动是果不是因——{core}背后的供需断裂才是邪修的入场信号",
-            f"当{core}成了新闻，大多数人已经错过了最好的窗口",
+            f"所有人都在看{core}的价格,邪修在看谁在为这个价格买单",
+            f"价格波动是果不是因--{core}背后的供需断裂才是邪修的入场信号",
+            f"当{core}成了新闻,大多数人已经错过了最好的窗口",
         ]
     elif any(kw in title_lower for kw in ['AI', '算力', '大模型']):
         candidates = [
-            f"{core}的淘金热里，邪修不淘金——邪修卖铲子和水",
-            f"AI泡沫破裂时，卖算力的照收租金——邪修就站在那个位置",
-            f"每次{core}上头条，就意味着有一批人已经赚完走了",
+            f"{core}的淘金热里,邪修不淘金--邪修卖铲子和水",
+            f"AI泡沫破裂时,卖算力的照收租金--邪修就站在那个位置",
+            f"每次{core}上头条,就意味着有一批人已经赚完走了",
         ]
     elif any(kw in title_lower for kw in ['信仰', '庙宇', '供奉', '法会']):
         candidates = [
-            f"信徒供养的不是庙——是安全感，邪修做的是安全感的中介",
-            f"{core}的复购率比任何SaaS都高——因为信仰不欠费",
-            f"科技的尽头是玄学，玄学的尽头是稳定的现金流",
+            f"信徒供养的不是庙--是安全感,邪修做的是安全感的中介",
+            f"{core}的复购率比任何SaaS都高--因为信仰不欠费",
+            f"科技的尽头是玄学,玄学的尽头是稳定的现金流",
         ]
     else:
         candidates = [
-            f"新闻是水面上的波纹，邪修在水下看谁在搅动水流",
-            f"{core}——大多数人看标题，邪修看标题背后的钱流方向",
-            f"不是所有新闻都是机会，但每条新闻都有人因此赚到钱",
-            f"天之道让一切回归均值，邪修之道在回归前离场",
-            f"信息差不是知道更多，是比别人早一步知道{core}意味着什么",
+            f"新闻是水面上的波纹,邪修在水下看谁在搅动水流",
+            f"{core}--大多数人看标题,邪修看标题背后的钱流方向",
+            f"不是所有新闻都是机会,但每条新闻都有人因此赚到钱",
+            f"天之道让一切回归均值,邪修之道在回归前离场",
+            f"信息差不是知道更多,是比别人早一步知道{core}意味着什么",
         ]
 
     quote = _gen_unique_quote(core, used_quotes, candidates)
@@ -1883,12 +1893,12 @@ def _gen_unique_quote(context_hint, used_quotes, candidates=None):
     """生成一句不重复的金句"""
     if not candidates:
         candidates = [
-            f"所有人都在看{context_hint}的时候，邪修在看谁在为这个消息付钱",
-            f"新闻是果不是因——{context_hint}背后的钱流方向才是邪修的方向",
-            f"天之道让{context_hint}回归均值，邪修之道在均值回归前收手",
-            f"当{context_hint}成了所有人的共识，就是邪修反向布局的时候",
-            f"信息差不是知道更多，是比别人早一步知道{context_hint}意味着什么",
-            f"看穿{context_hint}的本质——谁在赚钱，谁在亏钱，邪修跟赚钱的人走",
+            f"所有人都在看{context_hint}的时候,邪修在看谁在为这个消息付钱",
+            f"新闻是果不是因--{context_hint}背后的钱流方向才是邪修的方向",
+            f"天之道让{context_hint}回归均值,邪修之道在均值回归前收手",
+            f"当{context_hint}成了所有人的共识,就是邪修反向布局的时候",
+            f"信息差不是知道更多,是比别人早一步知道{context_hint}意味着什么",
+            f"看穿{context_hint}的本质--谁在赚钱,谁在亏钱,邪修跟赚钱的人走",
         ]
 
     # 选第一个不在used_quotes中的
@@ -1896,19 +1906,19 @@ def _gen_unique_quote(context_hint, used_quotes, candidates=None):
         if q not in used_quotes:
             return q
 
-    # 全部用过？加时间戳微调
+    # 全部用过?加时间戳微调
     import hashlib
     seed = int(hashlib.md5(context_hint.encode()).hexdigest()[:8], 16)
     # 用seed微调最后一句
     base = candidates[seed % len(candidates)]
-    return f"{base}（第{len(used_quotes)+1}日）"
+    return f"{base}(第{len(used_quotes)+1}日)"
 
 
 # ============================================================
-# V14: 公司/品牌预置库 — 优先匹配已知实体，避免提取出无意义片段
+# V14: 公司/品牌预置库 - 优先匹配已知实体,避免提取出无意义片段
 # ============================================================
 COMPANY_DB = {
-    # 台湾上市公司（含股票代码）
+    # 台湾上市公司(含股票代码)
     '台积电': '台积电(2330 TT)', '联发科': '联发科(2454 TT)', '鸿海': '鸿海(2317 TT)',
     '奇鋐': '奇鋐(3017 TT)', '双鸿': '双鸿(3324 TT)',
     '台塑': '台塑(1301 TT)', '台化': '台化(1326 TT)', '南亚': '南亚(1303 TT)',
@@ -1928,16 +1938,16 @@ COMPANY_DB = {
 
 
 def _extract_entity(title):
-    """V14→V17: 从新闻标题中提取核心实体 — 优先预置库匹配+去前缀+多模式验证+HTML解码"""
+    """V14→V17: 从新闻标题中提取核心实体 - 优先预置库匹配+去前缀+多模式验证+HTML解码"""
     import re, html
     # V17: 解码HTML实体 (&ldquo; &rdquo; &middot; &amp; 等)
     title = html.unescape(title)
     # 预处理: 去掉常见前缀噪音
     title_clean = title
-    for prefix in ['8点1氪丨', '8点1氪|', '氪星晚报｜', '氪星早报｜', '融资丨', '独家丨', '硬氪首发', '36氪首发', '| 36氪首发', '｜硬氪首发', '｜', '| ']:
+    for prefix in ['8点1氪丨', '8点1氪|', '氪星晚报|', '氪星早报|', '融资丨', '独家丨', '硬氪首发', '36氪首发', '| 36氪首发', '|硬氪首发', '|', '| ']:
         title_clean = title_clean.replace(prefix, '')
     title = title_clean
-    # V14: 优先匹配预置公司库（最高优先级）
+    # V14: 优先匹配预置公司库(最高优先级)
     for company_name, full_name in COMPANY_DB.items():
         if company_name in title:
             return full_name
@@ -1945,24 +1955,24 @@ def _extract_entity(title):
     # 噪音词库
     noise = {'今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '警惕', '注意', '曝光',
              '8点1氪', '氪星晚报', '氪星早报', '晚报', '早报', '日报', '周报', '月报',
-             '丨', '｜', '【', '】', '「', '」', '《', '》',
+             '丨', '|', '【', '】', '「', '」', '《', '》',
              '中国品牌', '韩国', '美国', '日本', '中国', '香港', '澳门',
              '北京', '上海', '深圳', '广州', '福建', '厦门', '金门',
              '股价', '市值', '融资', '投资', '收购', '上市', 'IPO'}
-    # 通用词子串（含这些词的片段不提取）
+    # 通用词子串(含这些词的片段不提取)
     noise_sub = {'中国品牌', '品牌出海', '产业链', '供应链', '制造业', '互联网', '人工智能',
                  '韩国', '美国', '日本', '中国', '台湾', '香港', '澳门',
                  '北京', '上海', '深圳', '广州', '福建', '厦门', '金门',
                  '全台疯抢', '人民币'}
-    # 英文停用词（大写开头单独出现不算实体）
+    # 英文停用词(大写开头单独出现不算实体)
     eng_stop = {'The', 'How', 'What', 'Why', 'When', 'This', 'That', 'These', 'Those',
                 'Here', 'There', 'Where', 'Which', 'Would', 'Could', 'Should', 'From',
                 'With', 'Will', 'Have', 'Been', 'More', 'New', 'One', 'Two', 'Our'}
-    
+
     # 用标点切分中文句子
-    segments = re.split(r'[，,。！!？?；;：:、\s]+', title)
-    
-    # 模式1: 公司/品牌名（XX公司/集团/平台/科技/品牌/银行/基金/酒厂/股份）
+    segments = re.split(r'[,,。!!??;;::、\s]+', title)
+
+    # 模式1: 公司/品牌名(XX公司/集团/平台/科技/品牌/银行/基金/酒厂/股份)
     for seg in segments:
         seg = seg.strip()
         m = re.search(r'([一-龥A-Za-z]{2,10}(?:公司|集团|平台|科技|品牌|银行|证券|基金|期货|酒厂|股份|庙宇|寺|宫|商会|协会))', seg)
@@ -1971,7 +1981,7 @@ def _extract_entity(title):
             if entity not in noise:
                 return entity
 
-    # V17: 模式1.5 — "公司名+完成/获/斩获+金额+融资" 提取公司名
+    # V17: 模式1.5 - "公司名+完成/获/斩获+金额+融资" 提取公司名
     # 例: "安纳智芯完成数亿元融资" → "安纳智芯", "百奥几何凭XX斩获数亿元融资" → "百奥几何"
     for seg in segments:
         seg = seg.strip()
@@ -1980,9 +1990,9 @@ def _extract_entity(title):
             entity = m.group(1)
             if entity not in noise and len(entity) >= 2:
                 return entity
-    
-    # 模式2: 英文专有名词（OpenAI, DeepSeek, NVIDIA, TSMC, SK等）
-    # 要求>=4字符或多词组合，且不在英文停用词中
+
+    # 模式2: 英文专有名词(OpenAI, DeepSeek, NVIDIA, TSMC, SK等)
+    # 要求>=4字符或多词组合,且不在英文停用词中
     for seg in segments:
         seg = seg.strip()
         m = re.search(r'([A-Z][A-Za-z]{2,15}(?:\s*[A-Z][A-Za-z]{1,15})*)', seg)
@@ -1993,8 +2003,8 @@ def _extract_entity(title):
                 cleaned = entity.split()[0] if ' ' in entity else entity
                 if cleaned not in eng_stop:
                     return entity
-    
-    # 模式3: 产品/品牌名称（中文2-6字后跟'发布'/'上线'/'推出'/'上市'）
+
+    # 模式3: 产品/品牌名称(中文2-6字后跟'发布'/'上线'/'推出'/'上市')
     for seg in segments:
         seg = seg.strip()
         m = re.search(r'([一-龥]{2,6})(?:发布|上线|上市|推出|官宣|融资|IPO|过会|获投|道歉|回应|财报|涨价|降价|暴跌|暴涨|开光|法会)', seg)
@@ -2002,8 +2012,8 @@ def _extract_entity(title):
             entity = m.group(1)
             if entity not in noise and entity not in {'韩国', '美国', '日本', '中国', '台湾', '北京', '上海', '深圳'}:
                 return entity
-    
-    # 模式4: 人名+头衔（2-4字中文名+创始人/CEO/董事长/总裁）
+
+    # 模式4: 人名+头衔(2-4字中文名+创始人/CEO/董事长/总裁)
     for seg in segments:
         seg = seg.strip()
         m = re.search(r'([一-龥]{2,4})(?:创始人|CEO|董事长|总裁|部长|经理|教授)', seg)
@@ -2011,16 +2021,16 @@ def _extract_entity(title):
             entity = m.group(1)
             if entity not in noise:
                 return entity + m.group(0)[len(entity):]  # 保留头衔
-    
-    # 模式5: 品牌/产品名（带引号或书名号的）
+
+    # 模式5: 品牌/产品名(带引号或书名号的)
     m = re.search(r'[「「]([^」」]{2,12})[」」]', title)
     if m:
         return m.group(1)
     m = re.search(r"['\"]([^'\"]{2,12})['\"]", title)
     if m:
         return m.group(1)
-    
-    # 模式6: 去"动词+了/得/不"等后缀，提取核心名词
+
+    # 模式6: 去"动词+了/得/不"等后缀,提取核心名词
     # 例: "救得了哈根达斯" → "哈根达斯", "做具身智能时代的餐饮世界模型" → "餐饮世界模型"
     verb_suffixes = ['救得了', '做得了', '看不到', '找不到', '买不到', '进不去', '出不來',
                      '做不了', '挡不住', '撑得起', '扛得住', '受得了', '吃得消',
@@ -2033,35 +2043,35 @@ def _extract_entity(title):
                 if len(clean) >= 2 and len(clean) <= 15:
                     return clean
 
-    # 兜底: 从末尾取有效中文片段（中文标题核心实体通常在尾部）
+    # 兜底: 从末尾取有效中文片段(中文标题核心实体通常在尾部)
     for seg in reversed(segments):
         seg = seg.strip()
-        clean = re.sub(r'[\d\.\-\+%￥$€¥\s（）()\[\]""'']+', '', seg)
+        clean = re.sub(r'[\d\.\-\+%¥$€¥\s()()\[\]""'']+', '', seg)
         if len(clean) >= 2 and len(clean) <= 15 and clean not in noise:
             # 跳过含噪音子串的片段
             if any(ns in clean for ns in noise_sub):
                 continue
-            # V17: 如果片段含"的"且>6字，取"的"后面的核心名词
+            # V17: 如果片段含"的"且>6字,取"的"后面的核心名词
             # 例: "一万亿市场的裂缝" → "裂缝"
             if '的' in clean and len(clean) > 6:
                 after_de = clean.split('的')[-1]
                 if len(after_de) >= 2 and len(after_de) <= 8 and after_de not in noise:
                     clean = after_de
-            # 如果以动词开头，提取后面的核心名词
+            # 如果以动词开头,提取后面的核心名词
             for verb in ['做', '打造', '推出', '发布', '宣布', '表示']:
                 if clean.startswith(verb) and len(clean) > len(verb) + 2:
                     clean = clean[len(verb):]
                     break
             return clean
-    
-    # 最后兜底：标题前15字
-    return re.sub(r'[\d\.\-\+%￥$€¥\s]+', '', title[:15]).strip()[:12]
+
+    # 最后兜底:标题前15字
+    return re.sub(r'[\d\.\-\+%¥$€¥\s]+', '', title[:15]).strip()[:12]
 
 def _fill_ops_template(op_template, news_entity):
-    """将新闻实体注入操作卡模板，让操作卡看起来针对这条新闻"""
+    """将新闻实体注入操作卡模板,让操作卡看起来针对这条新闻"""
     # op_template: (操作名, 找谁, 怎么说, 资金路径, 试水金额, 撤退信号)
     name, who, how, path, amount, retreat = op_template
-    # 如果有新闻实体，替换模板中的泛称
+    # 如果有新闻实体,替换模板中的泛称
     if news_entity and news_entity not in who:
         who = f"{news_entity}的{who}" if '的' not in who[:5] else who
         how = how.replace('以', f'以「{news_entity}」').replace('名义', '背景') if news_entity not in how else how
@@ -2095,7 +2105,7 @@ def _extract_signal_keywords(top_items):
 def send_email(subject, body):
     """发送邮件: Markdown正文+HTML渲染双格式"""
     if not SMTP_PASS:
-        logging.warning("[邮件] SMTP密码未配置，跳过发送")
+        logging.warning("[邮件] SMTP密码未配置,跳过发送")
         return False
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
@@ -2110,7 +2120,7 @@ def send_email(subject, body):
             {html_body}</body></html>"""
         msg.attach(MIMEText(html_wrapped, 'html', 'utf-8'))
     except Exception as e:
-        logging.warning(f"[邮件] Markdown渲染失败，降级纯文本: {e}")
+        logging.warning(f"[邮件] Markdown渲染失败,降级纯文本: {e}")
     try:
         server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30)
         server.login(SMTP_USER, SMTP_PASS)
@@ -2157,14 +2167,14 @@ def _fallback_lottery_display():
     """降级: 从lottery-predictions.json读取展示"""
     pred_file = os.path.join(MODULE_DIR, 'lottery-predictions.json')
     if not os.path.exists(pred_file):
-        return "\n---\n## 🎰 彩票推荐\n（lottery-predictions.json 未找到）\n---\n"
+        return "\n---\n## 🎰 彩票推荐\n(lottery-predictions.json 未找到)\n---\n"
 
     try:
         with open(pred_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金',
-                 '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
+        lines = ['\n---\n## 🎰 彩票号码推荐 - 刘海蟾点金',
+                 '> ⚠️ 彩票本质是随机事件,以下由刘海蟾点金算法基于历史数据规律推算,不构成任何投注建议。理性购彩,量力而行。\n']
 
         if isinstance(data, list):
             recs_today = {}
@@ -2190,10 +2200,10 @@ def _fallback_lottery_display():
                         lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
                     lines.append('')
             if not recs:
-                lines.append('（推荐数据暂未同步，下次自动恢复）\n')
+                lines.append('(推荐数据暂未同步,下次自动恢复)\n')
         return '\n'.join(lines)
     except Exception as e:
-        return f"\n---\n## 🎰 彩票推荐\n（数据读取异常: {e}）\n---\n"
+        return f"\n---\n## 🎰 彩票推荐\n(数据读取异常: {e})\n---\n"
 
 
 # ============================================================
@@ -2208,7 +2218,7 @@ def generate_taiwan_section():
         return f"\n{pln}\n\n{ltn}"
     except Exception as e:
         logging.warning(f"[台湾彩] 生成失败: {e}")
-        return "\n---\n## 🎰 台湾彩种\n（生成异常，下次自动恢复）\n---\n"
+        return "\n---\n## 🎰 台湾彩种\n(生成异常,下次自动恢复)\n---\n"
 
 
 # ============================================================
@@ -2221,38 +2231,39 @@ if __name__ == '__main__':
     try:
         news_content = _run_with_timeout(generate_all_sections, timeout=200)
     except TimeoutError:
-        logging.warning("[P1] 新闻生成超时(200秒)，使用降级模式")
+        logging.warning("[P1] 新闻生成超时(200秒),使用降级模式")
         all_raw_fb, _ = fetch_raw_materials()
         top_items_fb = filter_by_profile(all_raw_fb, min_score=0, top_n=20)
         news_content = _fallback_all_sections(all_raw_fb, top_items_fb)
     except Exception as e:
-        logging.error(f"[P1] 新闻生成异常: {e}，使用降级模式")
+        logging.error(f"[P1] 新闻生成异常: {e},使用降级模式")
         try:
             all_raw_fb, _ = fetch_raw_materials()
             top_items_fb = filter_by_profile(all_raw_fb, min_score=0, top_n=20)
             news_content = _fallback_all_sections(all_raw_fb, top_items_fb)
         except Exception as e2:
             logging.error(f"[P1] 降级模式也失败: {e2}")
-            news_content = "## 一、每日资讯\n（今日新闻抓取异常，下次自动恢复）\n"
+            news_content = "## 一、每日资讯\n(今日新闻抓取异常,下次自动恢复)\n"
 
     # 2. 生成彩票部分
     try:
         lottery_content = generate_lottery_section()
     except Exception as e:
         logging.error(f"[P1] 彩票生成异常: {e}")
-        lottery_content = "## 🎰 彩票推荐\n（今日彩票生成异常，下次自动恢复）\n"
+        lottery_content = "## 🎰 彩票推荐\n(今日彩票生成异常,下次自动恢复)\n"
 
-    # 3. 生成台湾彩种
-    try:
-        taiwan_content = generate_taiwan_section()
-    except Exception as e:
-        logging.warning(f"[P1] 台湾彩种异常: {e}")
-        taiwan_content = ""
+    # 3. 生成台湾彩种 (暂时跳过,避免卡住)
+    taiwan_content = ""
+    # try:
+    #     taiwan_content = generate_taiwan_section()
+    # except Exception as e:
+    #     logging.warning(f"[P1] 台湾彩种异常: {e}")
+    #     taiwan_content = ""
 
     # 4. 拼接完整日报
-    full_content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}{taiwan_content}"
+    full_content = f"# 阿算帮刘老板发财日报 - {today_str}\n\n---\n\n{news_content}{lottery_content}{taiwan_content}"
 
-    # 5. 质量守护 — 发送前验证
+    # 5. 质量守护 - 发送前验证
     try:
         from daily_report_guard import validate_report
         guard_result = validate_report(full_content)
@@ -2260,7 +2271,7 @@ if __name__ == '__main__':
             logging.info(f"[守护] ✅ 日报质量通过 (得分: {guard_result['score']}/100)")
         else:
             logging.warning(f"[守护] ⚠️ 日报质量问题: {guard_result['errors']}")
-            # 仍然发送，但记录问题
+            # 仍然发送,但记录问题
     except Exception as e:
         logging.warning(f"[守护] 验证异常(不阻塞): {e}")
 
@@ -2282,7 +2293,7 @@ if __name__ == '__main__':
 
     # 7. 发邮件
     if not SMTP_PASS:
-        logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
+        logging.warning("[P1] SMTP密码未配置,跳过邮件发送")
     else:
         try:
             subject = '阿算帮刘老板发财日报 | ' + today_str

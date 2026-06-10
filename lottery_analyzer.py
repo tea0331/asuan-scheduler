@@ -82,6 +82,35 @@ try:
 except ImportError:
     _SCRAPLING_AVAILABLE = False
 
+def _curl_get(url, headers=None, timeout=15, allow_redirects=True):
+    """用curl代替requests.get，避免DNS解析卡死"""
+    import subprocess
+    cmd = ['curl', '-s']
+    if allow_redirects:
+        cmd.append('-L')
+    cmd.extend(['--max-time', str(timeout)])
+    if headers:
+        for k, v in headers.items():
+            cmd.extend(['-H', f'{k}: {v}'])
+    cmd.append(url)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout+5)
+        if result.returncode != 0:
+            # 返回 500 错误对象，不返回 None
+            resp = type('CurlResponse', (), {'text': '', 'status_code': 500, 'content': b'', 'encoding': 'utf-8'})()
+            return resp
+        class CurlResponse:
+            def __init__(self, text, status_code=200):
+                self.text = text
+                self.status_code = status_code
+                self.content = text.encode('utf-8', errors='ignore')
+                self.encoding = 'utf-8'
+            __setattr__ = lambda self, k, v: setattr(self, k, v)
+        return CurlResponse(result.stdout)
+    except Exception:
+        resp = type('CurlResponse', (), {'text': '', 'status_code': 500, 'content': b'', 'encoding': 'utf-8'})()
+        return resp
+
 CST = timezone(timedelta(hours=8))
 
 
@@ -425,13 +454,13 @@ def _fetch_gdf99(game_key, period_start, periods=15):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept-Language': 'zh-TW,zh;q=0.9'
     }
-    for period_num in range(period_start, period_start - periods * 2, -1):
+    for period_num in range(period_start, period_start - periods, -1):
         if len(results) >= periods:
             break
         period = str(period_num)
         try:
             url = f'https://gdf99.com/lottery/{game_key}/no/{period}'
-            resp = requests.get(url, timeout=15, headers=headers)
+            resp = _curl_get(url, timeout=15, headers=headers)
             resp.encoding = 'utf-8'
             text = resp.text
             if resp.status_code != 200 or '開獎結果' not in text:
@@ -594,7 +623,7 @@ def _fetch_ssq_500com(periods, retries=3):
             ts = int(time.time())
             url = f'https://datachart.500.com/ssq/history/newinc/history.php?t={ts}'
             print(f"[双色球-500] 请求 (尝试{attempt+1}/{retries}): {url}")
-            resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/ssq/history/'}, timeout=15)
+            resp = _curl_get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/ssq/history/'}, timeout=15)
             print(f"[双色球-500] 状态码: {resp.status_code}, 长度: {len(resp.text)}")
             if resp.status_code != 200:
                 print(f"[双色球-500] HTTP错误: {resp.status_code}")
@@ -647,7 +676,7 @@ def _fetch_dlt_500com(periods, retries=3):
             ts = int(time.time())
             url = f'https://datachart.500.com/dlt/history/newinc/history.php?t={ts}'
             print(f"[大乐透-500] 请求 (尝试{attempt+1}/{retries}): {url}")
-            resp = requests.get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/dlt/history/'}, timeout=15)
+            resp = _curl_get(url, headers={**HEADERS, 'Referer': 'https://datachart.500.com/dlt/history/'}, timeout=15)
             print(f"[大乐透-500] 状态码: {resp.status_code}, 长度: {len(resp.text)}")
             if resp.status_code != 200:
                 print(f"[大乐透-500] HTTP错误: {resp.status_code}")
@@ -701,7 +730,7 @@ def _fetch_qxc_500com(periods):
         results = []
         # 先从开奖主页获取最新期号列表
         index_url = 'https://kaijiang.500.com/qxc.shtml'
-        resp = requests.get(index_url, headers=HEADERS, timeout=15)
+        resp = _curl_get(index_url, headers=HEADERS, timeout=15)
         resp.encoding = 'gb2312'
 
         # 主页直接有当期号码
@@ -729,7 +758,7 @@ def _fetch_qxc_500com(periods):
         for period in unique_periods[start_idx:periods]:
             try:
                 page_url = f'https://kaijiang.500.com/shtml/qxc/{period}.shtml'
-                page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
+                page_resp = _curl_get(page_url, headers=HEADERS, timeout=10)
                 page_resp.encoding = 'gb2312'
                 # 修复正则: ball_orange后可能有换行/空格,支持1-2位数字(最后一位0-14)
                 digits = re.findall(r'class="ball_orange">\s*(\d{1,2})\s*</li>', page_resp.text)
@@ -755,7 +784,7 @@ def _fetch_qxc_500com(periods):
 def _fetch_ssq_cjcp(periods):
     try:
         url = f'https://www.cjcp.cn/kaijiang/ssq/{periods}qi.html'
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = _curl_get(url, headers=HEADERS, timeout=15)
         resp.encoding = 'utf-8'
         return _parse_ssq_html(resp.text, periods)
     except Exception as e:
@@ -765,7 +794,7 @@ def _fetch_ssq_cjcp(periods):
 def _fetch_dlt_cjcp(periods):
     try:
         url = f'https://www.cjcp.cn/kaijiang/dlt/{periods}qi.html'
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = _curl_get(url, headers=HEADERS, timeout=15)
         resp.encoding = 'utf-8'
         return _parse_dlt_html(resp.text, periods)
     except Exception as e:
@@ -775,7 +804,7 @@ def _fetch_dlt_cjcp(periods):
 def _fetch_qxc_cjcp(periods):
     try:
         url = f'https://www.cjcp.cn/kaijiang/qxc/{periods}qi.html'
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = _curl_get(url, headers=HEADERS, timeout=15)
         resp.encoding = 'utf-8'
         return _parse_qxc_html(resp.text, periods)
     except Exception as e:
@@ -789,7 +818,7 @@ def _fetch_ssq_kaijiang500(periods):
         # 先获取最新期号列表(跟随重定向)
         index_url = 'https://kaijiang.500.com/ssq.shtml'
         print(f"[双色球-kaijiang] 请求主页: {index_url}")
-        resp = requests.get(index_url, headers=HEADERS, timeout=15, allow_redirects=True)
+        resp = _curl_get(index_url, headers=HEADERS, timeout=15, allow_redirects=True)
         print(f"[双色球-kaijiang] 状态码: {resp.status_code}, 最终URL: {resp.url}")
         resp.encoding = 'gb2312'
         # 尝试多种期号格式
@@ -811,7 +840,7 @@ def _fetch_ssq_kaijiang500(periods):
         for period in unique_periods[:periods]:
             try:
                 page_url = f'https://kaijiang.500.com/shtml/ssq/{period}.shtml'
-                page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
+                page_resp = _curl_get(page_url, headers=HEADERS, timeout=10)
                 page_resp.encoding = 'gb2312'
                 # 提取红球和蓝球
                 balls = re.findall(r'class="ball_red">(\d+)</span>', page_resp.text)
@@ -836,7 +865,7 @@ def _fetch_dlt_kaijiang500(periods):
     try:
         index_url = 'https://kaijiang.500.com/dlt.shtml'
         print(f"[大乐透-kaijiang] 请求主页: {index_url}")
-        resp = requests.get(index_url, headers=HEADERS, timeout=15)
+        resp = _curl_get(index_url, headers=HEADERS, timeout=15)
         resp.encoding = 'gb2312'
         period_list = re.findall(r'dlt/(\d{5})\.shtml', resp.text)
         if not period_list:
@@ -852,7 +881,7 @@ def _fetch_dlt_kaijiang500(periods):
         for period in unique_periods[:periods]:
             try:
                 page_url = f'https://kaijiang.500.com/shtml/dlt/{period}.shtml'
-                page_resp = requests.get(page_url, headers=HEADERS, timeout=10)
+                page_resp = _curl_get(page_url, headers=HEADERS, timeout=10)
                 page_resp.encoding = 'gb2312'
                 # 提取前区号码(class包含ball_red或ball_1)
                 front_balls = re.findall(r'class="ball_red">(\d+)</span>', page_resp.text)
