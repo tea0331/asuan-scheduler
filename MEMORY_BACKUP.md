@@ -27,11 +27,11 @@
 
 | 服务 | 值 |
 |------|-----|
-| 163邮箱SMTP | smtp.163.com:465, tea0331@163.com, 授权码: NYuLnGar8wT8RBit |
-| 聊天室 | http://101.43.44.171:8888, 密码: liuhaichan2026 |
-| GitHub Token | ghp_7G...0V6C（已存 .git-credentials） |
-| Gitee | 用户名: liu-zhijun0331, token: c4a0224eb050270e886b3246919220ca |
-| OpenRouter API | sk-or-...c3bc / sk-or-...2600 |
+| 163邮箱SMTP | smtp.163.com:465, 用户名/授权码见服务器环境变量 |
+| 聊天室 | http://101.43.44.171:8888, 密码见服务器环境变量 |
+| GitHub Token | 见服务器 .git-credentials |
+| Gitee | 用户名: liu-zhijun0331, token见服务器环境变量 |
+| OpenRouter API | 见服务器环境变量 |
 | 服务器 | VM-0-10-ubuntu, /root/asuan-scheduler |
 
 ## 阿算日报系统
@@ -83,7 +83,7 @@
 ## 聊天室
 
 - 地址: <http://101.43.44.171:8888>
-- 密码: liuhaichan2026
+- 密码: 见服务器环境变量
 - 主动监控已关闭（刘老板 2026-05-06 指示）
 
 ## 其他业务线

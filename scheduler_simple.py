@@ -29,9 +29,9 @@ yesterday_str = (datetime.now(CST) - timedelta(days=1)).strftime('%Y-%m-%d')
 # 邮件配置 (从环境变量读取，不硬编码)
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
-SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
+SMTP_USER = os.getenv('SMTP_USER', '')
 SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
-SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
+SMTP_TO = os.getenv('SMTP_TO', '')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s',
                     filename='/tmp/scheduler_simple.log', filemode='a')

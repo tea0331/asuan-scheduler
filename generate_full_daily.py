@@ -41,9 +41,9 @@ today = datetime.now(CST)
 
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.163.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '465'))
-SMTP_USER = os.getenv('SMTP_USER', 'tea0331@163.com')
+SMTP_USER = os.getenv('SMTP_USER', '')
 SMTP_PASS = os.getenv('SMTP_PASSWORD', os.getenv('SMTP_PASS', ''))
-SMTP_TO = os.getenv('SMTP_TO', 'tea0331@163.com')
+SMTP_TO = os.getenv('SMTP_TO', '')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -1311,7 +1311,10 @@ def fetch_raw_materials():
 # ============================================================
 def _call_hunyuan_api(system_msg, user_msg, timeout=90):
     """调用混元API，单次调用带timeout"""
-    api_key = os.getenv('HUNYUAN_API_KEY', 'sk-TjZgBJKZJA1FjrkMHIotwyBafg8gXnRdYBLDvyHNkGSkQAcq')
+    api_key = os.getenv('HUNYUAN_API_KEY', '')
+    if not api_key:
+        logging.error("[AI] HUNYUAN_API_KEY未设置，请在环境变量中配置")
+        return None
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
