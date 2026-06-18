@@ -722,7 +722,7 @@ IMPACT_CHAIN_TEMPLATES = [
 
 
 def _match_impact_chain(title):
-    """V19: 从新闻标题匹配影响链模板，返回最佳匹配（多关键词加权+优先规则）"""
+    """V20: 从新闻标题匹配影响链模板，返回最佳匹配（多关键词加权+优先规则+方向修正）"""
     title_lower = title.lower()
     # 优先规则：包含AI专属关键词 → 强制AI模板
     ai_keywords = ['gpu', 'hbm', '算力', '世界模型', '手脑一体', '英伟达', 'nvidia']
@@ -736,10 +736,20 @@ def _match_impact_chain(title):
         for t in IMPACT_CHAIN_TEMPLATES:
             if '台湾' in [tr for tr in t['triggers']]:
                 return t
+
+    # V20-fix11: 方向修正 — 含"恢复/增产/扩产/投产"的新闻 = 供给增加 = 价格下行
+    # 不应匹配"涨价/缺货/大宗"模板(#14)，改用"能源/新能源"模板(#7)或通用兜底(#22)
+    supply_increase_kw = ['恢复', '恢复至', '恢复到', '增产', '扩产', '投产', '复产', '提高产量',
+                          '加大产量', '提升产能', '解除不可抗力', '重启', '复工']
+    is_supply_increase = any(kw in title for kw in supply_increase_kw)
+
     best_match = None
     best_score = 0
     for template in IMPACT_CHAIN_TEMPLATES:
         if not template['triggers']:
+            continue
+        # V20-fix11: 供给增加的新闻跳过"涨价/缺货/大宗"模板（方向相反）
+        if is_supply_increase and '涨价' in template['triggers']:
             continue
         score = 0
         for trigger in template['triggers']:
@@ -1460,6 +1470,10 @@ def _filter_noise_news(news_items):
                   '即将召开', '即将开幕', '博览会将至']
     # 人事变动类关键词
     hr_kw = ['辞职', '离职', '卸任', '递交辞呈', '提交辞呈']
+    # V20-fix11: 喊话/表态/驳斥类 — 没有改变任何供需，纯嘴炮
+    rhetoric_kw = ['驳斥', '回应', '表态', '喊话', '警告', '谴责', '抗议', '否认',
+                   '批评', '指责', '反驳', '澄清', '辟谣', '强烈不满', '严重关切',
+                   '称将', '表示将', '打算', '计划将', '考虑', '研究将']
 
     filtered = []
     for item in news_items:
@@ -1481,6 +1495,17 @@ def _filter_noise_news(news_items):
         # 会议预告类 → 丢弃
         if any(kw in title for kw in meeting_kw):
             continue
+
+        # V20-fix11: 喊话/表态/驳斥类 → 丢弃（纯嘴炮不改变供需）
+        # 但保留含实质事件的（如"签署协议后驳斥"不算纯嘴炮）
+        if any(kw in title for kw in rhetoric_kw):
+            # 如果同时含实质事件词则保留
+            has_substance = any(kw in title for kw in ['签署', '协议', '贷款', '停产', '减产',
+                                                        '投产', '复产', '扩产', '涨价', '暴跌',
+                                                        '断供', '缺货', '管制', '禁令', '制裁',
+                                                        '停产检修', '装置停车'])
+            if not has_substance:
+                continue
 
         # 产品发布PR → 丢弃（但保留"发布政策/意见/办法/新规/数据"）
         if any(kw in title for kw in ['发布', '推出', '首发', '上线', '亮相']):
