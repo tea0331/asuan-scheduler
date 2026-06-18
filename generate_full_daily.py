@@ -568,18 +568,36 @@ IMPACT_CHAIN_TEMPLATES = [
 
 
 def _match_impact_chain(title):
-    """V19: 从新闻标题匹配影响链模板，返回最佳匹配"""
+    """V19: 从新闻标题匹配影响链模板，返回最佳匹配（多关键词加权+优先规则）"""
     title_lower = title.lower()
+    # 优先规则：包含AI专属关键词 → 强制AI模板
+    ai_keywords = ['gpu', 'hbm', '算力', '世界模型', '手脑一体', '英伟达', 'nvidia']
+    if any(kw in title_lower for kw in ai_keywords):
+        for t in IMPACT_CHAIN_TEMPLATES:
+            if 'gpu' in [tr.lower() for tr in t['triggers']] or 'ai' in [tr.lower() for tr in t['triggers']]:
+                return t
+    # 优先规则：包含台湾专属关键词 → 强制台湾模板
+    tw_keywords = ['台湾', '两岸', '台积电', '金门']
+    if any(kw in title_lower for kw in tw_keywords):
+        for t in IMPACT_CHAIN_TEMPLATES:
+            if '台湾' in [tr for tr in t['triggers']]:
+                return t
     best_match = None
-    best_hits = 0
+    best_score = 0
     for template in IMPACT_CHAIN_TEMPLATES:
         if not template['triggers']:
             continue
-        hits = sum(1 for trigger in template['triggers'] if trigger in title_lower)
-        if hits > best_hits:
-            best_hits = hits
+        score = 0
+        for trigger in template['triggers']:
+            if trigger in title_lower:
+                weight = len(trigger) / 10.0
+                if trigger in ['gpu', 'hbm', '台积电', '稀土', '减速器', '出海', '关税']:
+                    weight *= 2.0
+                score += weight
+        if score > best_score:
+            best_score = score
             best_match = template
-    return best_match if best_hits > 0 else IMPACT_CHAIN_TEMPLATES[-1]  # 兜底
+    return best_match if best_score > 0 else IMPACT_CHAIN_TEMPLATES[-1]
 
 
 def _inject_shortage_alert(content, top_items):
@@ -857,7 +875,7 @@ def _fetch_baidu_taiwan_news(count=10):
     """V14: 通过百度搜索补充台湾相关新闻（当台湾RSS源不可达时）
     搜索关键词: "台湾 经济" / "台股" / "台币" / "台湾 两岸"
     """
-    import re, subprocess
+    import re, subprocess, json
     taiwan_items = []
     search_queries = ['台湾+经济', '台股+今日', '台币+汇率', '两岸+贸易']
     headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -865,23 +883,29 @@ def _fetch_baidu_taiwan_news(count=10):
     for query in search_queries[:2]:  # 只搜2组，避免过频
         try:
             url = f"https://www.baidu.com/s?wd={query}&rn=10"
-            curl_cmd = ['curl', '-s', '-H', headers, url]
+            curl_cmd = ['curl', '-s', '-L', '-H', headers, url]
             result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
                 continue
             html = result.stdout
-            # 提取搜索结果标题
-            titles = re.findall(r'<h3[^>]*>(?:<[^>]*>)*([^<]+)(?:<[^>]*>)*</h3>', html)
+            # 提取搜索结果标题 - 多种正则兜底
+            titles = re.findall(r'<h3[^>]*>.*?<a[^>]*>(.*?)</a>', html, re.DOTALL)
             if not titles:
-                titles = re.findall(r'title="([^"]{10,80})"', html)[:10]
-            for t in titles[:5]:
+                titles = re.findall(r'"title":"(.*?)"', html)
+            if not titles:
+                titles = re.findall(r'<a[^>]*>(.*?)</a>', html)
+            # 清洗HTML标签
+            clean_titles = []
+            for t in titles:
+                t = re.sub(r'<[^>]+>', '', t)  # 去HTML标签
                 t = t.strip()
-                if t and len(t) > 8 and '百度' not in t:
-                    taiwan_items.append({
-                        'title': t,
-                        'source': '百度台湾搜索',
-                        'summary': f'搜索关键词: {query.replace("+", " ")}'
-                    })
+                if t and len(t) > 8 and '百度' not in t and 'baidu' not in t.lower():
+                    clean_titles.append(t)
+            taiwan_items.extend([{
+                'title': t,
+                'source': '百度台湾搜索',
+                'summary': f'搜索关键词: {query.replace("+", " ")}'
+            } for t in clean_titles[:5]])
         except Exception as e:
             logging.warning(f"[新闻] 百度台湾搜索失败({query}): {e}")
             continue
@@ -896,6 +920,36 @@ def _fetch_baidu_taiwan_news(count=10):
             unique.append(item)
 
     return unique[:count]
+
+
+def _fetch_taiwan_news_html():
+    """备用：直接爬取台湾新闻网站HTML（非RSS）"""
+    import re, subprocess
+    items = []
+    # 台湾新闻网站直接爬取（简化版）
+    sources = [
+        ('https://www.cna.com.tw/', '中央社'),
+        ('https://money.udn.com/money/index', '经济日报'),
+    ]
+    headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    for url, name in sources:
+        try:
+            curl_cmd = ['curl', '-s', '-L', '-H', headers, url]
+            result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                continue
+            html = result.stdout
+            # 提取标题（简单正则）
+            titles = re.findall(r'<h2[^>]*>(.*?)</h2>', html, re.DOTALL)[:5]
+            if not titles:
+                titles = re.findall(r'<h3[^>]*>(.*?)</h3>', html, re.DOTALL)[:5]
+            for t in titles:
+                t = re.sub(r'<[^>]+>', '', t).strip()
+                if t and len(t) > 8:
+                    items.append({'title': t, 'source': name, 'summary': f'来源: {name} HTML直接爬取'})
+        except Exception as e:
+            logging.warning(f"[新闻] {name} HTML爬取失败: {e}")
+    return items
 
 
 def fetch_raw_materials():
@@ -956,6 +1010,16 @@ def fetch_raw_materials():
         except Exception as e:
             source_stats['百度台湾搜索'] = 0
             logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
+        # 备用：直接爬取台湾新闻网站HTML
+        if not taiwan_baidu:
+            try:
+                taiwan_html = _fetch_taiwan_news_html()
+                all_raw.extend(taiwan_html)
+                source_stats['台湾HTML爬取'] = len(taiwan_html)
+                logging.info(f"[新闻] 台湾HTML爬取补充: {len(taiwan_html)}条")
+            except Exception as e:
+                source_stats['台湾HTML爬取'] = 0
+                logging.warning(f"[新闻] 台湾HTML爬取失败: {e}")
 
     # V17: 统一解码HTML实体 (&ldquo; &rdquo; &middot; 等)
     import html as html_mod
