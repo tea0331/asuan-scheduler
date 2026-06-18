@@ -1523,7 +1523,7 @@ def generate_all_sections():
 
 ## 一、每日资讯
 
-分类: 🎯 重大签署/政策 | 🤖 AI/算力 | 📊 供需/大宗 | 🌾 农产品/贵金属 | 🚀 新发明/新应用 | 🌐 出海
+分类: 🎯 重大签署/政策 | 🤖 AI/算力 | 📊 供需/大宗 | 🌍 地缘/通道 | 📈 行业数据/投资 | 🌾 农产品/贵金属 | 🚀 新发明/新应用 | 🌐 出海
 每条:
 - **标题**
   > 📡 因果链: [因为A所以B→因为B所以C→因为C所以D→因为D所以E，每步写清因果，标注过剩的步骤]
@@ -1690,17 +1690,34 @@ def _fallback_all_sections(all_raw, top_items):
                             if any(kw in n.get('title', '') for kw in signing_policy_kw)
                             and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:3]
 
-    # 供需/大宗板块只放真正的供需信号，排除AI/融资类
-    supply_demand_kw = ['涨', '跌', '断供', '缺货', '短缺', '减产', '停产', '限产', '供需',
-                        '供应', '需求', '库存', '产能', '产量', '成本', '价格', '行情',
-                        '管制', '禁令', '制裁', '配额', '期货', '现货', '石油', '铜', '铝',
-                        '钢', '锂', '稀土', '硫酸', '粮食', '天然气', '煤', '铁矿',
-                        '飙升', '狂飙', '趋紧', '紧缺', '一飞冲天', '破十万']
+    # V20-fix7: 供需/大宗拆成3个独立板块，避免重大新闻被挤掉
+    # A3: 供需断裂信号 + A4: 产能变化
+    supply_demand_kw = ['断供', '缺货', '短缺', '减产', '停产', '限产', '供需',
+                        '供应', '需求', '成本', '价格', '行情',
+                        '飙升', '狂飙', '趋紧', '紧缺', '一飞冲天', '破十万',
+                        '暴涨', '暴跌', '腰斩', '涨价潮', '降价潮', '价格战',
+                        '投产', '复产', '扩产', '检修', '减值', '资产减值',
+                        '涨', '跌', '库存', '产能', '产量']
     signal_filtered = [n for n in signal_items 
                        if any(kw in n.get('title', '') for kw in supply_demand_kw)
-                       and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:5]
+                       and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:4]
     if not signal_filtered:
-        signal_filtered = [n for n in signal_items if n.get('source') in ['生意社', '期货日报']][:5]
+        signal_filtered = [n for n in signal_items if n.get('source') in ['生意社', '期货日报']][:4]
+
+    # A5: 地缘/通道变化 — 独立板块
+    geopolitical_kw = ['海峡', '港口', '航线', '封锁', '通航', '禁运', '制裁', '出口管制',
+                       '实体清单', '关税', '霍尔木兹', '马六甲', '苏伊士', '巴拿马运河',
+                       '南海', '红海', '黑海', '封锁线', '海上通道']
+    geopolitical_items = [n for n in all_raw
+                          if any(kw in n.get('title', '') for kw in geopolitical_kw)][:3]
+
+    # A6+A7: 行业数据/重大投资 — 独立板块
+    industry_data_kw = ['同比', '环比', '进出口', '出口量', '进口量', '库存数据',
+                        '利用率', '指数', '占比', '市场份额', '出货量', '订单量',
+                        '项目', '基地', '工厂', '园区', '签约', '投资', '募投']
+    industry_data_items = [n for n in all_raw
+                           if any(kw in n.get('title', '') for kw in industry_data_kw)
+                           and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:3]
 
     # V20-fix6: 新发明/新应用/新skill/新产品(全球关注) — 时代级+实用级
     breakthrough_kw = ['突破', '首创', '世界首例', '里程碑', '颠覆', '革命性', '量产突破', '商用化',
@@ -1760,7 +1777,7 @@ def _fallback_all_sections(all_raw, top_items):
         else:
             sections.append(f"  > 📌 同类因果: 「{ent_short}」触发相同因果链（断裂在{template['fracture']}，窗口{template['window']}）→ 见上方完整链")
 
-    # 板块一结构: 🎯重大签署/政策 → 🤖AI/算力 → 📊供需/大宗 → 🌾农产品/贵金属 → 🚀新发明/新应用 → 🌐出海
+    # 板块一结构: 🎯重大签署/政策 → 🤖AI/算力 → 📊供需/大宗 → 🌍地缘/通道 → 📈行业数据/投资 → 🌾农产品/贵金属 → 🚀新发明/新应用 → 🌐出海
     used_titles_sp = set()
 
     sections.append("### 🎯 重大签署/政策\n")
@@ -1776,7 +1793,19 @@ def _fallback_all_sections(all_raw, top_items):
             used_titles_sp.add(n['title'][:30])
 
     sections.append("\n### 📊 供需/大宗\n")
-    for n in signal_filtered[:5]:
+    for n in signal_filtered[:4]:
+        if n['title'][:30] not in used_titles_sp:
+            _append_impact(n)
+            used_titles_sp.add(n['title'][:30])
+
+    sections.append("\n### 🌍 地缘/通道\n")
+    for n in geopolitical_items[:3]:
+        if n['title'][:30] not in used_titles_sp:
+            _append_impact(n)
+            used_titles_sp.add(n['title'][:30])
+
+    sections.append("\n### 📈 行业数据/投资\n")
+    for n in industry_data_items[:3]:
         if n['title'][:30] not in used_titles_sp:
             _append_impact(n)
             used_titles_sp.add(n['title'][:30])
