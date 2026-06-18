@@ -27,7 +27,7 @@ DAILY_REPORT_CONTRACT = {
     # 6大板块，缺一不可
     "required_sections": [
         ("每日资讯", "一、每日资讯"),
-        ("缺口扫描", "二、市场/中间人缺口扫描"),
+        ("资源短缺预警", "二、资源短缺预警"),
         ("逆潮观察", "三、逆潮观察"),
         ("深度传导分析", "四、深度传导分析"),
         ("避坑提醒", "五、避坑提醒"),
@@ -50,7 +50,7 @@ DAILY_REPORT_CONTRACT = {
     # 每个板块必须包含的关键要素
     "section_keywords": {
         "每日资讯": ["落地动作", "💰"],
-        "缺口扫描": ["缺口", "收钱", "操作卡"],
+        "资源短缺预警": ["缺口", "收钱", "操作卡"],
         "逆潮观察": ["逆向", "下注"],
         "深度传导分析": ["传导", "天之道"],
         "避坑提醒": ["止损"],
@@ -122,11 +122,11 @@ def validate_report(content: str) -> dict:
     current_year = datetime.now(CST).year
     stale_years = [str(y) for y in range(2020, current_year)]
     # 只检查窗口期/周期相关上下文中的年份
-    gap_section = _extract_section(content, "二、市场/中间人缺口扫描")
+    gap_section = _extract_section(content, "二、资源短缺预警")
     if gap_section:
         for sy in stale_years:
             if sy in gap_section:
-                warnings.append(f"⚠️ [时间] 缺口扫描出现过期年份{sy}，当前是{current_year}年，AI可能用了旧数据")
+                warnings.append(f"⚠️ [时间] 资源短缺预警出现过期年份{sy}，当前是{current_year}年，AI可能用了旧数据")
                 break
 
     # 4. 检查总长度
@@ -164,8 +164,8 @@ def validate_report(content: str) -> dict:
                 except Exception:
                     pass
 
-    # 7. 缺口扫描检查
-    gap_section = _extract_section(content, "二、市场/中间人缺口扫描")
+    # 7. 资源短缺预警检查
+    gap_section = _extract_section(content, "二、资源短缺预警")
     if gap_section:
         if "收钱模式" not in gap_section:
             warnings.append("⚠️ [缺口] 缺少'收钱模式'")
