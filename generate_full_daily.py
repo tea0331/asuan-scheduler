@@ -1228,7 +1228,7 @@ def fetch_raw_materials():
     source_stats = {}
     with ThreadPoolExecutor(max_workers=12) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
-        hot_future = pool.submit(_fetch_baidu_hot, 5)  # V20: 百度热搜从20→5，降权
+        hot_future = pool.submit(_fetch_baidu_hot, 0)  # V20: 百度热搜彻底停抓（八卦无价值）
 
         for name, future in rss_futures.items():
             try:
@@ -1414,10 +1414,11 @@ def generate_all_sections():
 
 ## 一、每日资讯
 
-分类: 🤖 AI/算力 | 🏦 金融 | 🚀 商业 | 🌐 出海 | 🔥 热搜
+分类: 🤖 AI/算力 | 🏦 金融 | 📊 供需/大宗 | 🌐 出海 | 🎯 重大签署
 每条:
 - **标题**
   > 📡 因果链: [因为A所以B→因为B所以C→因为C所以D→因为D所以E，每步写清因果，标注过剩的步骤]
+  > 注意: 融资新闻（XX完成X轮融资）只列标题不附因果链，因果推演价值低
 
 ## 二、资源短缺预警
 
@@ -1461,10 +1462,12 @@ def generate_all_sections():
 1. 6板块齐全，每板块有实质内容，每条新闻附因果链，不需要操作话术
 2. 因果链必须写清因果关系（因为A所以B），禁止只列断言（A短缺、B短缺）
 3. 传导链必须基于今日新闻，禁止铜→PCB→电动车抽象模板
-4. 金句每天不同，结合当日主题
-5. 总字数2000-3000字
-6. ⏰ 所有时间窗口基于{today_str}推算
-7. 📍 优先挖掘台湾相关机会
+4. 融资新闻（XX完成X轮融资）只列标题不附因果链——可操作空间太少
+5. 禁止推送八卦热搜/娱乐新闻——只推供需信号/政策落地/重大签署类新闻
+6. 金句每天不同，结合当日主题
+7. 总字数2000-3000字
+8. ⏰ 所有时间窗口基于{today_str}推算
+9. 📍 优先挖掘台湾相关机会
 {scene_context}
 {chain_ctx}"""
 
@@ -1548,8 +1551,20 @@ def _fallback_all_sections(all_raw, top_items):
 
     # 画像过滤
     filtered_all = filter_by_profile(all_raw, min_score=0, top_n=15)
-    hot_items = [n for n in all_raw if n.get('source') == '百度热搜']
-    hot_filtered = filter_by_profile(hot_items, min_score=-1, top_n=5)
+
+    # V20: 砍掉百度热搜板块，改为供需/大宗信号板块
+    signal_items = [n for n in all_raw if n.get('source') in ['生意社', '期货日报', '华尔街见闻', '财联社']]
+    # V20-fix: 供需/大宗板块只放真正的供需信号，排除AI/融资类
+    supply_demand_kw = ['涨', '跌', '断供', '缺货', '短缺', '减产', '停产', '限产', '供需',
+                        '供应', '需求', '库存', '产能', '产量', '成本', '价格', '行情',
+                        '管制', '禁令', '制裁', '配额', '期货', '现货', '石油', '铜', '铝',
+                        '钢', '锂', '稀土', '硫酸', '粮食', '天然气', '煤', '铁矿',
+                        '签署', '协议', '贷款', '投资', '合作', '项目', '用地', '审批']
+    signal_filtered = [n for n in signal_items 
+                       if any(kw in n.get('title', '') for kw in supply_demand_kw)
+                       and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:5]
+    if not signal_filtered:
+        signal_filtered = [n for n in signal_items if n.get('source') in ['生意社', '期货日报']][:5]
 
     # AI关键词
     ai_keywords = ['AI', '人工智能', '芯片', '模型', '大模型', '英伟达', '算力', 'DeepSeek', 'GPT', 'NVIDIA', 'GPU', '机器人', '智能体']
@@ -1558,17 +1573,27 @@ def _fallback_all_sections(all_raw, top_items):
         ai_items = filtered_all[:4]
     used_titles = set(n['title'][:30] for n in ai_items)
 
+    # V20: 融资新闻关键词 — 这类新闻不附因果链
+    financing_keywords = ['融资', '完成', '天使轮', 'a轮', 'b轮', 'c轮', 'pre-a', '领投', '募资', '定增', '增资']
+
     # 板块一: 每日资讯
     # V19-fix: 同模板去重，避免同类新闻输出完全一样的影响链
     used_chain_templates = set()
     sections = ["## 一、每日资讯\n"]
 
     def _append_impact(n):
-        """给单条新闻附加影响链，同模板去重"""
-        sections.append(f"- **{n['title']}**")
-        template = _match_impact_chain(n['title'])
+        """给单条新闻附加因果链，同模板去重。融资新闻只列简讯不附因果链。"""
+        title = n['title']
+        sections.append(f"- **{title}**")
+
+        # V20: 融资新闻不附因果链（可操作空间太少）
+        if any(kw in title.lower() for kw in financing_keywords):
+            sections.append(f"  > 📌 融资动态: 属于PR信号，因果推演价值低，仅记录")
+            return
+
+        template = _match_impact_chain(title)
         tpl_id = template['fracture']  # 用断裂点做唯一标识
-        entity = _extract_entity(n['title'])
+        entity = _extract_entity(title)
         ent_short = entity
         # V19-fix: 实体太短或全是噪音 → 用标题前15字代替
         clean = re.sub(r'[在的得了被把将向从]', '', entity)
@@ -1596,9 +1621,9 @@ def _fallback_all_sections(all_raw, top_items):
     for n in biz_items[:4]:
         _append_impact(n)
 
-    sections.append("\n### 🔥 热搜/时事\n")
-    for n in hot_filtered[:5]:
-        sections.append(f"- {n['title']}")
+    sections.append("\n### 📊 供需/大宗\n")
+    for n in signal_filtered[:5]:
+        _append_impact(n)
 
     # 板块二: 缺口扫描
     sections.append("\n\n" + _fallback_shortage_alert(top_items))
