@@ -94,11 +94,17 @@ USER_PROFILE_V7 = {
     '进出口': 4, '出口': 4, '进口': 3, '外贸': 4,
     '出海': 4, '跨境': 4, '跨境电商': 3, '汇率': 4,
     '资源流动': 3, '产能转移': 3, '供应链重构': 3, '信息差': 4,
-    '创业': 2, '融资': 2, '上市': 2, '投资': 2, '营收': 2,
-    '蓝海': 3, '供需': 4, '缺口': 5, '垄断': 2,
-    '供应链': 4, '代工': 2, '贴牌': 2, 'OEM': 2,
+    # V20: 融资PR降权（融资新闻本身无因果推演价值），供需信号大幅提升
+    '创业': 1, '融资': 1, '上市': 1, '投资': 1, '营收': 2,
+    '蓝海': 3, '供需': 5, '缺口': 5, '垄断': 2,
+    '供应链': 5, '代工': 2, '贴牌': 2, 'OEM': 2,
+    # V20新增: 供需断裂信号关键词
+    '暴涨': 5, '暴跌': 5, '飙升': 5, '狂飙': 5, '腰斩': 5,
+    '趋紧': 5, '供不应求': 5, '爆单': 5, '抢购': 4, '售罄': 4, '紧缺': 5,
+    '涨价潮': 5, '降价潮': 4, '价格战': 4, '成本上升': 5,
+    '限产': 5, '收紧': 4, '配额': 4, '清退': 4, '产能利用率': 5,
     # ====== 政策/宏观 ======
-    '政策': 4, '补贴': 3, '免税': 3, '减税': 2, '新规': 4,
+    '政策': 5, '补贴': 3, '免税': 3, '减税': 2, '新规': 5,
     '央行': 4, '降息': 4, '加息': 4, '流动性': 3,
     '裁员': 2, '亏损': 3, '逆势': 3, '关停': 4,
     # ====== 科技/产业（调整） ======
@@ -223,7 +229,15 @@ LIU_DOMAINS = [
     ('信仰经济', ['庙宇', '供奉', '开光', '法会', '线上庙宇', '信仰', '财神', '赵公明', '刘海蟾', '金蟾', '线上供养'], 1),
     ('彩票产业', ['彩票', '彩券', '台彩', '威力彩', '大乐透', '公益彩券', '博彩', '乐透', '派彩'], 1),
     ('AI/算力', ['AI', '人工智能', '大模型', '算力', 'GPU', '英伟达', 'NVIDIA', 'DeepSeek', 'LLM', 'AGI', '芯片', '半导体'], 3),
-    ('大宗/供应链', ['涨价', '暴跌', '缺货', '断供', '铜价', '铝价', '锂价', '硫酸', '减产', '停产', '期货', '现货'], 2),
+    # V20: 大宗/供应链配额从2→4，新增供需信号关键词
+    ('大宗/供应链', ['涨价', '暴跌', '缺货', '断供', '铜价', '铝价', '锂价', '硫酸', '减产', '停产',
+                      '期货', '现货', '库存', '暴涨', '暴跌', '飙升', '腰斩', '翻倍', '供不应求',
+                      '趋紧', '上行', '下行', '回落', '紧缺', '涨价潮', '降价潮', '价格战'], 4),
+    # V20: 新增"价格/供需信号"领域 — 信号型新闻保底
+    ('价格/供需信号', ['涨价', '跌价', '断供', '缺货', '短缺', '减产', '停产', '限产', '供不应求',
+                       '爆单', '抢购', '售罄', '紧缺', '管制', '禁令', '制裁', '配额', '收紧',
+                       '涨价潮', '降价潮', '成本上升', '利润下滑', '库存告急', '产能利用率',
+                       '暴涨', '暴跌', '飙升', '狂飙', '腰斩', '回落', '趋紧'], 4),
     ('金融/宏观', ['央行', '降息', '加息', '汇率', '人民币', '利率', '流动性', '政策', '关税', '制裁', '出口', '出海'], 2),
 ]
 
@@ -969,6 +983,231 @@ def _fetch_taiwan_news_html():
     return items
 
 
+def _fetch_sinews(count=15):
+    """V20: 生意社大宗涨跌快讯 — 供需断裂信号的核心源
+
+    生意社(100ppi.com)提供大宗商品涨跌榜、行情分析、供需快讯。
+    华为云WAF需要HW_CHECK cookie绕过：先提取JS中的cookie值，再带cookie重请求。
+    """
+    import re
+    url = 'https://www.100ppi.com'
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        # Step 1: 获取WAF页面，提取HW_CHECK cookie值
+        resp1 = requests.get(url, headers=headers, timeout=10, allow_redirects=False)
+        # 从JS中提取cookie值（华为云WAF格式: var _0x2 = "固定hash值"）
+        hw_match = re.search(r'var\s+\w+\s*=\s*["\'](\w{32})["\']', resp1.text)
+        if hw_match:
+            hw_cookie = f'HW_CHECK={hw_match.group(1)}'
+        else:
+            # 尝试从Set-Cookie头获取
+            hw_cookie = None
+            for cookie in resp1.cookies:
+                if cookie.name == 'HW_CHECK':
+                    hw_cookie = f'{cookie.name}={cookie.value}'
+                    break
+            if not hw_cookie:
+                logging.warning("[新闻] 生意社HW_CHECK cookie提取失败，跳过")
+                return []
+
+        # Step 2: 带cookie重新请求
+        headers2 = {**headers, 'Cookie': hw_cookie}
+        resp2 = requests.get(url, headers=headers2, timeout=12)
+        if resp2.status_code != 200 or len(resp2.text) < 500:
+            logging.warning(f"[新闻] 生意社二次请求失败: HTTP {resp2.status_code}, {len(resp2.text)}字节")
+            return []
+
+        html = resp2.text
+        # 提取新闻标题 — 生意社首页有涨跌排行+行情分析标题
+        # 多种正则兜底
+        titles = re.findall(r'<a[^>]*href="[^"]*"[^>]*title="([^"]+)"', html)
+        if not titles:
+            titles = re.findall(r'<h[1-6][^>]*>(.*?)</h[1-6]', html, re.DOTALL)
+        if not titles:
+            titles = re.findall(r'<a[^>]*>(.*?)</a>', html)
+
+        # 清洗 + 供需信号过滤
+        items = []
+        fracture_kw = ['涨', '跌', '飙升', '断供', '缺货', '短缺', '减产', '停产',
+                        '暴涨', '暴跌', '趋紧', '上行', '下行', '冲天', '狂飙', '回落',
+                        '紧缺', '缺口', '供应', '需求', '行情', '价格', '成本', '库存']
+        for t in titles:
+            t = re.sub(r'<[^>]+>', '', t).strip()
+            if t and len(t) > 8:
+                # 优先保留含供需信号关键词的标题
+                items.append({
+                    'title': t,
+                    'source': '生意社',
+                    'summary': '大宗商品供需快讯'
+                })
+        # 去重
+        seen = set()
+        unique = []
+        for item in items:
+            key = item['title'][:30]
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        return unique[:count]
+    except Exception as e:
+        logging.warning(f"[新闻] 生意社抓取失败: {e}")
+        return []
+
+
+def _fetch_wallstreetcn(count=15):
+    """V20: 华尔街见闻快讯 — 国际大宗/地缘/宏观供需信号
+
+    直接调用JSON API，无需签名，返回全球宏观+大宗快讯。
+    API端点: api-one-wscn.awtmt.com/apiv1/content/lives
+    """
+    import json
+    api_url = 'https://api-one-wscn.awtmt.com/apiv1/content/lives?channel=global-channel&limit={}'.format(count)
+    try:
+        resp = requests.get(api_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if resp.status_code != 200:
+            logging.warning(f"[新闻] 华尔街见闻API失败: HTTP {resp.status_code}")
+            return []
+        data = resp.json()
+        items_list = data.get('data', {}).get('items', data.get('items', []))
+        if not items_list:
+            # 尝试其他JSON结构
+            items_list = data.get('data', []) if isinstance(data.get('data'), list) else []
+        results = []
+        for item in items_list:
+            title = item.get('title', '') or item.get('content_text', '') or ''
+            title = title.strip().replace('\n', ' ')
+            if title and len(title) > 5:
+                # 提取摘要（如果content_text比title长）
+                summary = (item.get('content_text', '') or '')[:200].strip()
+                results.append({
+                    'title': title[:100],
+                    'source': '华尔街见闻',
+                    'summary': summary,
+                })
+        return results[:count]
+    except Exception as e:
+        logging.warning(f"[新闻] 华尔街见闻抓取失败: {e}")
+        return []
+
+
+def _fetch_qhrb(count=15):
+    """V20: 期货日报 — 期货品种供需/库存/政策信号
+
+    注意: 必须用HTTP(非HTTPS)抓取，HTTPS会SSL握手失败。
+    """
+    import re
+    # 必须用HTTP，HTTPS证书有问题
+    url = 'http://www.qhrb.com.cn'
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        if resp.status_code != 200:
+            logging.warning(f"[新闻] 期货日报抓取失败: HTTP {resp.status_code}")
+            return []
+        html = resp.text
+        # 提取新闻标题
+        titles = re.findall(r'<a[^>]*href="[^"]*"[^>]*>(.*?)</a>', html)
+        # 清洗 + 过滤有意义标题
+        items = []
+        for t in titles:
+            t = re.sub(r'<[^>]+>', '', t).strip()
+            if t and len(t) > 10 and t not in ['首页', '关于我们', '联系我们', '广告服务', '版权声明']:
+                items.append({
+                    'title': t,
+                    'source': '期货日报',
+                    'summary': '期货品种供需快讯'
+                })
+        # 去重
+        seen = set()
+        unique = []
+        for item in items:
+            key = item['title'][:30]
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        return unique[:count]
+    except Exception as e:
+        logging.warning(f"[新闻] 期货日报抓取失败: {e}")
+        return []
+
+
+def _fetch_cls(count=15):
+    """V20: 财联社快讯 — 政策落地/关键矿产/有色金属/供应链信号
+
+    贡献方式: 从首页HTML中提取内嵌的__NEXT_DATA__ JSON，获取快讯标题。
+    不需要破解签名API。
+    """
+    import re, json
+    url = 'https://www.cls.cn'
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=12)
+        if resp.status_code != 200:
+            logging.warning(f"[新闻] 财联社抓取失败: HTTP {resp.status_code}")
+            return []
+        html = resp.text
+
+        # 方法1: 提取 __NEXT_DATA__ JSON
+        next_data_match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+        if next_data_match:
+            try:
+                nd = json.loads(next_data_match.group(1))
+                # 递归搜索JSON中所有title/content字段
+                def _extract_titles(obj, depth=0):
+                    titles = []
+                    if depth > 5:
+                        return titles
+                    if isinstance(obj, dict):
+                        for k, v in obj.items():
+                            if k in ('title', 'content_text', 'brief') and isinstance(v, str) and len(v) > 5:
+                                titles.append(v.strip())
+                            elif isinstance(v, (dict, list)):
+                                titles.extend(_extract_titles(v, depth+1))
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            titles.extend(_extract_titles(item, depth+1))
+                    return titles
+                raw_titles = _extract_titles(nd)
+                results = []
+                seen = set()
+                for t in raw_titles:
+                    t = t.replace('\n', ' ').strip()[:100]
+                    if t and len(t) > 8 and t[:30] not in seen:
+                        seen.add(t[:30])
+                        results.append({
+                            'title': t,
+                            'source': '财联社',
+                            'summary': '政策/供需快讯'
+                        })
+                if results:
+                    return results[:count]
+            except json.JSONDecodeError:
+                pass
+
+        # 方法2兜底: 直接从HTML提取标题链接
+        titles = re.findall(r'<a[^>]*href="[^"]*"[^>]*>(.*?)</a>', html)
+        items = []
+        for t in titles:
+            t = re.sub(r'<[^>]+>', '', t).strip()
+            if t and len(t) > 10:
+                items.append({
+                    'title': t,
+                    'source': '财联社',
+                    'summary': '政策/供需快讯'
+                })
+        seen = set()
+        unique = []
+        for item in items:
+            key = item['title'][:30]
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        return unique[:count]
+    except Exception as e:
+        logging.warning(f"[新闻] 财联社抓取失败: {e}")
+        return []
+
+
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
     RSS_SOURCES = {
@@ -989,7 +1228,7 @@ def fetch_raw_materials():
     source_stats = {}
     with ThreadPoolExecutor(max_workers=12) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
-        hot_future = pool.submit(_fetch_baidu_hot, 20)
+        hot_future = pool.submit(_fetch_baidu_hot, 5)  # V20: 百度热搜从20→5，降权
 
         for name, future in rss_futures.items():
             try:
@@ -1013,6 +1252,25 @@ def fetch_raw_materials():
         source_stats['新浪财经'] = len(sina_items)
     except Exception:
         source_stats['新浪财经'] = 0
+
+    # V20: 供需信号源 — 生意社/华尔街见闻/期货日报/财联社
+    with ThreadPoolExecutor(max_workers=4) as signal_pool:
+        signal_futures = {
+            '生意社': signal_pool.submit(_fetch_sinews, 15),
+            '华尔街见闻': signal_pool.submit(_fetch_wallstreetcn, 15),
+            '期货日报': signal_pool.submit(_fetch_qhrb, 15),
+            '财联社': signal_pool.submit(_fetch_cls, 15),
+        }
+        for name, future in signal_futures.items():
+            try:
+                items = future.result(timeout=15)
+                all_raw.extend(items)
+                source_stats[name] = len(items)
+                if items:
+                    logging.info(f"[新闻] {name}补充: {len(items)}条")
+            except Exception as e:
+                source_stats[name] = 0
+                logging.warning(f"[新闻] {name}抓取失败: {e}")
 
     # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
     taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
