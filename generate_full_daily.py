@@ -1809,8 +1809,33 @@ def _fallback_contra_tide(top_items):
     ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw).rstrip('？?！!。、')
     title_lower = title.lower()
 
+    # V20-fix: 先判断是否政策/监管类新闻 — 政策发布≠产品发布，逻辑完全不同
+    policy_markers = ['总局', '部门', '委员会', '委办', '办公室', '国务院', '省政府', '市发改委',
+                      '意见', '通知', '办法', '规定', '条例', '指导意见', '实施方案', '纲要',
+                      '印发', '贯彻', '落实', '监管', '备案', '准入', '审查']
+    is_policy_news = any(kw in title for kw in policy_markers)
+
     # 检测共识倾向 — V16: 扩充关键词覆盖+else分支生成具体逆向分析
-    if any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN', '新高', '历史最高', '飙升', '翻倍', '大涨']):
+    if is_policy_news:
+        # V20-fix: 政策/监管类新闻的逆向逻辑 — 不做空概念股，而是找政策落地的断裂点
+        # 从标题提取政策影响的行业/领域
+        policy_domains = {
+            '人工智能': 'AI', 'ai': 'AI', '算力': 'AI', '大模型': 'AI',
+            '金融': '金融', '银行': '金融', '保险': '金融', '证券': '金融',
+            '新能源': '新能源', '光伏': '新能源', '储能': '新能源', '电动车': '新能源',
+            '芯片': '半导体', '半导体': '半导体',
+            '数据': '数据', '网络安全': '数据',
+        }
+        affected_domain = '相关行业'
+        for kw, domain in policy_domains.items():
+            if kw in title_lower:
+                affected_domain = domain
+                break
+        consensus = f"'{title[:25]}' → 市场共识偏向悲观（政策=合规成本上升）"
+        reverse = f"政策从发文到落地有时间差+执行往往打折→{affected_domain}行业短期过度反应，实际影响远小于预期"
+        bet = f"趁市场过度反应时关注{affected_domain}行业的合规服务商/替代技术供应商——政策越严，合规需求越旺"
+        stop = f"政策细则出台后确实严格执行（3-6个月内出现批量处罚/关停案例），则政策影响是实质性的"
+    elif any(kw in title_lower for kw in ['暴涨', '疯抢', '热', '爆发', 'ALL IN', '新高', '历史最高', '飙升', '翻倍', '大涨']):
         consensus = f"'{title[:25]}' → 市场共识偏向狂热"
         reverse = "涨过头必有回调——关注库存积压/产能释放信号"
         bet = "做空或减仓相关资产，等回调20%以上再入场"
@@ -1825,10 +1850,11 @@ def _fallback_contra_tide(top_items):
         reverse = "政策从发文到执行有时间差，且执行往往打折"
         bet = "趁市场过度反应时反向布局受影响资产"
         stop = "政策细则出台后确实严格，则逆向判断错误"
-    elif any(kw in title_lower for kw in ['发布', '推出', '首发', '突破', '创新', '技术', '量子', '上线']):
+    elif any(kw in title_lower for kw in ['发布', '推出', '首发', '突破', '创新', '技术', '量子', '上线']) and not is_policy_news:
+        # V20-fix: 排除政策类新闻（已在上方is_policy_news分支处理）
         consensus = f"'{title[:25]}' → 市场共识偏向乐观期待"
         reverse = f"新技术/新产品发布→PPT到量产差18-24个月→市场高估短期影响→{ent}的实际商业化进度远慢于预期"
-        bet = f"做空{ent}概念股的短期溢价，或在发布后1-2周买入被连带错杀的竞争对手"
+        bet = f"关注{ent}发布后1-2周被连带错杀的竞争对手——确定性更高的标的"
         stop = f"如果6个月内{ent}真的达到量产里程碑，则逆向判断错误"
     elif any(kw in title_lower for kw in ['融资', '投资', '收购', '合并', '并购', '定增', '募资']):
         consensus = f"'{title[:25]}' → 市场共识偏向看好融资方"
