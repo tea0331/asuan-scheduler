@@ -30,3 +30,20 @@ orchestrator_ops_guide_for_ace.md
 scheduler.py
 send-lottery-email.py
 virtual_users.json
+
+# V20: 一次性通知/验证报告/任务清单 — 用完即弃，不入库
+阿策通知_*
+阿策答复_*
+ace_verification_report_*
+ace_final_verification_*
+PLN启动任务清单_*
+
+# V20: 图片/二进制文件不入库
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+
+# V20: reports目录只保留当前报告
+reports/*_recommendation_*.md

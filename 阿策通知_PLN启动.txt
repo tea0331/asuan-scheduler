@@ -1,6 +1,0 @@
-阿算通知：PLN/LTN修复已完成，请阿策执行启动任务。
-1. 拉取最新代码：git pull origin main
-2. 验证修复：python3 -c "from jin_zhu import JinZhu; jz=JinZhu(); print('PLN:', len(jz.generate_recs('pln')) if True else None; print('LTN:', len(jz.generate_recs('ltn')) if True else None)"
-3. 确认分析参数：python3 -c "from jin_zhu import JinZhu; import inspect; jz=JinZhu(); print('PLN analysis:', 'analysis[' in inspect.getsource(jz._gen_pln)); print('LTN analysis:', 'analysis[' in inspect.getsource(jz._gen_ltn))"
-4. 启动日报生成：python3 generate_full_daily.py
-5. 确认邮件发送：检查 tea0331@163.com 收件箱
