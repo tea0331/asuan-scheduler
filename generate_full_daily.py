@@ -1280,20 +1280,33 @@ def _fallback_all_sections(all_raw, top_items):
     used_titles = set(n['title'][:30] for n in ai_items)
 
     # 板块一: 每日资讯
+    # V19-fix: 同模板去重，避免同类新闻输出完全一样的影响链
+    used_chain_templates = set()
     sections = ["## 一、每日资讯\n"]
+
+    def _append_impact(n):
+        """给单条新闻附加影响链，同模板去重"""
+        sections.append(f"- **{n['title']}**")
+        template = _match_impact_chain(n['title'])
+        tpl_id = template['fracture']  # 用断裂点做唯一标识
+        entity = _extract_entity(n['title'])
+        ent_short = re.sub(r'^[在的得了被把将向从]', '', entity[:8]).rstrip('？?！!。、')
+        if tpl_id not in used_chain_templates:
+            # 首次匹配此模板 → 输出完整影响链
+            used_chain_templates.add(tpl_id)
+            sections.append(_format_impact_chain(template, ent_short))
+        else:
+            # 同模板已输出过 → 只标注实体+断裂点，不重复完整链
+            sections.append(f"  > 📌 同类影响: 「{ent_short}」触发相同传导链（{template['fracture']}，窗口{template['window']}）→ 见上方完整链")
+
     sections.append("### 🤖 AI/算力\n")
     for n in ai_items[:4]:
-        sections.append(f"- **{n['title']}**")
-        # V19: 影响链推演替代话术模板
-        op_card = _infer_impact_chain(n['title'])
-        sections.append(op_card)
+        _append_impact(n)
 
     biz_items = [n for n in filtered_all if n['title'][:30] not in used_titles]
     sections.append("\n### 🌐 出海/商业\n")
     for n in biz_items[:4]:
-        sections.append(f"- **{n['title']}**")
-        op_card = _infer_impact_chain(n['title'])
-        sections.append(op_card)
+        _append_impact(n)
 
     sections.append("\n### 🔥 热搜/时事\n")
     for n in hot_filtered[:5]:
@@ -1326,17 +1339,21 @@ def _format_impact_chain(template, entity=''):
     layers = template['layers']
     chain_parts = []
     for i, (resource, direction, timing, desc) in enumerate(layers, 1):
-        arrow = '→' if i > 1 else ''
         tag = '🔴短缺' if direction == '短缺' else '🟢过剩'
         chain_parts.append(f"L{i}{resource}({tag},{timing})")
     chain_str = '→'.join(chain_parts)
     fracture = template['fracture']
     window = template['window']
 
+    # V19-fix: 注入新闻实体，让同类别不同新闻的输出有差异
+    entity_tag = f"「{entity}」" if entity else ''
+
     lines = [
         f"  > 📡 影响链: {chain_str}",
         f"  > ⚡ 断裂点: {fracture}，窗口{window}",
     ]
+    if entity:
+        lines.append(f"  > 📌 触发: {entity_tag}引发上述资源传导")
     return "\n".join(lines)
 
 
