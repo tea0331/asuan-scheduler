@@ -1290,7 +1290,16 @@ def _fallback_all_sections(all_raw, top_items):
         template = _match_impact_chain(n['title'])
         tpl_id = template['fracture']  # 用断裂点做唯一标识
         entity = _extract_entity(n['title'])
-        ent_short = re.sub(r'^[在的得了被把将向从]', '', entity[:8]).rstrip('？?！!。、')
+        ent_short = entity
+        # V19-fix: 实体太短或全是噪音 → 用标题前15字代替
+        clean = re.sub(r'[在的得了被把将向从]', '', entity)
+        if len(clean) < 3:
+            ent_short = n['title'][:15].strip()
+        else:
+            ent_short = re.sub(r'^[在的得了被把将向从]', '', entity).rstrip('？?！!。、')
+            # 安全截断：保留至少3个有效字符
+            if len(ent_short) < 3:
+                ent_short = n['title'][:10].strip()
         if tpl_id not in used_chain_templates:
             # 首次匹配此模板 → 输出完整影响链
             used_chain_templates.add(tpl_id)
@@ -1934,6 +1943,7 @@ COMPANY_DB = {
     '比亚迪': '比亚迪(1211 HK)', '宁德时代': '宁德时代(300750)',
     '英伟达': 'NVIDIA(NVDA)', 'OpenAI': 'OpenAI(私有)', 'DeepSeek': 'DeepSeek(私有)',
     '英特尔': 'Intel(INTC)', 'AMD': 'AMD(AMD)', '三星': 'Samsung(005930 KS)',
+    '知源智能': '知源智能(天使轮)',
 }
 
 
@@ -1950,7 +1960,16 @@ def _extract_entity(title):
     # V14: 优先匹配预置公司库（最高优先级）
     for company_name, full_name in COMPANY_DB.items():
         if company_name in title:
-            return full_name
+            # V19-fix: 验证匹配是否合理（排除误匹配）
+            # 如果匹配到的片段包含噪音词（融资/收购/完成等），可能是误匹配
+            noise_in_match = {'融资', '收购', '完成', '宣布', '推出', '发布', '获', '斩获'}
+            if not any(n in full_name for n in noise_in_match):
+                return full_name
+
+    # V19-fix: 公司库未匹配到 → 取标题前15字符作为实体（降级方案）
+    title_prefix = title[:15].strip()
+    if title_prefix:
+        return title_prefix
 
     # 噪音词库
     noise = {'今日', '最新', '突发', '重磅', '刚刚', '快讯', '关注', '热点', '警惕', '注意', '曝光',
