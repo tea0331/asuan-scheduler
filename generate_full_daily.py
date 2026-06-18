@@ -107,6 +107,12 @@ USER_PROFILE_V7 = {
     '政策': 5, '补贴': 3, '免税': 3, '减税': 2, '新规': 5,
     '央行': 4, '降息': 4, '加息': 4, '流动性': 3,
     '裁员': 2, '亏损': 3, '逆势': 3, '关停': 4,
+    # V20-fix2: 重大签署/政策类新闻大幅加权 — 因果链最强触发源
+    '签署': 5, '协议': 5, '贷款': 5, '合作': 4, '备忘录': 5,
+    '联合声明': 5, '联合公报': 5, '框架协议': 5, '战略协议': 5,
+    '国务院': 5, '部委': 5, '实施意见': 5, '指导意见': 5,
+    '管理办法': 5, '管理条例': 5, '暂行规定': 5, '印发': 4,
+    '征求意见': 4, '公开征求意见': 4, '落地': 4, '施行': 5,
     # ====== 科技/产业（调整） ======
     '手机': 1, '华为': 2, '小米': 1, '苹果': 1,
     '机器人': 3, '无人驾驶': 2, '自动驾驶': 2,
@@ -1414,11 +1420,16 @@ def generate_all_sections():
 
 ## 一、每日资讯
 
-分类: 🤖 AI/算力 | 🏦 金融 | 📊 供需/大宗 | 🌐 出海 | 🎯 重大签署
+分类: 🤖 AI/算力 | 📊 供需/大宗 | 🎯 重大签署/政策 | 🌐 出海
 每条:
 - **标题**
   > 📡 因果链: [因为A所以B→因为B所以C→因为C所以D→因为D所以E，每步写清因果，标注过剩的步骤]
   > 注意: 融资新闻（XX完成X轮融资）只列标题不附因果链，因果推演价值低
+
+  > ⭐ 高价值信号（优先推演）:
+  > - 重大签署: 任何国家间的协议/贷款/合作签署（中美/中欧/中日/美日等），这类新闻直接改变供应链结构
+  > - 国内新规: 国务院/部委/省级新政策、新办法、新指导意见，这类新闻直接改变供需规则
+  > 这两类是因果链最强触发源，遇到必须深度推演
 
 ## 二、资源短缺预警
 
@@ -1464,10 +1475,12 @@ def generate_all_sections():
 3. 传导链必须基于今日新闻，禁止铜→PCB→电动车抽象模板
 4. 融资新闻（XX完成X轮融资）只列标题不附因果链——可操作空间太少
 5. 禁止推送八卦热搜/娱乐新闻——只推供需信号/政策落地/重大签署类新闻
-6. 金句每天不同，结合当日主题
-7. 总字数2000-3000字
-8. ⏰ 所有时间窗口基于{today_str}推算
-9. 📍 优先挖掘台湾相关机会
+6. ⭐ 重大签署类新闻（国家间协议/贷款/合作）必须深度推演因果链——这类直接改变供应链结构
+7. ⭐ 国内新政策/新规类新闻（国务院/部委/省级）必须深度推演因果链——这类直接改变供需规则
+8. 金句每天不同，结合当日主题
+9. 总字数2000-3000字
+10. ⏰ 所有时间窗口基于{today_str}推算
+11. 📍 优先挖掘台湾相关机会
 {scene_context}
 {chain_ctx}"""
 
@@ -1552,14 +1565,22 @@ def _fallback_all_sections(all_raw, top_items):
     # 画像过滤
     filtered_all = filter_by_profile(all_raw, min_score=0, top_n=15)
 
-    # V20: 砍掉百度热搜板块，改为供需/大宗信号板块
-    signal_items = [n for n in all_raw if n.get('source') in ['生意社', '期货日报', '华尔街见闻', '财联社']]
-    # V20-fix: 供需/大宗板块只放真正的供需信号，排除AI/融资类
+    # V20: 砍掉百度热搜板块，改为"🎯 重大签署/政策 + 📊 供需/大宗"两个信号板块
+    signal_items = [n for n in all_raw if n.get('source') in ['生意社', '期货日报', '华尔街见闻', '财联社', '新浪财经']]
+    # V20-fix2: 重大签署/政策类新闻从所有源筛选（不只限信号源）
+    signing_policy_kw = ['签署', '协议', '贷款', '备忘录', '联合声明', '框架协议', '战略协议',
+                         '国务院', '部委', '实施意见', '指导意见', '管理办法', '管理条例',
+                         '印发', '征求意见', '施行', '新规', '政策', '监管', '合规']
+    signing_policy_items = [n for n in all_raw
+                            if any(kw in n.get('title', '') for kw in signing_policy_kw)
+                            and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:3]
+
+    # 供需/大宗板块只放真正的供需信号，排除AI/融资类
     supply_demand_kw = ['涨', '跌', '断供', '缺货', '短缺', '减产', '停产', '限产', '供需',
                         '供应', '需求', '库存', '产能', '产量', '成本', '价格', '行情',
                         '管制', '禁令', '制裁', '配额', '期货', '现货', '石油', '铜', '铝',
                         '钢', '锂', '稀土', '硫酸', '粮食', '天然气', '煤', '铁矿',
-                        '签署', '协议', '贷款', '投资', '合作', '项目', '用地', '审批']
+                        '飙升', '狂飙', '趋紧', '紧缺', '一飞冲天', '破十万']
     signal_filtered = [n for n in signal_items 
                        if any(kw in n.get('title', '') for kw in supply_demand_kw)
                        and not any(kw in n.get('title', '').lower() for kw in ['融资', '天使轮', 'a轮', 'b轮', 'pre-a', '领投'])][:5]
@@ -1613,12 +1634,20 @@ def _fallback_all_sections(all_raw, top_items):
             sections.append(f"  > 📌 同类因果: 「{ent_short}」触发相同因果链（断裂在{template['fracture']}，窗口{template['window']}）→ 见上方完整链")
 
     sections.append("### 🤖 AI/算力\n")
-    for n in ai_items[:4]:
+    for n in ai_items[:3]:
         _append_impact(n)
 
-    biz_items = [n for n in filtered_all if n['title'][:30] not in used_titles]
+    # V20-fix2: 重大签署/政策板块 — 国家间协议+国内新规，因果链最强触发源
+    used_titles_sp = set(n['title'][:30] for n in ai_items)
+    sections.append("\n### 🎯 重大签署/政策\n")
+    for n in signing_policy_items[:4]:
+        if n['title'][:30] not in used_titles_sp:
+            _append_impact(n)
+            used_titles_sp.add(n['title'][:30])
+
+    biz_items = [n for n in filtered_all if n['title'][:30] not in used_titles and n['title'][:30] not in used_titles_sp]
     sections.append("\n### 🌐 出海/商业\n")
-    for n in biz_items[:4]:
+    for n in biz_items[:3]:
         _append_impact(n)
 
     sections.append("\n### 📊 供需/大宗\n")
