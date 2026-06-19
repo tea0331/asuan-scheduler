@@ -1378,6 +1378,8 @@ class WeightedAnalyzer:
             'special_freq': special_freq,
             'main_miss': main_miss,
             'special_miss': special_miss,
+            'main_avg_interval': main_avg_interval,
+            'special_avg_interval': special_avg_interval,
             'zone_balance': zone_balance,
             'avg_sum': avg_sum,
             'total_periods': total,

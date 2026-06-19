@@ -1528,10 +1528,10 @@ def _filter_noise_news(news_items):
 # ============================================================
 # AI调用
 # ============================================================
-def _call_hunyuan_api(system_msg, user_msg, timeout=60):
+def _call_hunyuan_api(system_msg, user_msg, timeout=90):
     """调用混元API，单次调用带timeout
 
-    v8.4 优化: 超时从120秒降到60秒(快速失败)，限流重试3次(指数退避)
+    v8.4 优化: 超时90秒(兼顾慢响应)，限流重试3次(指数退避)，max_tokens 4000(减少生成时间)
     """
     api_key = os.getenv('HUNYUAN_API_KEY', '')
     if not api_key:
@@ -1548,7 +1548,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=60):
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
         ],
-        "max_tokens": 6000,
+        "max_tokens": 4000,
         "temperature": 0.75,
     }
 
@@ -1731,11 +1731,11 @@ def generate_all_sections():
 
 请生成今日完整6板块日报。"""
 
-    # 5. 调用AI生成 (v8.4: 超时120秒，API内部60秒×3次重试)
+    # 5. 调用AI生成 (v8.4: 超时200秒，API内部90秒×3次重试)
     try:
         content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=60),
-            timeout=120
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=90),
+            timeout=200
         )
         if content and len(content) > 500:
             # 验证6板块是否齐全
