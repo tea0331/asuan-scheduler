@@ -1523,8 +1523,11 @@ def _filter_noise_news(news_items):
 # ============================================================
 # AI调用
 # ============================================================
-def _call_hunyuan_api(system_msg, user_msg, timeout=90):
-    """调用混元API，单次调用带timeout"""
+def _call_hunyuan_api(system_msg, user_msg, timeout=60):
+    """调用混元API，单次调用带timeout
+
+    v8.4 优化: 超时从120秒降到60秒(快速失败)，限流重试3次(指数退避)
+    """
     api_key = os.getenv('HUNYUAN_API_KEY', '')
     if not api_key:
         logging.error("[AI] HUNYUAN_API_KEY未设置，请在环境变量中配置")
@@ -1544,39 +1547,43 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
         "temperature": 0.75,
     }
 
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-        if resp.status_code == 200:
-            result = resp.json()
-            content = result['choices'][0]['message']['content']
-            content = content.strip()
-            # 清理markdown代码块包裹
-            if content.startswith('```markdown'):
-                content = content[len('```markdown'):]
-            if content.startswith('```'):
-                content = content[len('```'):]
-            if content.endswith('```'):
-                content = content[:-3]
-            return content.strip()
-        elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
-            logging.warning("[AI] 混元API限流，等待5秒重试...")
-            import time; time.sleep(5)
+    import time
+
+    for attempt in range(3):
+        try:
             resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
             if resp.status_code == 200:
                 result = resp.json()
-                return result['choices'][0]['message']['content'].strip()
+                content = result['choices'][0]['message']['content']
+                content = content.strip()
+                # 清理markdown代码块包裹
+                if content.startswith('```markdown'):
+                    content = content[len('```markdown'):]
+                if content.startswith('```'):
+                    content = content[len('```'):]
+                if content.endswith('```'):
+                    content = content[:-3]
+                return content.strip()
+            elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
+                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s 指数退避
+                logging.warning(f"[AI] 混元API限流(attempt {attempt+1}/3)，等待{wait}秒重试...")
+                time.sleep(wait)
+                continue
             else:
-                logging.warning(f"[AI] 重试仍失败: {resp.status_code}")
+                logging.warning(f"[AI] 混元API失败: {resp.status_code} {resp.text[:200]}")
                 return None
-        else:
-            logging.warning(f"[AI] 混元API失败: {resp.status_code} {resp.text[:200]}")
+        except requests.exceptions.Timeout:
+            logging.warning(f"[AI] 混元API超时({timeout}秒, attempt {attempt+1}/3)")
+            if attempt < 2:
+                time.sleep(3)
+                continue
             return None
-    except requests.exceptions.Timeout:
-        logging.warning(f"[AI] 混元API超时({timeout}秒)")
-        return None
-    except Exception as e:
-        logging.warning(f"[AI] 混元API异常: {e}")
-        return None
+        except Exception as e:
+            logging.warning(f"[AI] 混元API异常: {e}")
+            return None
+
+    logging.warning("[AI] 混元API 3次重试均失败")
+    return None
 
 
 # ============================================================
@@ -1719,11 +1726,11 @@ def generate_all_sections():
 
 请生成今日完整6板块日报。"""
 
-    # 5. 调用AI生成 (外层超时180秒)
+    # 5. 调用AI生成 (v8.4: 超时120秒，API内部60秒×3次重试)
     try:
         content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=120),
-            timeout=180
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=60),
+            timeout=120
         )
         if content and len(content) > 500:
             # 验证6板块是否齐全

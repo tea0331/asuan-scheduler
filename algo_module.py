@@ -1376,33 +1376,50 @@ class ROITracker:
                 return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
 
             elif game == 'ltn':
-                # ⚠️ TODO: 台湾大乐透格式设计有误，需重构
-                # 官方: 6/49 + 特别号(1个)，8个奖级
-                # 代码格式: front(5, 1-47) + back(2, 1-38)
-                #   - 号码范围错误(应49)
-                #   - back=[第6主号, 特别号](sorted)，无法区分主号和特别号
-                #   - 导致无法正确判断特别号相关奖级
-                # 临时方案: 用总命中数做近似判断(仅判断主号命中)
-                # 正式修复需重构 LTN 整个数据格式
-                front = numbers.get('front', [])
-                back = numbers.get('back', [])
-                actual_front = actual.get('front', [])
-                actual_back = actual.get('back', [])
-                front_hits = len(set(front) & set(actual_front))
-                back_hits = len(set(back) & set(actual_back))
-                total_hits = front_hits + back_hits
+                # 台湾大乐透: 6/49 + 特别号(1个)，官方8个奖级
+                # v8.4 重构: 从旧格式front(5)+back(2)改为main(6)+special(1)
+                # 兼容旧格式: 如果有front/back没有main/special，做转换
+                if 'main' not in numbers and 'front' in numbers:
+                    # 旧格式兼容: front(5) + back(2) → main(6) + special(1)
+                    front = numbers.get('front', [])
+                    back = numbers.get('back', [])
+                    main = sorted(front + [back[0]]) if back else front
+                    special = back[1] if len(back) > 1 else 0
+                else:
+                    main = numbers.get('main', [])
+                    special = numbers.get('special', 0)
 
-                # 近似: front(5主号) + back(主号+特别号) = 总7号
-                # 主号命中 = front_hits + (back里属于actual_front+actual_back主号的部分)
-                # 简化为: total_hits >= 6 → 头奖, >=5 → 贰奖, 等
-                # ⚠️ 这只是近似，会在后续 LTN 重构时替换
-                if total_hits >= 6:
+                if 'main' not in actual and 'front' in actual:
+                    a_front = actual.get('front', [])
+                    a_back = actual.get('back', [])
+                    actual_main = sorted(a_front + [a_back[0]]) if a_back else a_front
+                    actual_special = a_back[1] if len(a_back) > 1 else 0
+                else:
+                    actual_main = actual.get('main', [])
+                    actual_special = actual.get('special', 0)
+
+                if isinstance(special, list): special = special[0] if special else 0
+                if isinstance(actual_special, list): actual_special = actual_special[0] if actual_special else 0
+                main_hits = len(set(main) & set(actual_main))
+                special_hit = 1 if special == actual_special else 0
+                total_hits = main_hits + special_hit
+
+                # 官方8级奖级
+                if main_hits == 6:
                     return {'tier': 1, 'name': '头奖', 'prize': 100000000, 'hit_count': total_hits}
-                elif total_hits == 5:
+                elif main_hits == 5 and special_hit == 1:
+                    return {'tier': 2, 'name': '贰奖', 'prize': 5000000, 'hit_count': total_hits}
+                elif main_hits == 5:
                     return {'tier': 3, 'name': '叁奖', 'prize': 50000, 'hit_count': total_hits}
-                elif total_hits == 4:
-                    return {'tier': 5, 'name': '伍奖', 'prize': 2000, 'hit_count': total_hits}
-                elif total_hits == 3:
+                elif main_hits == 4 and special_hit == 1:
+                    return {'tier': 4, 'name': '肆奖', 'prize': 2000, 'hit_count': total_hits}
+                elif main_hits == 4:
+                    return {'tier': 5, 'name': '伍奖', 'prize': 1000, 'hit_count': total_hits}
+                elif main_hits == 3 and special_hit == 1:
+                    return {'tier': 6, 'name': '陆奖', 'prize': 400, 'hit_count': total_hits}
+                elif main_hits == 2 and special_hit == 1:
+                    return {'tier': 7, 'name': '柒奖', 'prize': 400, 'hit_count': total_hits}
+                elif main_hits == 3:
                     return {'tier': 8, 'name': '普奖', 'prize': 400, 'hit_count': total_hits}
                 return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
         except Exception as e:
@@ -1455,8 +1472,8 @@ class ROITracker:
                 nums = r.get('numbers', [])
                 numbers = {'main': nums[:6], 'special': nums[6] if len(nums) > 6 else 0}
             elif game == 'ltn':
-                # LTN推荐格式: r['front'] = [5个], r['back'] = [2个]
-                numbers = {'front': r.get('front', []), 'back': r.get('back', [])}
+                # LTN推荐格式: r['main'] = [6个], r['special'] = 1个
+                numbers = {'main': r.get('main', []), 'special': r.get('special', 0)}
             
             cost = kelly * 2  # 简化成本计算
             # save_bet内部会json.dumps(numbers)，这里传dict而非字符串

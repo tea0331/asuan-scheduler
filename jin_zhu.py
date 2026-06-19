@@ -276,9 +276,11 @@ class JinZhu:
             analysis['front_weights'] = sorted(front_weights.items(), key=lambda x: x[1], reverse=True)
 
         elif game in ('pln', 'ltn'):
-            # PLN: 前区1-38选6 + 特别号1-8
-            # LTN: 前区1-47选5 + 特别号1-39
+            # PLN: 主号1-38选6 + 特别号1-8
+            # LTN: 主号1-49选6 + 特别号1-49 (v8.4: 从5/47+2/38改为6/49+special)
             last_numbers = last_draw.get('numbers', [])
+            if not last_numbers and isinstance(last_draw, dict):
+                last_numbers = last_draw.get('main', last_draw.get('numbers', []))
             if not last_numbers and isinstance(last_draw, dict):
                 last_numbers = last_draw.get('front', last_draw.get('reds', []))
             if not last_numbers:
@@ -286,7 +288,7 @@ class JinZhu:
             main_weights = dict(analysis.get('main_weights', []))
             if not main_weights:
                 main_weights = dict(analysis.get('front_weights', []))
-            limit = 38 if game == 'pln' else 47
+            limit = 38 if game == 'pln' else 49
             for n in last_numbers:
                 for neighbor in [n - 1, n + 1]:
                     if 1 <= neighbor <= limit and neighbor in main_weights:
@@ -642,80 +644,110 @@ class JinZhu:
         return selected[:n_specials]
 
     def _gen_ltn(self, analysis: dict, kelly_bias: float = 0.0) -> list:
-        """台湾大乐透5注推荐(用analysis参数做加权选号)"""
+        """台湾大乐透5注推荐 — v8.4: 官方6/49+特别号
+
+        数据格式改为: main(6, 1-49) + special(1, 1-49)
+        """
         import random
 
         # 构建候选池
-        front_weight_dict = dict(analysis.get('front_weights', []))
-        back_weight_dict = dict(analysis.get('back_weights', []))
+        main_weight_dict = dict(analysis.get('main_weights', []))
+        special_weight_dict = dict(analysis.get('special_weights', []))
 
-        all_front_pool = []
-        for n in range(1, 48):
-            w = front_weight_dict.get(n, 0)
-            f = analysis.get('front_freq', {}).get(n, 0)
-            m = analysis.get('front_miss', {}).get(n, 0)
-            all_front_pool.append((n, w, f, m))
+        all_main_pool = []
+        for n in range(1, 50):
+            w = main_weight_dict.get(n, 0)
+            f = analysis.get('main_freq', {}).get(n, 0)
+            m = analysis.get('main_miss', {}).get(n, 0)
+            all_main_pool.append((n, w, f, m))
 
-        all_back_pool = []
-        for n in range(1, 39):
-            w = back_weight_dict.get(n, 0)
-            f = analysis.get('back_freq', {}).get(n, 0)
-            m = analysis.get('back_miss', {}).get(n, 0)
-            all_back_pool.append((n, w, f, m))
-
-        all_front_pool = self._kelly_sort(all_front_pool, kelly_bias)
-        all_back_pool = self._kelly_sort(all_back_pool, kelly_bias)
+        all_main_pool = self._kelly_sort(all_main_pool, kelly_bias)
         strategy_tag = self._kelly_tag(kelly_bias)
 
-        # 核心注A: 前区TOP5 + 后区TOP2
-        core_front_A = sorted([n for n, w, f, m in all_front_pool[:5]])
-        core_back_A = [n for n, w, f, m in all_back_pool[:2]]
+        # 核心注A: 主号TOP6
+        core_main_A = sorted([n for n, w, f, m in all_main_pool[:6]])
 
         # 核心注B: 独立池
-        core_front_B = self._select_independent_pool(all_front_pool, core_front_A, 5)
-        core_back_B = self._select_independent_pool(all_back_pool, core_back_A, 2)
+        core_main_B = self._select_independent_pool(all_main_pool, core_main_A, 6)
 
         # 扩展1: 形态优化
-        target_sum = analysis.get('avg_sum', 90)
-        top20 = [n for n, w, f, m in all_front_pool[:20]]
-        must_keep = sorted([n for n, w, f, m in all_front_pool[:3]])
-        ext1_front = self._shape_optimized_select(top20, 5, target_sum, target_odd=3, target_big=3, must_include=must_keep, big_threshold=24)
-        # ext1_back: 独立选1对后区
-        ext1_back_pair = self._select_backs(analysis, n_pairs=1)
-        ext1_back = ext1_back_pair[0] if ext1_back_pair else [1, 2]
+        target_sum = analysis.get('avg_sum', 150)  # LTN 6/49 和值约150
+        top20 = [n for n, w, f, m in all_main_pool[:20]]
+        must_keep = sorted([n for n, w, f, m in all_main_pool[:3]])
+        ext1_main = self._shape_optimized_select(top20, 6, target_sum, target_odd=3, target_big=3, must_include=must_keep, big_threshold=25)
 
-        # 扩展2: 回补池（前区用回补逻辑，后区独立选）
-        ext2_front = self._select_recovery_pool(analysis, all_front_pool, set(core_front_A) | set(core_front_B) | set(ext1_front), n_select=5)
-        # ext2_back: 独立选1对后区（与前面不重叠）
-        used_back_set = set(core_back_A) | set(ext1_back)
-        ext2_back_pair = self._select_backs(analysis, n_pairs=1)
-        # 过滤掉已用的后区号码
-        ext2_back = None
-        for pair in ext2_back_pair:
-            if not set(pair) & used_back_set:
-                ext2_back = pair
-                break
-        if ext2_back is None:
-            # 如果所有pair都冲突，选一个不冲突的号码组合
-            candidates = [n for n in range(1, 13) if n not in used_back_set]
-            ext2_back = sorted(candidates[:2]) if len(candidates) >= 2 else [1, 2]
+        # 扩展2: 回补池
+        ext2_main = self._select_recovery_pool(analysis, all_main_pool, set(core_main_A) | set(core_main_B) | set(ext1_main), n_select=6)
 
         # 冷号注
-        used = set(core_front_A) | set(core_front_B) | set(ext1_front) | set(ext2_front)
-        cold_front = self._select_cold_front(analysis, all_front_pool, used)
-        cold_back = self._select_cold_back(analysis, set(core_back_A) | set(core_back_B) | set(ext1_back) | set(ext2_back))
+        used = set(core_main_A) | set(core_main_B) | set(ext1_main) | set(ext2_main)
+        cold_main = self._select_cold_ltn(analysis, used)
+
+        # 特别号选择: 从special_weights选5个
+        specials = self._select_ltn_specials(analysis, n_specials=5)
 
         # 随机扰动
-        core_front_A = self._perturb(core_front_A, all_front_pool, max_swaps=1)
-        core_front_B = self._perturb(core_front_B, all_front_pool, max_swaps=1)
+        core_main_A = self._perturb(core_main_A, all_main_pool, max_swaps=1)
+        core_main_B = self._perturb(core_main_B, all_main_pool, max_swaps=1)
 
         return [
-            {'front': core_front_A, 'back': core_back_A, 'strategy': f'{strategy_tag}A'},
-            {'front': core_front_B, 'back': core_back_B, 'strategy': f'{strategy_tag}B'},
-            {'front': ext1_front, 'back': ext1_back, 'strategy': Strategy.EXT1},
-            {'front': ext2_front, 'back': ext2_back, 'strategy': Strategy.EXT2},
-            {'front': cold_front, 'back': cold_back, 'strategy': Strategy.COLD},
+            {'main': core_main_A, 'special': specials[0], 'strategy': f'{strategy_tag}A'},
+            {'main': core_main_B, 'special': specials[1], 'strategy': f'{strategy_tag}B'},
+            {'main': ext1_main, 'special': specials[2], 'strategy': Strategy.EXT1},
+            {'main': ext2_main, 'special': specials[3], 'strategy': Strategy.EXT2},
+            {'main': cold_main, 'special': specials[4], 'strategy': Strategy.COLD},
         ]
+
+    def _select_cold_ltn(self, analysis, used_set):
+        """LTN冷号注主号(1-49)- 温和回补策略(非极端冷号)"""
+        cold_miss_w = self.get_param('cold_miss_front', 0.40)
+        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
+        cold_freq_w = self.get_param('cold_freq_front', 0.30)
+
+        miss_key = 'main_miss'
+        freq_key = 'main_freq'
+        avg_interval = analysis.get('main_avg_interval', {})
+
+        scores = []
+        for n in range(1, 50):
+            if n in used_set:
+                continue
+            miss_val = analysis[miss_key].get(n, 0)
+            avg_i = avg_interval.get(n, 15)
+            ratio = miss_val / max(avg_i, 1)
+
+            if 0.8 <= ratio <= 2.0:
+                miss_score = 2.5
+            elif ratio > 2.0:
+                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
+            else:
+                miss_score = ratio * 1.5
+
+            cycle_signal = min(ratio, 2.0)
+            f = analysis[freq_key].get(n, 0)
+            f_score = min(f / 3.0, 1.5)
+            score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
+            scores.append((n, score))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return sorted([n for n, s in scores[:6]])
+
+    def _select_ltn_specials(self, analysis, n_specials=5):
+        """LTN特别号选择(1-49)- 权重+遗漏"""
+        special_weight_dict = dict(analysis.get('special_weights', []))
+        special_miss = analysis.get('special_miss', {})
+        special_freq = analysis.get('special_freq', {})
+
+        scores = {}
+        for n in range(1, 50):
+            w = special_weight_dict.get(n, 0)
+            m = special_miss.get(n, 0)
+            f = special_freq.get(n, 0)
+            miss_score = min(m / 5.0, 3.0)
+            freq_score = min(f, 4) / 2.0
+            scores[n] = w * 0.5 + freq_score * 0.3 + miss_score * 0.2
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [n for n, s in ranked[:n_specials]]
 
 
     # ============================================================

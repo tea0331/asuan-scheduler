@@ -510,7 +510,7 @@ def fetch_pln_history(periods=15):
 
 
 def _ltn_csv_fallback(periods=15):
-    """LTN CSV降级读取"""
+    """LTN CSV降级读取 — v8.4: 兼容旧CSV格式(front/back)和新格式(main/special)"""
     import csv
     try:
         csv_path = os.path.join(os.path.dirname(__file__), 'data', 'ltn_history.csv')
@@ -518,11 +518,26 @@ def _ltn_csv_fallback(periods=15):
             reader = csv.DictReader(f)
             result = []
             for row in reader:
-                result.append({
-                    'period': row['period'],
-                    'front': [int(row[f'front{i}']) for i in range(1, 6)],
-                    'back': [int(row[f'back{i}']) for i in range(1, 3)]
-                })
+                if 'main1' in row:
+                    # 新格式CSV
+                    result.append({
+                        'period': row['period'],
+                        'main': [int(row[f'main{i}']) for i in range(1, 7)],
+                        'special': int(row.get('special', 0))
+                    })
+                else:
+                    # 旧格式CSV(front/back)，转换为main/special
+                    front = [int(row[f'front{i}']) for i in range(1, 6)]
+                    back = [int(row[f'back{i}']) for i in range(1, 3)]
+                    # front(5) + back(2) → main(6) + special(1)
+                    # 旧格式back=[第6主号, 特别号](sorted)，无法区分，取较大的当特别号
+                    main6 = sorted(front + [back[0]])
+                    special = back[1] if len(back) > 1 else 0
+                    result.append({
+                        'period': row['period'],
+                        'main': main6,
+                        'special': special
+                    })
             result.sort(key=lambda x: x['period'], reverse=True)
             return result[:periods]
     except Exception as e:
@@ -531,7 +546,11 @@ def _ltn_csv_fallback(periods=15):
 
 
 def fetch_ltn_history(periods=15):
-    """抓取台湾大乐透(LTN)历史数据 — gdf99.com联网 + CSV降级"""
+    """抓取台湾大乐透(LTN)历史数据 — gdf99.com联网 + CSV降级
+
+    v8.4 修复: 官方规则是6/49+特别号(1个)，不是5/47+2/38
+    数据格式改为: main(6, 1-49) + special(1, 1-49)
+    """
     # 1) 联网抓取 gdf99.com
     try:
         now = datetime.now(timezone(timedelta(hours=8)))
@@ -546,13 +565,10 @@ def fetch_ltn_history(periods=15):
                 balls = r['balls']
                 main6 = sorted(balls[:6])
                 special = balls[6]
-                # LTN项目格式: front(5) + back(第6主号+特别号)
-                front5 = main6[:5]
-                back2 = sorted([main6[5], special])
                 result.append({
                     'period': r['period'],
-                    'front': front5,
-                    'back': back2
+                    'main': main6,
+                    'special': special
                 })
             print(f"[LTN] ✅ gdf99联网抓取: {len(result)}期 (最新{result[0]['period']})")
             return result
@@ -1369,48 +1385,62 @@ class WeightedAnalyzer:
 
 
     def analyze_ltn(self):
-        """台湾大乐透(LTN)加权分析 (5/47 + 2/38)"""
-        # 强制转换历史数据中的数字为int
+        """台湾大乐透(LTN)加权分析 — v8.4: 官方6/49+特别号
+
+        数据格式: main(6, 1-49) + special(1, 1-49)
+        """
+        # 兼容旧格式(front/back)→转换为新格式(main/special)
         for d in self.history:
-            d['front'] = [int(x) if isinstance(x, str) else x for x in d['front']]
-            d['back'] = [int(x) if isinstance(x, str) else x for x in d['back']]
+            if 'main' not in d:
+                if 'front' in d and 'back' in d:
+                    front = [int(x) if isinstance(x, str) else x for x in d['front']]
+                    back = [int(x) if isinstance(x, str) else x for x in d['back']]
+                    d['main'] = sorted(front + [back[0]])
+                    d['special'] = back[1] if len(back) > 1 else 0
+                else:
+                    d['main'] = []
+                    d['special'] = 0
+            d['main'] = [int(x) if isinstance(x, str) else x for x in d['main']]
+            d['special'] = int(d['special']) if isinstance(d['special'], str) else d['special']
+
         total = len(self.history)
         if total == 0:
             return {'weights': [], 'total_periods': 0}
-        
-        # 前区权重（1-47）
-        front_weights, front_freq, front_miss, front_avg_interval = self._calc_weights(
-            range(1, 48), lambda d: d['front'], total
+
+        # 主号权重（1-49）
+        main_weights, main_freq, main_miss, main_avg_interval = self._calc_weights(
+            range(1, 50), lambda d: d['main'], total
         )
-        
-        # 后区权重（1-38）
-        back_weights, back_freq, back_miss, back_avg_interval = self._calc_weights(
-            range(1, 39), lambda d: d['back'], total
+
+        # 特别号权重（1-49）
+        special_weights, special_freq, special_miss, special_avg_interval = self._calc_weights(
+            range(1, 50), lambda d: [d['special']], total
         )
-        
-        # 前区分区（1-15/16-31/32-47三区）
+
+        # 分区（1-17/18-33/34-49三区）
         zone_balance = [0, 0, 0]
         for d in self.history[:5]:
-            for n in d['front']:
-                num = int(n) if isinstance(n, str) else n
-                zone = min((num-1) // 16, 2)
+            for n in d['main']:
+                zone = min((n - 1) // 17, 2)
                 zone_balance[zone] += 1
-        
+
         # 和值范围
-        sums = [sum(d['front']) for d in self.history]
+        sums = [sum(d['main']) for d in self.history]
         avg_sum = sum(sums) / len(sums) if sums else 0
-        
+
         # 按权重排序
-        hot_fronts = sorted(front_weights.items(), key=lambda x: x[1], reverse=True)
-        hot_backs = sorted(back_weights.items(), key=lambda x: x[1], reverse=True)
-        
+        hot_mains = sorted(main_weights.items(), key=lambda x: x[1], reverse=True)
+        hot_specials = sorted(special_weights.items(), key=lambda x: x[1], reverse=True)
+
         return {
-            'front_weights': hot_fronts,
-            'back_weights': hot_backs,
-            'front_freq': front_freq,
-            'back_freq': back_freq,
-            'front_miss': front_miss,
-            'back_miss': back_miss,
+            'main_weights': hot_mains,
+            'special_weights': hot_specials,
+            'main_freq': main_freq,
+            'special_freq': special_freq,
+            'main_miss': main_miss,
+            'special_miss': special_miss,
+            'main_avg_interval': main_avg_interval,
+            'special_avg_interval': special_avg_interval,
             'zone_balance': zone_balance,
             'avg_sum': avg_sum,
             'total_periods': total,
