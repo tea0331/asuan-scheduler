@@ -90,49 +90,41 @@ def parse_numbers(raw):
     return {}
 
 
-def build_records(predictions, settlements):
-    """合并推荐和结算数据，构建逐期记录"""
-    # 按 (date, game) 索引结算数据
-    settle_map = defaultdict(list)
+def build_records_from_db(settlements):
+    """直接从 algo_state.db 的结算数据构建记录，不依赖 lottery-predictions.json
+
+    修复: 原版通过 lottery-predictions.json(30期) 匹配 algo_state.db(11125条)，
+    导致统计范围太窄(只覆盖30期对应数据)，部分策略子集碰巧0中奖。
+    改为直接统计全部结算记录。
+    """
+    records = []
+    # 按 (date, game) 分组
+    group_map = defaultdict(list)
     for s in settlements:
         key = (s.get('date', ''), s.get('game', ''))
-        settle_map[key].append(s)
+        group_map[key].append(s)
 
-    records = []
-    for pred in predictions:
-        date = pred.get('date', '')
-        if not date:
-            continue
-        for game in ['ssq', 'dlt', 'qxc']:
-            recs = pred.get(f'{game}_recs', [])
-            if not recs:
-                continue
-
-            # 找对应结算数据
-            game_settlements = settle_map.get((date, game), [])
-
-            # 合并推荐和结算
-            rec_settlements = []
-            for s in game_settlements:
-                bet_nums = parse_numbers(s.get('bet_numbers'))
-                actual = parse_numbers(s.get('actual_numbers'))
-                rec_settlements.append({
-                    'strategy': s.get('strategy', ''),
-                    'numbers': bet_nums,
-                    'actual': actual,
-                    'hit_count': s.get('hit_count', 0),
-                    'prize_tier': s.get('prize_tier', 0),
-                    'prize_name': s.get('prize_name', '未中奖'),
-                    'prize_amount': s.get('prize_amount', 0),
-                    'cost': s.get('cost', 2),
-                })
-
-            records.append({
-                'date': date,
-                'game': game,
-                'recommendations': recs,
-                'settlements': rec_settlements,
+    for (date, game), group in group_map.items():
+        rec_settlements = []
+        for s in group:
+            bet_nums = parse_numbers(s.get('bet_numbers'))
+            actual = parse_numbers(s.get('actual_numbers'))
+            rec_settlements.append({
+                'strategy': s.get('strategy', ''),
+                'numbers': bet_nums,
+                'actual': actual,
+                'hit_count': s.get('hit_count', 0),
+                'prize_tier': s.get('prize_tier', 0),
+                'prize_name': s.get('prize_name', '未中奖'),
+                'prize_amount': s.get('prize_amount', 0),
+                'cost': s.get('cost', 2),
             })
+
+        records.append({
+            'date': date,
+            'game': game,
+            'settlements': rec_settlements,
+        })
 
     return records
 
@@ -308,15 +300,12 @@ def generate():
     """主生成函数"""
     print(f"[分析] 开始生成 jinzhu_analysis.json @ {_now_cst().isoformat()}")
 
-    # 1. 加载数据
-    predictions = load_predictions()
+    # 1. 加载数据（直接从 algo_state.db 全量读取，不再依赖 lottery-predictions.json）
     settlements = load_settlements()
-
-    print(f"[分析] predictions: {len(predictions)} 期")
     print(f"[分析] settlements: {len(settlements)} 条结算记录")
 
-    # 2. 构建记录
-    records = build_records(predictions, settlements)
+    # 2. 构建记录（直接从 DB 结算数据）
+    records = build_records_from_db(settlements)
     print(f"[分析] 合并后 records: {len(records)} 条")
 
     # 3. 策略分析
@@ -329,14 +318,13 @@ def generate():
     output = {
         'metadata': {
             'generated_at': _now_cst().isoformat(),
-            'generator': 'jinzhu_analysis_generator.py v1.0',
-            'data_source': 'lottery-predictions.json + algo_state.db',
-            'note': 'JinZhu无置信度概念，逆向回测基于策略命中率分析。只覆盖ssq/dlt/qxc，不含pln/ltn',
+            'generator': 'jinzhu_analysis_generator.py v2.0',
+            'data_source': 'algo_state.db (全量结算数据)',
+            'note': 'JinZhu无置信度概念，逆向回测基于策略命中率分析。覆盖ssq/dlt/qxc/pln/ltn所有已结算数据',
             'games_covered': list(strategy_analysis.keys()),
             'total_records': len(records),
             'total_settlements': len(settlements),
         },
-        'records': records,
         'strategy_analysis': strategy_analysis,
         'reverse_backtest': reverse,
     }
