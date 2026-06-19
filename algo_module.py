@@ -1284,23 +1284,56 @@ class ROITracker:
                 return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
             
             elif game == 'qxc':
+                # 7星彩: 前6位(0-9各1位) + 第7位(0-14)
+                # 官方规则(第二十二条):
+                # 一等奖: 7位全中
+                # 二等奖: 前6位全中(第7位不同)
+                # 三等奖: 前6位中任意5位相同 + 第7位相同
+                # 四等奖: 7位中任意5位相同
+                # 五等奖: 7位中任意4位相同
+                # 六等奖: 7位中任意3位相同, 或前6位中任意1位相同+第7位相同, 或仅第7位相同
+                #
+                # ⚠️ 2026-06-19 修复: 原代码用"逐位相同计数"做简单连续匹配,
+                #    与官方规则完全不符(官方区分前6位和第7位, 且高奖级有复合条件)
                 digits = numbers.get('digits', [])
                 actual_digits = actual.get('digits', [])
                 if isinstance(actual_digits, str): actual_digits = [int(d) for d in actual_digits]
                 if isinstance(digits, str): digits = [int(d) for d in digits]
-                # 逐位对比（位置相关）
-                hit_count = 0
-                for i in range(min(len(digits), len(actual_digits), 7)):
-                    if digits[i] == actual_digits[i]:
-                        hit_count += 1
-                # 七星彩奖级判断（完整6级，位置相关）
-                if hit_count == 7: return {'tier': 1, 'name': '一等奖', 'prize': 5000000, 'hit_count': hit_count}
-                elif hit_count == 6: return {'tier': 2, 'name': '二等奖', 'prize': 50000, 'hit_count': hit_count}
-                elif hit_count == 5: return {'tier': 3, 'name': '三等奖', 'prize': 5000, 'hit_count': hit_count}
-                elif hit_count == 4: return {'tier': 4, 'name': '四等奖', 'prize': 500, 'hit_count': hit_count}
-                elif hit_count == 3: return {'tier': 5, 'name': '五等奖', 'prize': 30, 'hit_count': hit_count}
-                elif hit_count == 2: return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': hit_count}
-                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': hit_count}
+
+                # 补齐到7位
+                while len(digits) < 7: digits.append(-1)
+                while len(actual_digits) < 7: actual_digits.append(-1)
+
+                # 前6位匹配数
+                front6_hits = sum(1 for i in range(6) if digits[i] == actual_digits[i])
+                # 第7位匹配
+                last_hit = 1 if digits[6] == actual_digits[6] else 0
+                # 总匹配数
+                total_hits = front6_hits + last_hit
+
+                # 奖级判断（按官方规则，取最高奖级）
+                if total_hits == 7:
+                    # 7位全中
+                    return {'tier': 1, 'name': '一等奖', 'prize': 5000000, 'hit_count': total_hits}
+                elif front6_hits == 6:
+                    # 前6位全中(第7位不同) = 二等奖
+                    return {'tier': 2, 'name': '二等奖', 'prize': 50000, 'hit_count': total_hits}
+                elif front6_hits == 5 and last_hit == 1:
+                    # 前6位中任意5位相同 + 第7位相同 = 三等奖
+                    return {'tier': 3, 'name': '三等奖', 'prize': 3000, 'hit_count': total_hits}
+                elif total_hits == 5:
+                    # 7位中任意5位相同 = 四等奖
+                    return {'tier': 4, 'name': '四等奖', 'prize': 500, 'hit_count': total_hits}
+                elif total_hits == 4:
+                    # 7位中任意4位相同 = 五等奖
+                    return {'tier': 5, 'name': '五等奖', 'prize': 30, 'hit_count': total_hits}
+                elif total_hits == 3:
+                    # 7位中任意3位相同 = 六等奖
+                    return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': total_hits}
+                elif (front6_hits == 1 and last_hit == 1) or (front6_hits == 0 and last_hit == 1):
+                    # 前6位中任意1位相同+第7位相同, 或仅第7位相同 = 六等奖
+                    return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': total_hits}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
         except Exception as e:
             print(f"[Algo] 奖级计算失败: {e}")
         # 异常时返回未中奖（字典，不是字符串）
