@@ -1334,6 +1334,77 @@ class ROITracker:
                     # 前6位中任意1位相同+第7位相同, 或仅第7位相同 = 六等奖
                     return {'tier': 6, 'name': '六等奖', 'prize': 5, 'hit_count': total_hits}
                 return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
+
+            elif game == 'pln':
+                # 台湾威力彩: 第一区(1-38)选6 + 第二区(1-8)选1
+                # 官方10级奖级:
+                # 头奖: 6中+特中  贰奖: 6中  参奖: 5中+特中(15万)
+                # 肆奖: 5中(2万)  伍奖: 4中+特中(4000)  陆奖: 4中(800)
+                # 柒奖: 3中+特中(400)  捌奖: 2中+特中(200)
+                # 玖奖: 3中(100)  普奖: 1中+特中(100)
+                main = numbers.get('main', [])
+                special = numbers.get('special', 0)
+                actual_main = actual.get('numbers', [])
+                actual_special = actual.get('special', 0)
+                if isinstance(main, int): main = [main]
+                if isinstance(special, list): special = special[0] if special else 0
+                if isinstance(actual_special, list): actual_special = actual_special[0] if actual_special else 0
+                main_hits = len(set(main) & set(actual_main))
+                special_hit = 1 if special == actual_special else 0
+                total_hits = main_hits + special_hit
+
+                if main_hits == 6 and special_hit == 1:
+                    return {'tier': 1, 'name': '头奖', 'prize': 200000000, 'hit_count': total_hits}
+                elif main_hits == 6:
+                    return {'tier': 2, 'name': '贰奖', 'prize': 5000000, 'hit_count': total_hits}
+                elif main_hits == 5 and special_hit == 1:
+                    return {'tier': 3, 'name': '参奖', 'prize': 150000, 'hit_count': total_hits}
+                elif main_hits == 5:
+                    return {'tier': 4, 'name': '肆奖', 'prize': 20000, 'hit_count': total_hits}
+                elif main_hits == 4 and special_hit == 1:
+                    return {'tier': 5, 'name': '伍奖', 'prize': 4000, 'hit_count': total_hits}
+                elif main_hits == 4:
+                    return {'tier': 6, 'name': '陆奖', 'prize': 800, 'hit_count': total_hits}
+                elif main_hits == 3 and special_hit == 1:
+                    return {'tier': 7, 'name': '柒奖', 'prize': 400, 'hit_count': total_hits}
+                elif main_hits == 2 and special_hit == 1:
+                    return {'tier': 8, 'name': '捌奖', 'prize': 200, 'hit_count': total_hits}
+                elif main_hits == 3:
+                    return {'tier': 9, 'name': '玖奖', 'prize': 100, 'hit_count': total_hits}
+                elif main_hits >= 1 and special_hit == 1:
+                    return {'tier': 10, 'name': '普奖', 'prize': 100, 'hit_count': total_hits}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
+
+            elif game == 'ltn':
+                # ⚠️ TODO: 台湾大乐透格式设计有误，需重构
+                # 官方: 6/49 + 特别号(1个)，8个奖级
+                # 代码格式: front(5, 1-47) + back(2, 1-38)
+                #   - 号码范围错误(应49)
+                #   - back=[第6主号, 特别号](sorted)，无法区分主号和特别号
+                #   - 导致无法正确判断特别号相关奖级
+                # 临时方案: 用总命中数做近似判断(仅判断主号命中)
+                # 正式修复需重构 LTN 整个数据格式
+                front = numbers.get('front', [])
+                back = numbers.get('back', [])
+                actual_front = actual.get('front', [])
+                actual_back = actual.get('back', [])
+                front_hits = len(set(front) & set(actual_front))
+                back_hits = len(set(back) & set(actual_back))
+                total_hits = front_hits + back_hits
+
+                # 近似: front(5主号) + back(主号+特别号) = 总7号
+                # 主号命中 = front_hits + (back里属于actual_front+actual_back主号的部分)
+                # 简化为: total_hits >= 6 → 头奖, >=5 → 贰奖, 等
+                # ⚠️ 这只是近似，会在后续 LTN 重构时替换
+                if total_hits >= 6:
+                    return {'tier': 1, 'name': '头奖', 'prize': 100000000, 'hit_count': total_hits}
+                elif total_hits == 5:
+                    return {'tier': 3, 'name': '叁奖', 'prize': 50000, 'hit_count': total_hits}
+                elif total_hits == 4:
+                    return {'tier': 5, 'name': '伍奖', 'prize': 2000, 'hit_count': total_hits}
+                elif total_hits == 3:
+                    return {'tier': 8, 'name': '普奖', 'prize': 400, 'hit_count': total_hits}
+                return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
         except Exception as e:
             print(f"[Algo] 奖级计算失败: {e}")
         # 异常时返回未中奖（字典，不是字符串）
@@ -1379,6 +1450,13 @@ class ROITracker:
                 numbers = {'front': r.get('front', []), 'back': r.get('back', [])}
             elif game == 'qxc':
                 numbers = {'digits': r.get('digits', [])}
+            elif game == 'pln':
+                # PLN推荐格式: r['numbers'] = [n1,n2,n3,n4,n5,n6, special]
+                nums = r.get('numbers', [])
+                numbers = {'main': nums[:6], 'special': nums[6] if len(nums) > 6 else 0}
+            elif game == 'ltn':
+                # LTN推荐格式: r['front'] = [5个], r['back'] = [2个]
+                numbers = {'front': r.get('front', []), 'back': r.get('back', [])}
             
             cost = kelly * 2  # 简化成本计算
             # save_bet内部会json.dumps(numbers)，这里传dict而非字符串
