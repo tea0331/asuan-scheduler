@@ -54,13 +54,18 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _run_with_timeout(func, timeout=60):
-    """用subprocess执行AI调用，超时则跳过（避免线程池卡死）"""
-    import multiprocessing
-    with multiprocessing.Pool(processes=1) as pool:
-        result = pool.apply_async(func)
+    """用线程池执行AI调用，超时则跳过
+
+    v8.4 修复: 原版用 multiprocessing.Pool，但在 daemon 进程(cron/systemd)下
+    禁止创建子进程(daemonic processes are not allowed to have children)，
+    导致 AI 100% 失败走降级。改用 ThreadPoolExecutor(线程不算子进程)。
+    """
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func)
         try:
-            return result.get(timeout=timeout)
-        except multiprocessing.TimeoutError:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError:
             raise TimeoutError(f"AI调用超时({timeout}秒)")
 
 
