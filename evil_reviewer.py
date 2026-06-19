@@ -169,7 +169,7 @@ def analyze_blind_spot(jinzhu):
         findings.append('jinzhu_analysis.json 无 strategy_analysis 字段')
         return findings
 
-    # 找命中率最低的策略
+    # 找号码命中率最低的策略（用 effective_hit_rate 而非 hit_rate，避免 dlt 九等奖虚高）
     for game, strategies in strategy_analysis.items():
         if not strategies:
             continue
@@ -177,21 +177,23 @@ def analyze_blind_spot(jinzhu):
         if not candidates:
             candidates = strategies
         if candidates:
-            worst = min(candidates.items(), key=lambda x: x[1].get('hit_rate', 0))
+            worst = min(candidates.items(), key=lambda x: x[1].get('effective_hit_rate', x[1].get('hit_rate', 0)))
+            ehr = worst[1].get('effective_hit_rate', worst[1].get('hit_rate', 0))
+            hr = worst[1].get('hit_rate', 0)
             findings.append(
-                f'[{game}] 策略「{worst[0]}」命中率最低: {worst[1].get("hit_rate", 0):.0%}'
-                f'({worst[1].get("hit_bets", 0)}/{worst[1].get("total_bets", 0)}注)'
+                f'[{game}] 策略「{worst[0]}」号码命中率最低: {ehr:.0%}'
+                f'(中奖率{hr:.0%}，{worst[1].get("total_bets", 0)}注)'
             )
 
-    # 核心注 vs 冷号注对比
+    # 核心注 vs 冷号注对比（用 effective_hit_rate）
     reverse = jinzhu.get('reverse_backtest', {})
     core_vs_cold = reverse.get('core_vs_cold', {})
     for game, comp in core_vs_cold.items():
         winner = comp.get('winner', '平局')
         if winner != '平局':
             findings.append(
-                f'[{game}] {winner}命中率更高'
-                f'(核心{comp.get("core_hit_rate", 0):.0%} vs 冷号{comp.get("cold_hit_rate", 0):.0%})'
+                f'[{game}] {winner}号码命中率更高'
+                f'(核心{comp.get("core_effective_hit_rate", 0):.0%} vs 冷号{comp.get("cold_effective_hit_rate", 0):.0%})'
             )
 
     return findings if findings else ['各策略命中率差异不显著，未发现明显盲区']

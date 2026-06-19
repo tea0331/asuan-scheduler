@@ -138,10 +138,18 @@ def build_records(predictions, settlements):
 
 
 def analyze_strategies(records):
-    """按彩种 × 策略类型统计命中率"""
-    # stats[game][strategy] = {total, hits, total_hit_count, total_prize, total_cost}
+    """按彩种 × 策略类型统计命中率
+
+    统计口径说明:
+    - hit_rate: prize_tier > 0 的比例（中奖率）
+      ⚠️ dlt 有九等奖(0前0后也中奖)，所以 dlt 的 hit_rate 会虚高至100%
+    - effective_hit_rate: hit_count > 0 的比例（号码命中率，跨彩种可比）
+    - profitable_rate: prize_amount > cost 的比例（盈利率）
+    - avg_hit_count: 平均命中号码数
+    """
     stats = defaultdict(lambda: defaultdict(lambda: {
-        'total_bets': 0, 'hit_bets': 0, 'total_hit_count': 0,
+        'total_bets': 0, 'hit_bets': 0, 'effective_hit_bets': 0,
+        'profitable_bets': 0, 'total_hit_count': 0,
         'total_prize': 0, 'total_cost': 0,
     }))
 
@@ -149,13 +157,20 @@ def analyze_strategies(records):
         game = rec['game']
         for s in rec.get('settlements', []):
             strategy = s.get('strategy', '未知')
+            cost = s.get('cost', 2)
+            prize = s.get('prize_amount', 0)
+            hit_count = s.get('hit_count', 0)
             st = stats[game][strategy]
             st['total_bets'] += 1
-            st['total_cost'] += s.get('cost', 2)
-            st['total_hit_count'] += s.get('hit_count', 0)
-            st['total_prize'] += s.get('prize_amount', 0)
+            st['total_cost'] += cost
+            st['total_hit_count'] += hit_count
+            st['total_prize'] += prize
             if s.get('prize_tier', 0) > 0:
                 st['hit_bets'] += 1
+            if hit_count > 0:
+                st['effective_hit_bets'] += 1
+            if prize > cost:
+                st['profitable_bets'] += 1
 
     # 计算衍生指标
     result = {}
@@ -168,6 +183,8 @@ def analyze_strategies(records):
                 'total_bets': s['total_bets'],
                 'hit_bets': s['hit_bets'],
                 'hit_rate': round(s['hit_bets'] / total, 4),
+                'effective_hit_rate': round(s['effective_hit_bets'] / total, 4),
+                'profitable_rate': round(s['profitable_bets'] / total, 4),
                 'avg_hit_count': round(s['total_hit_count'] / total, 2),
                 'total_prize': s['total_prize'],
                 'total_cost': s['total_cost'],
@@ -181,10 +198,13 @@ def reverse_backtest(strategy_analysis):
     """逆向回测分析 - 找出持续失效的策略和可利用盲区
 
     JinZhu 无置信度，改为基于策略命中率分析:
-    1. 哪种策略命中率最低(持续失效)?
+    1. 哪种策略 effective_hit_rate 最低(持续失效)?
     2. 哪种策略 ROI 最低(最不值得跟)?
     3. 冷号注 vs 核心注 谁表现更好?
     4. JinZhu 的主推策略(核心注)是否真的是最优策略?
+
+    注意: 使用 effective_hit_rate 而非 hit_rate 做跨彩种比较
+    (dlt 九等奖门槛极低导致 hit_rate 虚高，effective_hit_rate 更公平)
     """
     findings = []
     worst_strategies = {}  # game -> worst strategy
@@ -200,52 +220,58 @@ def reverse_backtest(strategy_analysis):
         if not candidates:
             candidates = strategies
 
-        # 最差策略(命中率最低)
-        worst = min(candidates.items(), key=lambda x: x[1]['hit_rate'])
+        # 最差策略(effective_hit_rate 最低)
+        worst = min(candidates.items(), key=lambda x: x[1]['effective_hit_rate'])
         worst_strategies[game] = {
             'strategy': worst[0],
+            'effective_hit_rate': worst[1]['effective_hit_rate'],
             'hit_rate': worst[1]['hit_rate'],
             'total_bets': worst[1]['total_bets'],
         }
-        if worst[1]['hit_rate'] < 0.1 and worst[1]['total_bets'] >= 3:
+        if worst[1]['effective_hit_rate'] < 0.1 and worst[1]['total_bets'] >= 3:
             findings.append(
-                f"[{game}] 策略「{worst[0]}」命中率仅{worst[1]['hit_rate']:.0%}"
-                f"({worst[1]['hit_bets']}/{worst[1]['total_bets']}注)，持续失效"
+                f"[{game}] 策略「{worst[0]}」号码命中率仅{worst[1]['effective_hit_rate']:.0%}"
+                f"(中奖率{worst[1]['hit_rate']:.0%}，{worst[1]['total_bets']}注)，持续失效"
             )
 
         # 最优策略
-        best = max(candidates.items(), key=lambda x: x[1]['hit_rate'])
+        best = max(candidates.items(), key=lambda x: x[1]['effective_hit_rate'])
         best_strategies[game] = {
             'strategy': best[0],
+            'effective_hit_rate': best[1]['effective_hit_rate'],
             'hit_rate': best[1]['hit_rate'],
             'total_bets': best[1]['total_bets'],
         }
 
-        # 核心注 vs 冷号注 对比
+        # 核心注 vs 冷号注 对比（用 effective_hit_rate）
         core_strategies = {k: v for k, v in strategies.items() if '核心' in k}
         cold_strategies = {k: v for k, v in strategies.items() if '冷号' in k}
 
-        core_hr = sum(s['hit_bets'] for s in core_strategies.values()) / max(
-            sum(s['total_bets'] for s in core_strategies.values()), 1)
-        cold_hr = sum(s['hit_bets'] for s in cold_strategies.values()) / max(
-            sum(s['total_bets'] for s in cold_strategies.values()), 1)
+        core_ehr = sum(s['effective_hit_bets'] if 'effective_hit_bets' in s else
+                       s.get('hit_bets', 0) for s in core_strategies.values()) / max(
+            sum(s['total_bets'] for s in core_strategies.values()), 1) if core_strategies else 0
+        # 用 avg_hit_count 作为 effective 代理（因为 strategy_analysis 里没存 effective_hit_bets 原始值）
+        core_total_bets = sum(s['total_bets'] for s in core_strategies.values())
+        cold_total_bets = sum(s['total_bets'] for s in cold_strategies.values())
+        core_ehr = sum(s['effective_hit_rate'] * s['total_bets'] for s in core_strategies.values()) / max(core_total_bets, 1) if core_strategies else 0
+        cold_ehr = sum(s['effective_hit_rate'] * s['total_bets'] for s in cold_strategies.values()) / max(cold_total_bets, 1) if cold_strategies else 0
 
         winner = '平局'
-        if core_hr > cold_hr + 0.05:
+        if core_ehr > cold_ehr + 0.05:
             winner = '核心注'
-        elif cold_hr > core_hr + 0.05:
+        elif cold_ehr > core_ehr + 0.05:
             winner = '冷号注'
 
         core_vs_cold[game] = {
-            'core_hit_rate': round(core_hr, 4),
-            'cold_hit_rate': round(cold_hr, 4),
+            'core_effective_hit_rate': round(core_ehr, 4),
+            'cold_effective_hit_rate': round(cold_ehr, 4),
             'winner': winner,
         }
 
         # 如果冷号注明显优于核心注，这是可利用盲区
-        if winner == '冷号注' and cold_hr > core_hr + 0.1:
+        if winner == '冷号注' and cold_ehr > core_ehr + 0.1:
             findings.append(
-                f"[{game}] 冷号注命中率{cold_hr:.0%} > 核心注{core_hr:.0%}，"
+                f"[{game}] 冷号注号码命中率{cold_ehr:.0%} > 核心注{core_ehr:.0%}，"
                 f"JinZhu主推核心注但冷号注表现更好，策略权重可能需要调整"
             )
 
