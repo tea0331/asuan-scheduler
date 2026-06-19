@@ -666,6 +666,14 @@ def main():
     print('✍️ 追加到日报末尾...')
     write_append(report_path, evil)
 
+    # 同时存一份到 reviews/ 目录（供 WorkBuddy 从 GitHub 读取）
+    reviews_dir = os.path.join(MODULE_DIR, 'reviews')
+    os.makedirs(reviews_dir, exist_ok=True)
+    review_path = os.path.join(reviews_dir, f'evil_review_{date_str}.md')
+    with open(review_path, 'w', encoding='utf-8') as f:
+        f.write(evil)
+    print(f'✅ 评价已保存到: {review_path}')
+
     print(f'✅ 完成，评价已追加到: {report_path}')
     print('---评价内容---')
     print(evil)
