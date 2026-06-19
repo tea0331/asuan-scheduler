@@ -441,7 +441,9 @@ class JinZhu:
                     best_n = n
             ext2[i] = best_n if best_n is not None else core_A[i]
 
-        # 冷号注: 每位遗漏最高 + 周期信号(从Model读权重)
+        # 冷号注: 温和回补策略(非极端冷号) — v8.4修复
+        # 原版选遗漏最高号码(赌徒谬误)，全量数据显示0%中奖率
+        # 改为钟形曲线: 遗漏在平均周期1-2倍之间得分最高
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -456,9 +458,19 @@ class JinZhu:
             for n in range(10):
                 m = miss.get(n, 0)
                 avg_i = avg_interval.get(n, 5)
-                cycle = min(m / max(avg_i, 1), 2.0)
+                ratio = m / max(avg_i, 1)
+
+                # 钟形曲线
+                if 0.8 <= ratio <= 2.0:
+                    miss_score = 2.5
+                elif ratio > 2.0:
+                    miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
+                else:
+                    miss_score = ratio * 1.5
+
+                cycle = min(ratio, 2.0)
                 f = freq.get(n, 0)
-                score = min(m / 5.0, 3.0) * cold_miss_w + cycle * cold_cycle_w + min(f / 3.0, 1.5) * cold_freq_w
+                score = miss_score * cold_miss_w + cycle * cold_cycle_w + min(f / 3.0, 1.5) * cold_freq_w
                 if score > best_score:
                     best_score = score
                     best_n = n
@@ -524,7 +536,11 @@ class JinZhu:
         ]
 
     def _select_cold_pln(self, analysis, used_set):
-        """PLN冷号注主号(1-38)- 多维评分"""
+        """PLN冷号注主号(1-38)- 温和回补策略(非极端冷号)
+
+        v8.4 修复: 原版选遗漏最久的号码(赌徒谬误)，全量数据显示0%中奖率。
+        改为钟形曲线评分: 遗漏在平均周期1-2倍之间得分最高。
+        """
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -538,9 +554,18 @@ class JinZhu:
             if n in used_set:
                 continue
             miss_val = analysis[miss_key].get(n, 0)
-            miss_score = min(miss_val / 10.0, 3.0)
             avg_i = avg_interval.get(n, 15)
-            cycle_signal = min(miss_val / max(avg_i, 1), 2.0)
+            ratio = miss_val / max(avg_i, 1)
+
+            # 钟形曲线
+            if 0.8 <= ratio <= 2.0:
+                miss_score = 2.5
+            elif ratio > 2.0:
+                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
+            else:
+                miss_score = ratio * 1.5
+
+            cycle_signal = min(ratio, 2.0)
             f = analysis[freq_key].get(n, 0)
             f_score = min(f / 3.0, 1.5)
             score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
@@ -773,7 +798,12 @@ class JinZhu:
         return sorted([n for n, s in scores[:n_select]])
 
     def _select_cold_reds(self, analysis, used_set, game='ssq'):
-        """冷号注红球 - 多维评分,权重从Model读取"""
+        """冷号注红球 - 温和回补策略(非极端冷号)
+
+        v8.4 修复: 原版选遗漏最久的号码(赌徒谬误)，全量数据显示0%中奖率。
+        改为钟形曲线评分: 遗漏在平均周期1-2倍之间得分最高(可能回补区间)，
+        超过2倍降分(太冷可能真的不出了)，低于0.8倍低分(还不够冷)。
+        """
         cold_miss_w = self.get_param('cold_miss_front', 0.40)
         cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
         cold_freq_w = self.get_param('cold_freq_front', 0.30)
@@ -788,9 +818,18 @@ class JinZhu:
             if n in used_set:
                 continue
             miss_val = analysis[miss_key].get(n, 0)
-            miss_score = min(miss_val / 10.0, 3.0)
             avg_interval = red_avg_interval.get(n, 15)
-            cycle_signal = min(miss_val / max(avg_interval, 1), 2.0)
+            ratio = miss_val / max(avg_interval, 1)
+
+            # 钟形曲线: 1-2倍区间最高，超过2倍降分
+            if 0.8 <= ratio <= 2.0:
+                miss_score = 2.5  # 最佳回补区间
+            elif ratio > 2.0:
+                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)  # 超过2倍递减
+            else:
+                miss_score = ratio * 1.5  # 不够冷
+
+            cycle_signal = min(ratio, 2.0)
             f = analysis[freq_key].get(n, 0)
             f_score = min(f / 3.0, 1.5)
             score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
