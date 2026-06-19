@@ -1261,16 +1261,26 @@ class ROITracker:
                 front_hits = len(set(front) & set(actual_front))
                 back_hits = len(set(back) & set(actual_back))
                 total_hits = front_hits + back_hits
-                # 大乐透奖级判断（完整9级）
+                # 大乐透奖级判断（官方7级，2026年规则）
+                # 来源: 中国体育彩票超级大乐透游戏规则 第二十五条
+                # 一等奖: 5前+2后
+                # 二等奖: 5前+1后
+                # 三等奖: 5前+0后 或 4前+2后
+                # 四等奖: 4前+1后
+                # 五等奖: 4前+0后 或 3前+2后
+                # 六等奖: 3前+1后 或 2前+2后
+                # 七等奖: 3前+0后 或 2前+1后 或 1前+2后 或 0前+2后
+                # 不中奖: 2前0后 / 1前1后 / 1前0后 / 0前1后 / 0前0后
+                #
+                # ⚠️ 2026-06-19 修复: 原代码有9个奖级(官方只有7个)，
+                #    且把0前0后也判为九等奖，导致dlt hit_rate虚高至100%
                 if front_hits == 5 and back_hits == 2: return {'tier': 1, 'name': '一等奖', 'prize': 10000000, 'hit_count': total_hits}
                 elif front_hits == 5 and back_hits == 1: return {'tier': 2, 'name': '二等奖', 'prize': 500000, 'hit_count': total_hits}
                 elif front_hits == 5 or (front_hits == 4 and back_hits == 2): return {'tier': 3, 'name': '三等奖', 'prize': 10000, 'hit_count': total_hits}
-                elif (front_hits == 4 and back_hits == 1) or (front_hits == 3 and back_hits == 2): return {'tier': 4, 'name': '四等奖', 'prize': 3000, 'hit_count': total_hits}
-                elif front_hits == 4 or (front_hits == 3 and back_hits == 1) or (front_hits == 2 and back_hits == 2): return {'tier': 5, 'name': '五等奖', 'prize': 300, 'hit_count': total_hits}
-                elif front_hits == 3 or (front_hits == 2 and back_hits == 1) or (front_hits == 1 and back_hits == 2): return {'tier': 6, 'name': '六等奖', 'prize': 200, 'hit_count': total_hits}
-                elif (front_hits == 2 and back_hits == 0) or (front_hits == 1 and back_hits == 1) or (front_hits == 0 and back_hits == 2): return {'tier': 7, 'name': '七等奖', 'prize': 100, 'hit_count': total_hits}
-                elif (front_hits == 1 and back_hits == 0) or (front_hits == 0 and back_hits == 1): return {'tier': 8, 'name': '八等奖', 'prize': 15, 'hit_count': total_hits}
-                elif front_hits == 0 and back_hits == 0: return {'tier': 9, 'name': '九等奖', 'prize': 5, 'hit_count': total_hits}
+                elif front_hits == 4 and back_hits == 1: return {'tier': 4, 'name': '四等奖', 'prize': 3000, 'hit_count': total_hits}
+                elif front_hits == 4 or (front_hits == 3 and back_hits == 2): return {'tier': 5, 'name': '五等奖', 'prize': 300, 'hit_count': total_hits}
+                elif (front_hits == 3 and back_hits == 1) or (front_hits == 2 and back_hits == 2): return {'tier': 6, 'name': '六等奖', 'prize': 200, 'hit_count': total_hits}
+                elif front_hits == 3 or (front_hits == 2 and back_hits == 1) or (front_hits == 1 and back_hits == 2) or (front_hits == 0 and back_hits == 2): return {'tier': 7, 'name': '七等奖', 'prize': 100, 'hit_count': total_hits}
                 return {'tier': 0, 'name': '未中奖', 'prize': 0, 'hit_count': total_hits}
             
             elif game == 'qxc':
