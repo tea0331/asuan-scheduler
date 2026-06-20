@@ -1566,11 +1566,11 @@ def _filter_noise_news(news_items):
 # ============================================================
 # AI调用
 # ============================================================
-def _call_hunyuan_api(system_msg, user_msg, timeout=30):
+def _call_hunyuan_api(system_msg, user_msg, timeout=60):
     """调用混元API，单次调用带timeout
 
-    v8.5 优化: 超时30秒(原90秒过长)，重试2次(原3次)，退避3+6秒(原5+10+20)，
-    最坏69秒(在200秒外层限制内)。连接超时10秒单独设置，避免DNS/建连阶段卡死。
+    v8.5.1 调参: 30s 读取超时不够（生成6板块实际需要更久），调回 60s。
+    重试保持 2 次，最坏 60×2 + 3+6 = 129s，在 200s 外层限制内。
     """
     api_key = os.getenv('HUNYUAN_API_KEY', '')
     if not api_key:
@@ -1777,7 +1777,7 @@ def generate_all_sections():
     # 5. 调用AI生成 (v8.4: 超时200秒，API内部90秒×3次重试)
     try:
         content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=30),
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=60),
             timeout=200
         )
         if content and len(content) > 500:
