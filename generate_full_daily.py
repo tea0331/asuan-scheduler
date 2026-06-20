@@ -2249,27 +2249,33 @@ def _fallback_shortage_alert(top_items):
         ent_short = entity[:8] if len(entity) > 8 else entity
         ent_short = re.sub(r'^[在的得了被把将向从]', '', ent_short).rstrip('？?！!。、')
 
-        # 构建因果链叙事（直接拼接每层因果句）
-        chain_str = ' → '.join([l[0] for l in template['layers']])
+        # V20-fix: 不再直接输出模板layers通用句子（那些是放之四海皆准的废话）
+        # 改为输出传导方向参考 + 新闻锚定
+        chain_parts = []
+        for i, (step_desc, timing, direction) in enumerate(template['layers'], 1):
+            suffix = '(过剩)' if direction == '过剩' else ''
+            direction_hint = step_desc.split('→')[0].strip() if '→' in step_desc else step_desc[:20]
+            chain_parts.append(f"[第{i}步·{direction_hint}{suffix}]")
+        chain_str = ' → '.join(chain_parts)
         fracture = template['fracture']
         window = template['window']
 
-        # 提取短缺层和过剩层
-        shortage_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '短缺']
-        surplus_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '过剩']
+        # 提取短缺层和过剩层方向
+        shortage_layers = [(l[0].split('→')[0].strip() if '→' in l[0] else l[0][:20], l[1]) for l in template['layers'] if l[2] == '短缺']
+        surplus_layers = [(l[0].split('→')[0].strip() if '→' in l[0] else l[0][:20], l[1]) for l in template['layers'] if l[2] == '过剩']
 
         lines.append(f"### ⚠️ 「{ent_short}」触发的因果链\n")
-        lines.append(f"- **因果链**: {chain_str}")
+        lines.append(f"- **因果链方向**: {chain_str}")
+        lines.append(f"- **⚠️ 以上为传导方向，每步需用新闻「{title[:30]}」的具体内容填充**")
         lines.append(f"- **断裂在**: {fracture}，窗口{window}")
 
         # 如果有过剩层才单独列短缺端/过剩端（否则因果链本身就是全短缺链）
         if surplus_layers and shortage_layers:
-            # 短缺端只列关键步骤（最多3步），避免太长
             short_keys = shortage_layers[:3]
-            lines.append(f"- **短缺端**: {' → '.join([s[0] for s in short_keys])}")
-            lines.append(f"- **过剩端**: {' → '.join([s[0] for s in surplus_layers])}")
+            lines.append(f"- **短缺端方向**: {' → '.join([s[0] for s in short_keys])}")
+            lines.append(f"- **过剩端方向**: {' → '.join([s[0] for s in surplus_layers])}")
         elif surplus_layers:
-            lines.append(f"- **过剩端**: {' → '.join([s[0] for s in surplus_layers])}")
+            lines.append(f"- **过剩端方向**: {' → '.join([s[0] for s in surplus_layers])}")
 
         lines.append(f"- **新闻来源**: 「{title[:40]}」\n")
         alerts_found += 1
@@ -2280,13 +2286,17 @@ def _fallback_shortage_alert(top_items):
         title = top_items[0].get('title', '')
         entity = _extract_entity(title)
         ent_short = entity[:8] if len(entity) > 8 else entity
-        chain_str = ' → '.join([l[0] for l in template['layers']])
-        shortage_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '短缺']
+        # V20-fix: 兜底也用方向参考，不直接输出通用句子
+        chain_parts = []
+        for i, (step_desc, timing, direction) in enumerate(template['layers'], 1):
+            suffix = '(过剩)' if direction == '过剩' else ''
+            direction_hint = step_desc.split('→')[0].strip() if '→' in step_desc else step_desc[:20]
+            chain_parts.append(f"[第{i}步·{direction_hint}{suffix}]")
+        chain_str = ' → '.join(chain_parts)
         lines.append(f"### ⚠️ 「{ent_short}」触发的因果链\n")
-        lines.append(f"- **因果链**: {chain_str}")
+        lines.append(f"- **因果链方向**: {chain_str}")
+        lines.append(f"- **⚠️ 以上为传导方向，每步需用新闻「{title[:30]}」的具体内容填充**")
         lines.append(f"- **断裂在**: {template['fracture']}，窗口{template['window']}")
-        if shortage_layers:
-            lines.append(f"- **短缺端**: {' → '.join([s[0] for s in shortage_layers])}")
         lines.append(f"- **新闻来源**: 「{title[:40]}」\n")
 
     lines.append("> 📍 重点关注断裂位置附近的短缺端，那是供需最不平衡的地方。")

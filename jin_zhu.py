@@ -100,7 +100,7 @@ class Strategy:
     CORE_B = '核心注B'
     EXT1 = '扩展1(形态)'
     EXT2 = '扩展2(回补)'
-    COLD = '冷号注(遗漏)'
+    COLD = '差异化注(覆盖)'
 
 
 # ============================================================
@@ -476,7 +476,6 @@ class JinZhu:
         for i in range(7):
             available = [n for n in range(10) if n not in used_per_pos[i]]
             cold.append(_rng.choice(available) if available else _rng.randint(0, 9))
-            cold.append(best_n)
 
         # 随机扰动
         core_A = self._perturb_qxc(core_A, pos_pools, max_swaps=2)
