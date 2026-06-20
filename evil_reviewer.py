@@ -698,7 +698,7 @@ def main():
         except Exception:
             pass
         server = smtplib.SMTP_SSL(_env.get('SMTP_SERVER', 'smtp.163.com'), int(_env.get('SMTP_PORT', '465')), timeout=30)
-        server.login(_env.get('SMTP_USER', ''), _env.get('SMTP_PASSWORD', ''))
+        server.login(_env.get('SMTP_USER', ''), _env.get('SMTP_PASSWORD', '') or _env.get('SMTP_PASS', ''))
         server.sendmail(_env.get('SMTP_USER', ''), [_env.get('SMTP_TO', '')], msg.as_string())
         server.quit()
         print('✅ 邮件重发成功')
