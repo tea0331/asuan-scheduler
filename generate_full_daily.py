@@ -1386,22 +1386,32 @@ def _fetch_cls(count=15):
 
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
-    RSS_SOURCES = {
     # 大陆科技/商业
-    '36氪': 'https://36kr.com/feed',
-    '36氪快讯': 'https://36kr.com/feed-newsflash',
-    '虎嗅': 'https://www.huxiu.com/rss/0.xml',
-    '钛媒体': 'https://www.tmtpost.com/rss.xml',
-    '创业邦': 'https://www.cyzone.cn/rss/',
-    # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
-    '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
-    '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
-    '工商时报': 'https://ctee.com.tw/rss',
-    '联合财经': 'https://udn.com/rssfeed/news/2/6642',
-}
+    RSS_SOURCES_CN = {
+        '36氪': 'https://36kr.com/feed',
+        '36氪快讯': 'https://36kr.com/feed-newsflash',
+        '虎嗅': 'https://www.huxiu.com/rss/0.xml',
+        '钛媒体': 'https://www.tmtpost.com/rss.xml',
+        '创业邦': 'https://www.cyzone.cn/rss/',
+    }
+    # 台湾综合/财经（大陆服务器连不通，仅 GitHub Actions 环境抓取）
+    RSS_SOURCES_TW = {
+        '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
+        '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
+        '工商时报': 'https://ctee.com.tw/rss',
+        '联合财经': 'https://udn.com/rssfeed/news/2/6642',
+    }
 
+    # v8.5.2: GitHub Actions 环境才抓台湾 RSS，大陆服务器直接跳过（连不通浪费时间导致 SIGKILL）
     all_raw = []
     source_stats = {}
+    RSS_SOURCES = dict(RSS_SOURCES_CN)
+    if os.getenv('RUN_ENV') == 'github-actions':
+        RSS_SOURCES.update(RSS_SOURCES_TW)
+    else:
+        logging.info("[新闻] 非GitHub Actions环境，跳过台湾RSS（走百度搜索补源）")
+        for name in RSS_SOURCES_TW:
+            source_stats[name] = 0
     with ThreadPoolExecutor(max_workers=12) as pool:
         rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
         hot_future = pool.submit(_fetch_baidu_hot, 0)  # V20: 百度热搜彻底停抓（八卦无价值）
@@ -1461,8 +1471,8 @@ def fetch_raw_materials():
         except Exception as e:
             source_stats['百度台湾搜索'] = 0
             logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
-        # 备用：直接爬取台湾新闻网站HTML
-        if not taiwan_baidu:
+        # 备用：直接爬取台湾新闻网站HTML（仅 GitHub Actions，大陆服务器连不通）
+        if not taiwan_baidu and os.getenv('RUN_ENV') == 'github-actions':
             try:
                 taiwan_html = _fetch_taiwan_news_html()
                 all_raw.extend(taiwan_html)
