@@ -1736,17 +1736,18 @@ def generate_all_sections():
 6. ❌ 因果链禁止原地打转——新闻说X涨价/跌价/短缺，推导禁止停留在X本身涨跌的描述上（什么时候涨、涨多少、谁说的），必须从X变化后的**后果**开始往外推至少2级下游传导链。例：新闻说"糖价受天气影响"→❌错误："糖价会涨→8月涨→进口糖成本升"（全在糖价本身打转）→✅正确："糖价涨→糖醇比变化→巴西甘蔗转产乙醇→原糖出口减少→替代甜味剂（果葡糖浆/赤藓糖醇）需求上升→国内食品饮料企业原料替代机会"
 7. ❌ 因果链必须沿着新闻品种的**真实下游产业链**推导，禁止万能大宗模板——大豆涨→推豆粕/饲料/养殖、豆油/食用油/生物柴油、大豆蛋白/食品加工；糖涨→推糖醇比/乙醇/甜味剂替代；铜涨→推电缆/电机/电动车。禁止什么品种都推到"替代品需求爆发→产能跟不上→爬坡期6个月→回收产能不足"，这是万能废话不是推导
 8. ❌ 禁止编造新闻中没有的数字——新闻没说"涨15%"推导里就不能出现15%，新闻没说"溢价20%"就不能出现20%。只能用新闻原文的数字，或标注「推算」
-9. ❌ 融资PR/股票盘前涨跌/普通产品发布PR/会议预告/人事变动/喊话表态——禁止推送，无因果推演价值
-10. 只推送10类高价值触发源: 重大签署/国内新规/AI算力信息化/供需断裂/产能变化/地缘通道/农产品贵金属产量预警/新发明新应用/行业数据/国内国外缺货
-11. ⭐ 重大签署类新闻（国家间协议/贷款/合作）必须深度推演因果链
-12. ⭐ 国内新政策/新规类新闻（国务院/部委/省级）必须深度推演因果链
-13. ⭐ 农产品/贵金属产量预警（减产/歉收/种植面积/开采量变化）必须深度推演因果链
-14. ⭐ 新发明/新应用/新产品(全球关注)必须深度推演因果链
-15. 注意: 普通产品发布(手机更新/SaaS上线/小版本迭代)≠新发明新应用，前者禁止后者必须推演
-16. 金句每天不同，结合当日主题
-17. 总字数2000-3000字
-18. ⏰ 所有时间窗口基于{today_str}推算
-19. 📍 优先挖掘台湾相关机会
+9. ❌ 禁止输出放之四海而皆准的废话——因果链每一步必须锚定到今日新闻的具体内容（具体公司/具体政策/具体数字/具体事件）。检验标准：把这条因果链里的品种名换成另一个品种，如果仍然成立=你在写废话=违规。例："原料涨价→加工厂减产→终端涨价"换成任何品种都成立=废话；"巴西中南部甘蔗降雨不足→榨季出糖率下降3%→原糖出口配额可能削减"锚定到具体产区/品种/数字=有效推导
+10. ❌ 融资PR/股票盘前涨跌/普通产品发布PR/会议预告/人事变动/喊话表态——禁止推送，无因果推演价值
+11. 只推送10类高价值触发源: 重大签署/国内新规/AI算力信息化/供需断裂/产能变化/地缘通道/农产品贵金属产量预警/新发明新应用/行业数据/国内国外缺货
+12. ⭐ 重大签署类新闻（国家间协议/贷款/合作）必须深度推演因果链
+13. ⭐ 国内新政策/新规类新闻（国务院/部委/省级）必须深度推演因果链
+14. ⭐ 农产品/贵金属产量预警（减产/歉收/种植面积/开采量变化）必须深度推演因果链
+15. ⭐ 新发明/新应用/新产品(全球关注)必须深度推演因果链
+16. 注意: 普通产品发布(手机更新/SaaS上线/小版本迭代)≠新发明新应用，前者禁止后者必须推演
+17. 金句每天不同，结合当日主题
+18. 总字数2000-3000字
+19. ⏰ 所有时间窗口基于{today_str}推算
+20. 📍 优先挖掘台湾相关机会
 {scene_context}
 {chain_ctx}"""
 
@@ -1842,6 +1843,11 @@ VAGUE_PHRASES = [
     '供需双紧', '有价无市', '供需断裂在', '服务供给不足', '供需两端信息',
     '断裂在服务供给', '断裂在仓储和信息', '断裂在服务供给和信息',
     '放之四海而皆准', '等中间人', '都在等',
+    # V20-fix: 万能废话句式——任何时候都成立的通用描述
+    '替代品需求爆发', '产能跟不上', '爬坡期', '回收产能不足',
+    '成本转嫁', '终端需求下降', '库存积压', '经销商被迫折价清仓',
+    '供给收紧', '成本飙升', '利润压缩', '供给跟不上',
+    '现货价格立即飙升', '现货溢价', '期货涨停',
 ]
 
 def _detect_vague_phrases(text):
@@ -2018,7 +2024,7 @@ def _fallback_all_sections(all_raw, top_items):
                 ent_short = n['title'][:10].strip()
         if tpl_id not in used_chain_templates:
             used_chain_templates.add(tpl_id)
-            chain_output = _format_impact_chain(template, ent_short)
+            chain_output = _format_impact_chain(template, ent_short, news_title=title)
             # V20-fix13: 注入新闻实体到因果链，避免完全脱离新闻
             chain_output = _inject_news_entity_into_chain(chain_output, title)
             sections.append(chain_output)
@@ -2120,31 +2126,38 @@ def _fallback_all_sections(all_raw, top_items):
     return full_output
 
 
-def _format_impact_chain(template, entity=''):
+def _format_impact_chain(template, entity='', news_title=''):
     """V20: 格式化影响链为因果句式 — 人话，不用密码
+
+    V20-fix: 模板layers只作为方向参考，输出时必须注入新闻具体内容。
+    禁止直接输出模板通用句子——那些是"任何时候都成立的废话"。
+    每一步因果必须包含新闻标题中的具体信息。
 
     参数: IMPACT_CHAIN_TEMPLATES 中的模板 dict
     返回: 因果链叙事字符串
     """
     layers = template['layers']
-    # 每层 = (因果句, 时间窗, 方向)，直接拼接因果句
+    # V20-fix: 模板layers只作为传导方向参考，输出时提示"需结合新闻具体内容"
+    # 不再直接输出模板通用句子——那些放之四海皆准，等于什么都没说
     chain_parts = []
     for i, (step_desc, timing, direction) in enumerate(layers, 1):
-        # 方向标记：短缺不加标记（默认关注），过剩标注
-        if direction == '过剩':
-            chain_parts.append(f"{step_desc}(过剩)")
-        else:
-            chain_parts.append(f"{step_desc}")
+        # 方向标记
+        suffix = '(过剩)' if direction == '过剩' else ''
+        # 提取这一步的关键方向词（→前面的部分）
+        direction_hint = step_desc.split('→')[0].strip() if '→' in step_desc else step_desc[:20]
+        chain_parts.append(f"[第{i}步·{direction_hint}{suffix}→需结合新闻具体内容]")
     chain_str = ' → '.join(chain_parts)
     fracture = template['fracture']
     window = template['window']
 
-    # 注入新闻实体，让同类别不同新闻的输出有差异
+    # 注入新闻实体
     entity_tag = f"「{entity}」" if entity else ''
+    news_ref = f"基于新闻「{news_title[:40]}」" if news_title else ''
 
     lines = [
-        f"  > 📡 因果链: {chain_str}",
+        f"  > 📡 {news_ref}因果链方向: {chain_str}",
         f"  > ⚡ 断裂在{fracture}，窗口{window}",
+        f"  > ⚠️ 以上为传导方向参考，每步需用新闻原文的具体数字/公司/政策名替换",
     ]
     if entity:
         lines.append(f"  > 📌 触发: {entity_tag}引发上述传导")
@@ -2159,7 +2172,7 @@ def _infer_impact_chain(title):
     """
     template = _match_impact_chain(title)
     entity = _extract_entity(title)
-    return _format_impact_chain(template, entity)
+    return _format_impact_chain(template, entity, news_title=title)
 
 
 def _validate_signal(signal, title, existing_signals=None):
