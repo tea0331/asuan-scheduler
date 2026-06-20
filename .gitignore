@@ -18,7 +18,6 @@ toku-daily-report.md
 # 环境和进程文件
 daemon.pid
 scheduler.pid
-output/
 
 # 摆设文件/工具脚本（不入库）
 audit.py
