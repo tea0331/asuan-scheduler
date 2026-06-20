@@ -2784,16 +2784,6 @@ def _extract_entity(title):
             if entity not in noise:
                 return entity
 
-    # V17: 模式1.5 — "公司名+完成/获/斩获+金额+融资" 提取公司名
-    # 例: "安纳智芯完成数亿元融资" → "安纳智芯", "百奥几何凭XX斩获数亿元融资" → "百奥几何"
-    for seg in segments:
-        seg = seg.strip()
-        m = re.search(r'([一-龥A-Za-z]{2,8})(?:完成|获|斩获|拿到|获得|拿到)(?:数|多|超|近|约)?(?:亿|千万|百万|万)?元?(?:融资|投资|融资|注资)', seg)
-        if m:
-            entity = m.group(1)
-            if entity not in noise and len(entity) >= 2:
-                return entity
-    
     # 模式2: 英文专有名词（OpenAI, DeepSeek, NVIDIA, TSMC, SK等）
     # 要求>=4字符或多词组合，且不在英文停用词中
     for seg in segments:

@@ -12,7 +12,7 @@
   "neighbor_bonus": 0.04999999999999999,
   "gamma": 0.8099999999999999,
   "version": 32,
-  "algo_version": "v8.3",
+  "algo_version": "v8.5",
   "evolution_log": [
     {
       "date": "2026-04-30",

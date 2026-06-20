@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-金主 (JinZhu) - 刘海蟾点金算法核心大脑 v8.3
+金主 (JinZhu) - 刘海蟾点金算法核心大脑 v8.5
 
 唯一真相来源:所有推荐生成、结算反哺、权重进化都经过这里。
 外部只需调用 JinZhu.daily_run(),不直接操作 games/*.py 或 algo_module.py。
@@ -9,7 +9,17 @@
   Model Layer   → weight-config.json (唯一模型参数出处)
   Generation Layer → generate_ssq/dlt/qxc (策略差异化+随机扰动+邻号加分)
   Evaluation Layer → settle/backtest (结果驱动进化 + 系统结算)
-  Evolution Layer  → GEPA (写回Model,下一代自动生效 + 系统虚拟用户信号)
+  Evolution Layer  → 智能进化 (写回Model,下一代自动生效 + 系统虚拟用户信号)
+
+v8.5 进化引擎重构:
+  - P0: _is_significant 改用中奖率中位数检验（原均值检验被一等奖离群值失效）
+  - P0: _collect_evolve_signals 策略名匹配覆盖所有彩种（原只匹配'追热'/'核心'，PLN/LTN 信号永远为空）
+  - P0: 进化步长按命中率差距自适应（原固定0.005导致边界震荡）
+  - P0: GEPA砍尾——进化时砍掉表现最差的策略权重（东方朔提议）
+  - P0: 冷号策略重构——彻底废弃赌徒谬误（"很久没出≠会出"），改为差异化覆盖策略，选其他4注没用过的号，最大化5注覆盖面
+  - P1: evolve() 加防重复调用保护（同一天不重复进化，避免日志重复写入）
+  - P1: algo_version 与 version 分离——algo_version 只在算法逻辑改动时手动升，version 记录策略迭代次数
+  - P1: 新增 _append_backtest_log 回测CSV记录
 
 v8.3 统一虚拟用户:
   - generate_recs() 支持 model_override (虚拟用户各人参数化生成)
@@ -64,7 +74,7 @@ DEFAULT_MODEL = {
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
     'neighbor_bonus': 0.03, 'gamma': 0.88,
-    'version': 1, 'algo_version': 'v8.3', 'evolution_log': [],
+    'version': 1, 'algo_version': 'v8.5', 'evolution_log': [],
     'lock_config': {},
 }
 
@@ -231,10 +241,21 @@ class JinZhu:
             # pln/ltn 用专用分析函数
             if game == 'pln':
                 from games.pln import analyze_pln
-                return analyze_pln(history_data)
+                result = analyze_pln(history_data)
+                # 确保返回格式是 main_weights/special_weights
+                if 'front_weights' in result and 'main_weights' not in result:
+                    # 旧格式转换: front(6)+back(1) → main(6)+special(1)
+                    result['main_weights'] = result.pop('front_weights')
+                    result['special_weights'] = result.pop('back_weights', [])
+                return result
             elif game == 'ltn':
                 from games.ltn import analyze_ltn
-                return analyze_ltn(history_data)
+                result = analyze_ltn(history_data)
+                # 确保返回格式是 main_weights/special_weights
+                if 'front_weights' in result and 'main_weights' not in result:
+                    result['main_weights'] = result.pop('front_weights')
+                    result['special_weights'] = result.pop('back_weights', [])
+                return result
 
             wa = la.WeightedAnalyzer(history_data)
             analyze_map = {
@@ -443,39 +464,18 @@ class JinZhu:
                     best_n = n
             ext2[i] = best_n if best_n is not None else core_A[i]
 
-        # 冷号注: 温和回补策略(非极端冷号) — v8.4修复
-        # 原版选遗漏最高号码(赌徒谬误)，全量数据显示0%中奖率
-        # 改为钟形曲线: 遗漏在平均周期1-2倍之间得分最高
-        cold_miss_w = self.get_param('cold_miss_front', 0.40)
-        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
-        cold_freq_w = self.get_param('cold_freq_front', 0.30)
+        # 冷号注: 差异化覆盖策略 — V20-fix
+        # 彩票是独立随机事件，"很久没出"不代表"会出"（赌徒谬误）
+        # 改为逐位选和其他4注不同的数字，最大化覆盖面
+        import random as _rng
         cold = []
+        used_per_pos = [set() for _ in range(7)]
+        for other_rec in [core_A, core_B, ext1, ext2]:
+            for i in range(min(7, len(other_rec))):
+                used_per_pos[i].add(other_rec[i])
         for i in range(7):
-            pos_data = positions[i]
-            miss = pos_data.get('miss', {})
-            freq = pos_data.get('freq', {})
-            avg_interval = pos_data.get('avg_interval', {})
-            best_n = 0
-            best_score = -999
-            for n in range(10):
-                m = miss.get(n, 0)
-                avg_i = avg_interval.get(n, 5)
-                ratio = m / max(avg_i, 1)
-
-                # 钟形曲线
-                if 0.8 <= ratio <= 2.0:
-                    miss_score = 2.5
-                elif ratio > 2.0:
-                    miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
-                else:
-                    miss_score = ratio * 1.5
-
-                cycle = min(ratio, 2.0)
-                f = freq.get(n, 0)
-                score = miss_score * cold_miss_w + cycle * cold_cycle_w + min(f / 3.0, 1.5) * cold_freq_w
-                if score > best_score:
-                    best_score = score
-                    best_n = n
+            available = [n for n in range(10) if n not in used_per_pos[i]]
+            cold.append(_rng.choice(available) if available else _rng.randint(0, 9))
             cold.append(best_n)
 
         # 随机扰动
@@ -538,42 +538,17 @@ class JinZhu:
         ]
 
     def _select_cold_pln(self, analysis, used_set):
-        """PLN冷号注主号(1-38)- 温和回补策略(非极端冷号)
+        """PLN冷号注主号(1-38)- 差异化覆盖策略
 
-        v8.4 修复: 原版选遗漏最久的号码(赌徒谬误)，全量数据显示0%中奖率。
-        改为钟形曲线评分: 遗漏在平均周期1-2倍之间得分最高。
+        V20-fix: 冷号策略不再基于"遗漏值/赌徒谬误"——彩票是独立随机事件，
+        "很久没出"不代表"会出"。改为差异化覆盖：选其他4注没用过的号，
+        按均匀分布选取，最大化5注的整体覆盖面。
         """
-        cold_miss_w = self.get_param('cold_miss_front', 0.40)
-        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
-        cold_freq_w = self.get_param('cold_freq_front', 0.30)
-
-        miss_key = 'main_miss'
-        freq_key = 'main_freq'
-        avg_interval = analysis.get('main_avg_interval', {})
-
-        scores = []
-        for n in range(1, 39):
-            if n in used_set:
-                continue
-            miss_val = analysis[miss_key].get(n, 0)
-            avg_i = avg_interval.get(n, 15)
-            ratio = miss_val / max(avg_i, 1)
-
-            # 钟形曲线
-            if 0.8 <= ratio <= 2.0:
-                miss_score = 2.5
-            elif ratio > 2.0:
-                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
-            else:
-                miss_score = ratio * 1.5
-
-            cycle_signal = min(ratio, 2.0)
-            f = analysis[freq_key].get(n, 0)
-            f_score = min(f / 3.0, 1.5)
-            score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
-            scores.append((n, score))
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return sorted([n for n, s in scores[:6]])
+        import random as _rng
+        available = [n for n in range(1, 39) if n not in used_set]
+        if len(available) >= 6:
+            return sorted(_rng.sample(available, 6))
+        return sorted(available[:6])
 
     def _select_specials(self, analysis, n_specials=5):
         """PLN特号智能选择(1-8)- 权重+遗漏+奇偶+互斥"""
@@ -699,37 +674,18 @@ class JinZhu:
         ]
 
     def _select_cold_ltn(self, analysis, used_set):
-        """LTN冷号注主号(1-49)- 温和回补策略(非极端冷号)"""
-        cold_miss_w = self.get_param('cold_miss_front', 0.40)
-        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
-        cold_freq_w = self.get_param('cold_freq_front', 0.30)
+        """LTN冷号注主号(1-49)- 差异化覆盖策略
 
-        miss_key = 'main_miss'
-        freq_key = 'main_freq'
-        avg_interval = analysis.get('main_avg_interval', {})
-
-        scores = []
-        for n in range(1, 50):
-            if n in used_set:
-                continue
-            miss_val = analysis[miss_key].get(n, 0)
-            avg_i = avg_interval.get(n, 15)
-            ratio = miss_val / max(avg_i, 1)
-
-            if 0.8 <= ratio <= 2.0:
-                miss_score = 2.5
-            elif ratio > 2.0:
-                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)
-            else:
-                miss_score = ratio * 1.5
-
-            cycle_signal = min(ratio, 2.0)
-            f = analysis[freq_key].get(n, 0)
-            f_score = min(f / 3.0, 1.5)
-            score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
-            scores.append((n, score))
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return sorted([n for n, s in scores[:6]])
+        V20-fix: 冷号策略不再基于"遗漏值/赌徒谬误"——彩票是独立随机事件，
+        "很久没出"不代表"会出"。改为差异化覆盖：选其他4注没用过的号，
+        按均匀分布选取，最大化5注的整体覆盖面。
+        """
+        import random as _rng
+        available = [n for n in range(1, 50) if n not in used_set]
+        # 均匀分布选取6个，最大化覆盖面
+        if len(available) >= 6:
+            return sorted(_rng.sample(available, 6))
+        return sorted(available[:6])
 
     def _select_ltn_specials(self, analysis, n_specials=5):
         """LTN特别号选择(1-49)- 权重+遗漏"""
@@ -830,45 +786,19 @@ class JinZhu:
         return sorted([n for n, s in scores[:n_select]])
 
     def _select_cold_reds(self, analysis, used_set, game='ssq'):
-        """冷号注红球 - 温和回补策略(非极端冷号)
+        """冷号注红球 - 差异化覆盖策略
 
-        v8.4 修复: 原版选遗漏最久的号码(赌徒谬误)，全量数据显示0%中奖率。
-        改为钟形曲线评分: 遗漏在平均周期1-2倍之间得分最高(可能回补区间)，
-        超过2倍降分(太冷可能真的不出了)，低于0.8倍低分(还不够冷)。
+        V20-fix: 冷号策略不再基于"遗漏值/赌徒谬误"——彩票是独立随机事件，
+        "很久没出"不代表"会出"。改为差异化覆盖：选其他4注没用过的号，
+        按均匀分布选取，最大化5注的整体覆盖面。
         """
-        cold_miss_w = self.get_param('cold_miss_front', 0.40)
-        cold_cycle_w = self.get_param('cold_cycle_front', 0.30)
-        cold_freq_w = self.get_param('cold_freq_front', 0.30)
+        import random as _rng
         n_range = 34 if game == 'ssq' else 36
-
-        red_avg_interval = analysis.get('red_avg_interval', analysis.get('front_avg_interval', {}))
-        miss_key = 'red_miss' if 'red_miss' in analysis else 'front_miss'
-        freq_key = 'red_freq' if 'red_freq' in analysis else 'front_freq'
-
-        scores = []
-        for n in range(1, n_range):
-            if n in used_set:
-                continue
-            miss_val = analysis[miss_key].get(n, 0)
-            avg_interval = red_avg_interval.get(n, 15)
-            ratio = miss_val / max(avg_interval, 1)
-
-            # 钟形曲线: 1-2倍区间最高，超过2倍降分
-            if 0.8 <= ratio <= 2.0:
-                miss_score = 2.5  # 最佳回补区间
-            elif ratio > 2.0:
-                miss_score = max(0, 2.5 - (ratio - 2.0) * 0.8)  # 超过2倍递减
-            else:
-                miss_score = ratio * 1.5  # 不够冷
-
-            cycle_signal = min(ratio, 2.0)
-            f = analysis[freq_key].get(n, 0)
-            f_score = min(f / 3.0, 1.5)
-            score = miss_score * cold_miss_w + cycle_signal * cold_cycle_w + f_score * cold_freq_w
-            scores.append((n, score))
-        scores.sort(key=lambda x: x[1], reverse=True)
         n_need = 6 if game == 'ssq' else 5
-        return sorted([n for n, s in scores[:n_need]])
+        available = [n for n in range(1, n_range) if n not in used_set]
+        if len(available) >= n_need:
+            return sorted(_rng.sample(available, n_need))
+        return sorted(available[:n_need])
 
     def _select_cold_front(self, analysis, all_pool, used_set):
         """大乐透冷号注前区"""
@@ -962,22 +892,12 @@ class JinZhu:
                 if len(selected) >= n_blues:
                     break
 
-        # 最后一个给冷号
+        # 最后一个给差异化覆盖（V20-fix: 不用赌徒谬误选冷号）
         if len(selected) >= n_blues:
-            cold_scores = {}
-            for n in range(1, 17):
-                if n in selected[:n_blues - 1]:
-                    continue
-                m = blue_miss.get(n, 0)
-                avg_i = blue_avg_interval.get(n, 10)
-                cycle = min(m / max(avg_i, 1), 2.0)
-                f = blue_freq.get(n, 0)
-                freq_s = min(f, 4) / 2.0
-                miss_s = min(m / 5.0, 3.0)
-                cold_scores[n] = miss_s * cold_miss_w + cycle * cold_cycle_w + freq_s * cold_freq_w
-            cold_ranked = sorted(cold_scores.items(), key=lambda x: x[1], reverse=True)
-            if cold_ranked:
-                selected[n_blues - 1] = cold_ranked[0][0]
+            import random as _rng
+            available = [n for n in range(1, 17) if n not in selected[:n_blues - 1]]
+            if available:
+                selected[n_blues - 1] = _rng.choice(available)
 
         return selected[:n_blues]
 
@@ -1034,27 +954,13 @@ class JinZhu:
                             break
 
             if i == n_pairs - 1 and len(pair) == 2:
-                cold_scores = {}
-                for n in range(1, 13):
-                    if n in used and n not in pair:
-                        continue
-                    m = back_miss.get(n, 0)
-                    avg_i = back_avg_interval.get(n, 10)
-                    cycle = min(m / max(avg_i, 1), 2.0)
-                    f = back_freq.get(n, 0)
-                    freq_s = min(f, 4) / 2.0
-                    miss_s = min(m / 5.0, 3.0)
-                    cold_scores[n] = miss_s * cold_miss_w + cycle * cold_cycle_w + freq_s * cold_freq_w
-                cold_ranked = sorted(cold_scores.items(), key=lambda x: x[1], reverse=True)
-                cold_pair = []
-                for n, s in cold_ranked:
-                    if n not in used or n in pair:
-                        cold_pair.append(n)
-                        used.add(n)
+                # V20-fix: 最后一注改为差异化覆盖——选还没用过的号，不用赌徒谬误
+                import random as _rng
+                available = [n for n in range(1, 13) if n not in used or n in pair]
+                if len(available) >= 2:
+                    cold_pair = _rng.sample([n for n in available if n not in pair], 2) if len([n for n in available if n not in pair]) >= 2 else pair
                     if len(cold_pair) == 2:
-                        break
-                if len(cold_pair) == 2:
-                    pair = sorted(cold_pair)
+                        pair = sorted(cold_pair)
 
             result.append(sorted(pair))
 
@@ -1194,6 +1100,12 @@ class JinZhu:
                 'prize': prize_info.get('prize', 0),
             })
 
+        # 回测log: 写入CSV
+        try:
+            self._append_backtest_log(game, date, actual_period, hits, actual)
+        except Exception as e:
+            logging.warning(f"[Settle] 回测log写入失败(不阻塞): {e}")
+
         return {
             'game': game, 'date': date, 'period': actual_period,
             'total_cost': total_cost, 'total_prize': total_prize,
@@ -1201,6 +1113,37 @@ class JinZhu:
             'hits': hits,
             'summary': f"投入{total_cost}元 中奖{total_prize}元 ROI={((total_prize - total_cost) / max(total_cost, 1)) * 100:.1f}%"
         }
+
+    def _append_backtest_log(self, game, date, period, hits, actual):
+        """回测log: 每期结算结果追加写入 backtest_log.csv"""
+        import csv
+        log_path = os.path.join(MODULE_DIR, 'backtest_log.csv')
+        file_exists = os.path.exists(log_path)
+        with open(log_path, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['日期', '彩种', '期号', '策略', '命中数', '中奖等级', '奖金', '开奖号码'])
+            for h in hits:
+                # actual 号码格式按彩种取
+                if game == 'ssq':
+                    actual_str = f"红{actual.get('reds', [])}+蓝{actual.get('blue', '?')}"
+                elif game == 'dlt':
+                    actual_str = f"前{actual.get('front', [])}+后{actual.get('back', [])}"
+                elif game == 'qxc':
+                    actual_str = str(actual.get('numbers', []))
+                elif game == 'pln':
+                    actual_str = f"{actual.get('numbers', [])}+特{actual.get('special', '?')}"
+                elif game == 'ltn':
+                    actual_str = f"主{actual.get('main', [])}+特{actual.get('special', '?')}"
+                else:
+                    actual_str = str(actual)
+                writer.writerow([
+                    date, game, period,
+                    h.get('strategy', ''),
+                    h.get('tier', 0),
+                    h.get('prize', 0),
+                    actual_str
+                ])
 
     def backtest(self, game: str, n_periods: int = 10):
         """回测最近N期"""
@@ -1338,14 +1281,29 @@ class JinZhu:
         return signals, changes, len(rows)
 
     # ============================================================
-    #  Evolution Layer - GEPA 进化 (写回Model)
+    #  Evolution Layer - 智能进化 (写回Model)
     # ============================================================
 
     def evolve(self, game: str = None):
-        """GEPA进化 - 结算数据驱动权重调整,写回Model(P0修复: 合并3彩种投票+边界保护+最小样本6)"""
+        """智能进化 - 结算数据驱动权重调整,写回Model(P0修复: 合并3彩种投票+边界保护+最小样本6)
+
+        V20-fix: 加防重复调用保护（同一天不重复进化，避免日志重复写入）
+        """
         from algo_module import AlgoDB
         db = AlgoDB()
         games = [game] if game else ['ssq', 'dlt', 'qxc', 'pln', 'ltn']
+
+        # V20-fix: 防重复调用 — 检查今天是否已经进化过
+        today_str = _now_cst().strftime('%Y-%m-%d')
+        evo_log = self.model.get('evolution_log', [])
+        if evo_log:
+            last_entry = evo_log[-1]
+            last_date = last_entry.get('date', '')
+            last_trigger = last_entry.get('trigger', '')
+            # 如果今天已经进化过且不是指定单彩种的手动调用，跳过
+            if last_date == today_str and game is None and '结算驱动' in last_trigger:
+                logging.info(f"[Evolve] 今天({today_str})已进化过，跳过重复调用")
+                return {'status': '今日已进化', 'samples': last_entry.get('sample_size', 0)}
 
         # P0修复: 收集所有彩种的进化信号,最后合并投票
         game_signals = defaultdict(float)  # 彩种信号
@@ -1412,9 +1370,10 @@ class JinZhu:
                     self.model[k] = max(lo, min(hi, self.model[k]))
             all_changes.append(f"归一化修正: {total:.4f}→1.0")
 
-        # 更新版本号
+        # 更新策略迭代号: 每次权重微调 +1（记录策略变化次数，不是算法版本）
         self.model['version'] = self.model.get('version', 1) + 1
-        self.model['algo_version'] = 'v8.3'
+        # algo_version 不在进化时自增——它只在算法逻辑发生结构性改动时手动升（如 v8.3→v8.5）
+        # 32次进化是权重的微调，不是算法版本的迭代
 
         # P2修复: 进化日志长度限制(最近50条)
         log_entry = {
@@ -1439,7 +1398,11 @@ class JinZhu:
         }
 
     def _collect_evolve_signals(self, db, game):
-        """收集单彩种进化信号(不直接修改Model,返回delta字典)"""
+        """收集单彩种进化信号(不直接修改Model,返回delta字典)
+
+        V20-fix: 策略名匹配改为按 Strategy 常量覆盖所有彩种；
+        进化步长按命中率差距自适应（差距大→步长大，差距小→步长小）
+        """
         conn = db._get_conn()
         week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
         rows = conn.execute(
@@ -1453,59 +1416,124 @@ class JinZhu:
         if len(rows) < 3:
             return {}, [], len(rows)
 
-        strategy_stats = defaultdict(lambda: {'count': 0, 'total_prize': 0, 'total_hits': 0})
+        strategy_stats = defaultdict(lambda: {'count': 0, 'total_prize': 0, 'total_hits': 0, 'wins': 0})
         for r in rows:
             s = strategy_stats[r['strategy']]
             s['count'] += 1
             s['total_prize'] += r['prize_amount']
             s['total_hits'] += r['hit_count']
+            if r['prize_amount'] > 0:
+                s['wins'] += 1
+
+        # 计算每个策略的命中率
+        for stype, s in strategy_stats.items():
+            s['hit_rate'] = s['wins'] / max(s['count'], 1)
+            s['avg_prize'] = s['total_prize'] / max(s['count'], 1)
 
         best_strategy = max(strategy_stats.items(), key=lambda x: x[1]['total_prize'])
+        worst_strategy = min(strategy_stats.items(), key=lambda x: x[1]['total_prize'])
 
         signals = {}
         changes = []
+        best_name = best_strategy[0]
+        best_stats = best_strategy[1]
+        worst_name = worst_strategy[0]
+        worst_stats = worst_strategy[1]
 
-        # 热号领先 → freq 微增, miss 微减 (step减半为0.005,更保守)
-        if '追热' in best_strategy[0] or '核心' in best_strategy[0]:
-            signals['freq'] = 0.005
-            signals['miss'] = -0.005
-            changes.append(f"[{game}] 热号领先 → freq +0.005, miss -0.005")
+        # 自适应步长: 命中率差距越大步长越大
+        rate_gap = best_stats['hit_rate'] - worst_stats['hit_rate']
+        step = max(0.002, min(0.008, 0.003 + rate_gap * 0.02))
 
-        # 冷号领先 → cold_cycle 微增 (step减半为0.003)
-        if '冷号' in best_strategy[0]:
-            signals['cold_cycle_front'] = 0.003
-            changes.append(f"[{game}] 冷号领先 → cold_cycle_front +0.003")
+        # V20-fix: 策略→维度映射表（最优策略加分 + 最差策略砍尾减分）
+        strategy_dim_map = {
+            '核心': ('freq', 'miss'),        # 核心注好→freq+miss-；核心注差→freq-miss+
+            'A': ('freq', 'miss'),
+            'B': ('freq', 'miss'),
+            '扩展1': ('trend', None),        # 形态好→trend+；形态差→trend-
+            '形态': ('trend', None),
+            '冷号': ('cold_cycle_front', None),
+            Strategy.COLD: ('cold_cycle_front', None),
+            '扩展2': ('zone', None),
+            '回补': ('zone', None),
+        }
+
+        # 匹配最优策略维度
+        best_dim_up = best_dim_down = None
+        for keyword, (dim_up, dim_down) in strategy_dim_map.items():
+            if keyword in best_name:
+                best_dim_up, best_dim_down = dim_up, dim_down
+                break
+
+        # 匹配最差策略维度
+        worst_dim_up = worst_dim_down = None
+        for keyword, (dim_up, dim_down) in strategy_dim_map.items():
+            if keyword in worst_name:
+                worst_dim_up, worst_dim_down = dim_up, dim_down
+                break
+
+        # 给最优策略加分
+        if best_dim_up:
+            signals[best_dim_up] = signals.get(best_dim_up, 0) + step
+            changes.append(f"[{game}] 最优={best_name}(命中{best_stats['hit_rate']:.1%}, gap={rate_gap:.1%}) → {best_dim_up} +{step:.4f}")
+        if best_dim_down:
+            signals[best_dim_down] = signals.get(best_dim_down, 0) - step
+            changes.append(f"[{game}] 最优={best_name} → {best_dim_down} -{step:.4f}")
+
+        # 砍尾: 给最差策略减分（东方朔提议，砍尾力度=正向的0.7倍，不砍死）
+        cut_step = step * 0.7
+        if worst_dim_up and worst_dim_up != best_dim_up:
+            signals[worst_dim_up] = signals.get(worst_dim_up, 0) - cut_step
+            changes.append(f"[{game}] 砍尾={worst_name}(命中{worst_stats['hit_rate']:.1%}) → {worst_dim_up} -{cut_step:.4f}")
+        if worst_dim_down and worst_dim_down != best_dim_down:
+            signals[worst_dim_down] = signals.get(worst_dim_down, 0) + cut_step
+            changes.append(f"[{game}] 砍尾={worst_name} → {worst_dim_down} +{cut_step:.4f}")
 
         return signals, changes, len(rows)
 
     def _is_significant(self, db, games):
-        """P0修复: 简单显著性检验 - 最优策略奖金需超过均值20%以上"""
+        """P0修复: 显著性检验 — V20-fix: 用中位数而非均值，排除一等奖离群值
+
+        原逻辑用 max_prize < avg_prize * 1.2，但一等奖500万 vs 六等奖5元，
+        max几乎永远超过avg 1.2倍，显著性检验形同虚设。
+        改用中奖率（非零奖金占比）的中位数检验。
+        """
         conn = db._get_conn()
         week_ago = (_now_cst() - timedelta(days=7)).strftime('%Y-%m-%d')
 
-        # 只看有结算数据的彩种
-        all_prizes = []
+        all_hit_rates = []
         for g in games:
             rows = conn.execute(
-                """SELECT s.prize_amount FROM algo_settlements s
+                """SELECT b.strategy, s.prize_amount FROM algo_settlements s
                    JOIN algo_bets b ON s.bet_id = b.id
                    WHERE b.game=? AND s.settled_at >= ?""",
                 (g, week_ago)
             ).fetchall()
-            all_prizes.extend([r['prize_amount'] for r in rows])
+
+            # 按策略分组计算中奖率
+            strat_wins = defaultdict(lambda: {'total': 0, 'wins': 0})
+            for r in rows:
+                strat_wins[r['strategy']]['total'] += 1
+                if r['prize_amount'] > 0:
+                    strat_wins[r['strategy']]['wins'] += 1
+
+            for stype, s in strat_wins.items():
+                if s['total'] >= 3:  # 至少3条才统计
+                    all_hit_rates.append(s['wins'] / s['total'])
+
         conn.close()
 
-        if len(all_prizes) < 6:
+        if len(all_hit_rates) < 3:
             return False
 
-        avg_prize = sum(all_prizes) / len(all_prizes)
-        max_prize = max(all_prizes)
+        # V20-fix: 最优策略中奖率需超过中位数1.5倍，或绝对值超过0.15
+        all_hit_rates.sort()
+        median_rate = all_hit_rates[len(all_hit_rates) // 2]
+        best_rate = max(all_hit_rates)
 
-        # 如果最大奖金不超过均值的1.2倍,差异不显著
-        if avg_prize > 0 and max_prize < avg_prize * 1.2:
-            return False
+        if best_rate > median_rate * 1.5 or best_rate > 0.15:
+            return True
 
-        return True
+        return False
 
     # ============================================================
     # ============================================================
