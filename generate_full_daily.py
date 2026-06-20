@@ -69,14 +69,20 @@ def _run_with_timeout(func, timeout=60):
     v8.4 修复: 原版用 multiprocessing.Pool，但在 daemon 进程(cron/systemd)下
     禁止创建子进程(daemonic processes are not allowed to have children)，
     导致 AI 100% 失败走降级。改用 ThreadPoolExecutor(线程不算子进程)。
+
+    v8.5 修复: 不用 with 语句(with 退出时 shutdown(wait=True) 会阻塞等待线程)，
+    超时后手动 shutdown(wait=False) 立即返回，避免进程卡死被 SIGKILL。
     """
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeoutError:
-            raise TimeoutError(f"AI调用超时({timeout}秒)")
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(func)
+    try:
+        result = future.result(timeout=timeout)
+        executor.shutdown(wait=False)
+        return result
+    except FuturesTimeoutError:
+        executor.shutdown(wait=False)
+        raise TimeoutError(f"AI调用超时({timeout}秒)")
 
 
 # ============================================================
@@ -1560,10 +1566,11 @@ def _filter_noise_news(news_items):
 # ============================================================
 # AI调用
 # ============================================================
-def _call_hunyuan_api(system_msg, user_msg, timeout=90):
+def _call_hunyuan_api(system_msg, user_msg, timeout=30):
     """调用混元API，单次调用带timeout
 
-    v8.4 优化: 超时90秒(兼顾慢响应)，限流重试3次(指数退避)，max_tokens 4000(减少生成时间)
+    v8.5 优化: 超时30秒(原90秒过长)，重试2次(原3次)，退避3+6秒(原5+10+20)，
+    最坏69秒(在200秒外层限制内)。连接超时10秒单独设置，避免DNS/建连阶段卡死。
     """
     api_key = os.getenv('HUNYUAN_API_KEY', '')
     if not api_key:
@@ -1586,9 +1593,9 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
 
     import time
 
-    for attempt in range(3):
+    for attempt in range(2):
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+            resp = requests.post(url, json=payload, headers=headers, timeout=(10, timeout))
             if resp.status_code == 200:
                 result = resp.json()
                 content = result['choices'][0]['message']['content']
@@ -1602,16 +1609,16 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
                     content = content[:-3]
                 return content.strip()
             elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
-                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s 指数退避
-                logging.warning(f"[AI] 混元API限流(attempt {attempt+1}/3)，等待{wait}秒重试...")
+                wait = 3 * (2 ** attempt)  # 3s, 6s 指数退避
+                logging.warning(f"[AI] 混元API限流(attempt {attempt+1}/2)，等待{wait}秒重试...")
                 time.sleep(wait)
                 continue
             else:
                 logging.warning(f"[AI] 混元API失败: {resp.status_code} {resp.text[:200]}")
                 return None
         except requests.exceptions.Timeout:
-            logging.warning(f"[AI] 混元API超时({timeout}秒, attempt {attempt+1}/3)")
-            if attempt < 2:
+            logging.warning(f"[AI] 混元API超时({timeout}秒, attempt {attempt+1}/2)")
+            if attempt < 1:
                 time.sleep(3)
                 continue
             return None
@@ -1619,7 +1626,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
             logging.warning(f"[AI] 混元API异常: {e}")
             return None
 
-    logging.warning("[AI] 混元API 3次重试均失败")
+    logging.warning("[AI] 混元API 2次重试均失败")
     return None
 
 
@@ -1770,7 +1777,7 @@ def generate_all_sections():
     # 5. 调用AI生成 (v8.4: 超时200秒，API内部90秒×3次重试)
     try:
         content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=90),
+            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=30),
             timeout=200
         )
         if content and len(content) > 500:
