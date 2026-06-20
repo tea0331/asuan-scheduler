@@ -670,6 +670,41 @@ def main():
     print('---评价内容---')
     print(evil)
 
+    # 重发邮件（含东方朔评价）
+    print('📧 重发邮件（含东方朔评价）...')
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        _env = {}
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    _env[k.strip()] = v.strip()
+        with open(report_path, 'r', encoding='utf-8') as f:
+            full_body = f.read()
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'阿算帮刘老板发财日报 | {TODAY}（含东方朔邪修评价）'
+        msg['From'] = _env.get('SMTP_USER', '')
+        msg['To'] = _env.get('SMTP_TO', '')
+        msg.attach(MIMEText(full_body, 'plain', 'utf-8'))
+        try:
+            import markdown as md
+            html_body = md.markdown(full_body, extensions=['extra', 'nl2br'])
+            html_wrapped = f'<html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.7;color:#333;max-width:680px;margin:0 auto;padding:20px;">{html_body}</body></html>'
+            msg.attach(MIMEText(html_wrapped, 'html', 'utf-8'))
+        except Exception:
+            pass
+        server = smtplib.SMTP_SSL(_env.get('SMTP_SERVER', 'smtp.163.com'), int(_env.get('SMTP_PORT', '465')), timeout=30)
+        server.login(_env.get('SMTP_USER', ''), _env.get('SMTP_PASSWORD', ''))
+        server.sendmail(_env.get('SMTP_USER', ''), [_env.get('SMTP_TO', '')], msg.as_string())
+        server.quit()
+        print('✅ 邮件重发成功')
+    except Exception as e:
+        print(f'⚠️ 邮件重发失败: {e}')
+
 
 if __name__ == '__main__':
     main()

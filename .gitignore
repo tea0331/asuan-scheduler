@@ -48,3 +48,4 @@ PLN启动任务清单_*
 
 # V20: reports目录只保留当前报告
 reports/*_recommendation_*.md
+.env
