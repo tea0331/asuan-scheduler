@@ -1643,19 +1643,24 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=60):
 # ============================================================
 # 核心: 生成全部6板块
 # ============================================================
-def generate_all_sections():
-    """生成日报全部6大板块 — V6核心函数
+def fetch_and_filter():
+    """v8.6: 拆分出的抓取+过滤阶段，供 step1 脚本独立调用
 
+    返回 (all_raw, top_items, source_stats, domain_stats)
+    """
+    all_raw, source_stats = fetch_raw_materials()
+    top_items, domain_stats = filter_by_domain_quota(all_raw, total=20)
+    logging.info(f"[日报] 领域配额: {domain_stats} | 共{len(top_items)}条")
+    return all_raw, top_items, source_stats, domain_stats
+
+
+def generate_sections_ai(all_raw, top_items):
+    """v8.6: 拆分出的AI生成阶段，供 step2 脚本独立调用
+
+    接收已抓取过滤的新闻数据，调用混元API生成6板块。
     主路径: AI一次生成6板块
     降级路径: 基于关键词推断生成6板块
     """
-    # 1. 抓取新闻素材
-    all_raw, source_stats = fetch_raw_materials()
-
-    # 2. 领域配额过滤 — 保证各关注领域都有新闻，不被AI/算力挤占
-    top_items, domain_stats = filter_by_domain_quota(all_raw, total=20)
-    logging.info(f"[日报] 领域配额: {domain_stats} | 共{len(top_items)}条")
-
     # 3. 构建邪修上下文
     chain_ctx, used_quotes = _build_xie_xiu_context(top_items)
 
@@ -1784,7 +1789,7 @@ def generate_all_sections():
 
 请生成今日完整6板块日报。"""
 
-    # 5. 调用AI生成 (v8.4: 超时200秒，API内部90秒×3次重试)
+    # 5. 调用AI生成 (v8.5: 超时200秒，API内部60秒×2次重试)
     try:
         content = _run_with_timeout(
             lambda: _call_hunyuan_api(system_msg, user_msg, timeout=60),
@@ -1831,11 +1836,24 @@ def generate_all_sections():
             logging.warning("[日报] AI生成内容过短或为空，使用降级模式")
             return _fallback_all_sections(all_raw, top_items)
     except TimeoutError:
-        logging.warning("[日报] AI生成超时(180秒)，使用降级模式")
+        logging.warning("[日报] AI生成超时(200秒)，使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
     except Exception as e:
         logging.warning(f"[日报] AI生成异常: {e}，使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
+
+
+def generate_all_sections():
+    """生成日报全部6大板块 — V6核心函数（cron 兼容入口）
+
+    v8.6: 拆分为 fetch_and_filter() + generate_sections_ai()，
+    原逻辑不变，仅拆分供 step 脚本独立调用。
+
+    主路径: AI一次生成6板块
+    降级路径: 基于关键词推断生成6板块
+    """
+    all_raw, top_items, _, _ = fetch_and_filter()
+    return generate_sections_ai(all_raw, top_items)
 
 
 def _patch_missing_sections(content, top_items, missing_headers):

@@ -48,3 +48,6 @@ PLN启动任务清单_*
 # V20: reports目录只保留当前报告
 reports/*_recommendation_*.md
 .env
+
+# v8.6: 分步执行缓存目录（不入库）
+cache/
