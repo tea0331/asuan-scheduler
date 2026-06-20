@@ -26,6 +26,16 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
+# 加载 .env 文件（确保直接运行 python3 generate_full_daily.py 时也能读到）
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.exists(_env_path):
+    with open(_env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                os.environ[k.strip()] = v.strip()
+
 import requests
 
 
