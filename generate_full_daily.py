@@ -3170,9 +3170,9 @@ if __name__ == '__main__':
     def _generate_5line_summary(text):
         """调用 AI 把日报压成 exactly 5 行结论"""
         import os
-        DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
-        if not DEEPSEEK_API_KEY:
-            logging.warning("[摘要] DEEPSEEK_API_KEY 未配置，跳过 AI 摘要")
+        HUNYUAN_API_KEY = os.getenv('HUNYUAN_API_KEY', '')
+        if not HUNYUAN_API_KEY:
+            logging.warning("[摘要] HUNYUAN_API_KEY 未配置，跳过 AI 摘要")
             return []
         
         prompt = f"""把下面的日报内容压成 exactly 5 行结论。
@@ -3191,13 +3191,13 @@ if __name__ == '__main__':
         try:
             import requests
             resp = requests.post(
-                'https://api.deepseek.com/v1/chat/completions',
+                'https://api.hunyuan.cloud.tencent.com/v1/chat/completions',
                 headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Authorization': f'Bearer {HUNYUAN_API_KEY}',
                     'Content-Type': 'application/json',
                 },
                 json={
-                    'model': 'deepseek-chat',
+                    'model': 'hunyuan-pro',
                     'messages': [{'role': 'user', 'content': prompt}],
                     'max_tokens': 200,
                     'temperature': 0.3,
