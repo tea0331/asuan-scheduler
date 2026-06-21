@@ -3168,45 +3168,66 @@ if __name__ == '__main__':
 
     # 7. 生成 5 行摘要（P0 决策点①）
     def _generate_5line_summary(text):
-        """用 summarize skill 的逻辑把日报压成 5 行结论"""
-        import re
-        # 按句子分割（中文/英文句号、感叹号、问号）
-        sentences = re.split(r'([。！？.!?])', text)
-        # 合并句子和标点
-        sentences = [''.join(i) for i in zip(sentences[0::2], sentences[1::2])]
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        """调用 AI 把日报压成 exactly 5 行结论"""
+        import os
+        DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
+        if not DEEPSEEK_API_KEY:
+            logging.warning("[摘要] DEEPSEEK_API_KEY 未配置，跳过 AI 摘要")
+            return []
         
-        # 评分：优先选包含数字、关键词（PE/价格/仓位/止损/PE/ROE/营收/利润）的句子
-        keywords = ['PE', '价格', '仓位', '止损', 'ROE', '营收', '利润', '推荐', '策略', '风险', '机会']
-        def _score(s):
-            score = 0
-            if re.search(r'\d', s): score += 2
-            for k in keywords:
-                if k in s: score += 1
-            return score
+        prompt = f"""把下面的日报内容压成 exactly 5 行结论。
+
+要求：
+- 每行是一个独立结论，不超过 20 字
+- 不出现"根据今日资讯""数据分析"这类废话开头
+- 直接输出 5 行，不要编号不要解释不要分隔线
+- 结论要具体，要有信息量，不能是大白话
+
+日报全文：
+{text[:4000]}
+"""
         
-        scored = [(s, _score(s)) for s in sentences]
-        scored.sort(key=lambda x: x[1], reverse=True)
+        try:
+            import requests
+            resp = requests.post(
+                'https://api.deepseek.com/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': 'deepseek-chat',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 200,
+                    'temperature': 0.3,
+                },
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                lines = resp.json()['choices'][0]['message']['content'].strip().split('\n')
+                # 过滤空行，最多取 5 行
+                lines = [l.strip() for l in lines if l.strip()][:5]
+                if len(lines) == 5:
+                    logging.info(f"[摘要] AI 生成 5 行结论成功")
+                    return lines
+                else:
+                    logging.warning(f"[摘要] AI 返回行数异常: {len(lines)}，用原文兜底")
+            else:
+                logging.warning(f"[摘要] AI 调用失败: {resp.status_code}")
+        except Exception as e:
+            logging.warning(f"[摘要] AI 调用异常: {e}")
         
-        # 取前 5 个最高分句子，按原文顺序重排
-        top5 = [s for s, _ in scored[:8]]  # 多取几个候选
-        ordered = [s for s in sentences if s in top5][:5]
-        
-        # 如果不够 5 行，补后面的句子
-        if len(ordered) < 5:
-            for s in sentences:
-                if s not in ordered:
-                    ordered.append(s)
-                if len(ordered) >= 5:
-                    break
-        
-        return ordered[:5]
+        # 兜底：AI 失败时返回空列表，不发摘要
+        return []
     
     summary_lines = _generate_5line_summary(full_content)
-    summary_text = '\n'.join([f'{i+1}. {line}' for i, line in enumerate(summary_lines)])
     
-    # 把摘要插到邮件正文最前面
-    full_content_with_summary = f"【阿算日报 · {today_str}】\n\n{summary_text}\n\n---\n\n{full_content}"
+    if len(summary_lines) == 5:
+        summary_text = '\n'.join(summary_lines)
+        full_content_with_summary = f"【阿算日报 · {today_str}】\n\n{summary_text}\n\n---\n\n{full_content}"
+    else:
+        # AI 摘要失败，不发摘要，直接发原文
+        full_content_with_summary = full_content
     
     # 8. 发邮件
     if not SMTP_PASS:
