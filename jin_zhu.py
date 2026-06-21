@@ -73,7 +73,7 @@ DEFAULT_MODEL = {
     'freq': 0.30, 'miss': 0.25, 'trend': 0.25, 'zone': 0.20,
     'cold_miss_front': 0.40, 'cold_cycle_front': 0.30, 'cold_freq_front': 0.30,
     'cold_miss_back': 0.30, 'cold_cycle_back': 0.40, 'cold_freq_back': 0.30,
-    'neighbor_bonus': 0.03, 'gamma': 0.88,
+    'neighbor_bonus': 0.03, 'tail_concentration': 0.10, 'gamma': 0.88,
     'version': 1, 'algo_version': 'v8.5', 'evolution_log': [],
     'lock_config': {},
 }
@@ -91,6 +91,7 @@ PARAM_BOUNDS = {
     'cold_cycle_back':  (0.20, 0.60),
     'cold_freq_back':   (0.10, 0.45),
     'neighbor_bonus':   (0.00, 0.10),
+    'tail_concentration': (0.00, 0.25),
     'gamma':            (0.50, 0.95),
 }
 
@@ -328,6 +329,141 @@ class JinZhu:
 
         return analysis
 
+    # ------ 尾数集中度评分 ------
+    
+    def _tail_concentration_score(self, numbers: list) -> float:
+        """
+        计算尾数集中度评分（数值范围0-1，越高越好）
+        
+        逻辑：
+        - 理想状态：6个号码中，有1-2组尾数重复（如03/13/23，或07/17）
+        - 过度集中：>=3组尾数重复（如03/13/23/33，尾数3重复4次）
+        - 过度分散：所有尾数都不重复（完全没规律）
+        
+        返回：
+        - 0.0~1.0的评分（1.0=理想，0.0=最差）
+        """
+        if not numbers or len(numbers) == 0:
+            return 0.5
+        
+        # 提取尾数（号码%10）
+        tails = [n % 10 for n in numbers]
+        tail_counts = {}
+        for t in tails:
+            tail_counts[t] = tail_counts.get(t, 0) + 1
+        
+        # 统计尾数重复情况
+        repeated_groups = sum(1 for count in tail_counts.values() if count >= 2)
+        max_repeat = max(tail_counts.values()) if tail_counts else 0
+        
+        # 评分逻辑（优化版）
+        if repeated_groups == 0:
+            # 完全无重复：轻微扣分（过度分散）
+            return 0.6
+        elif repeated_groups == 1:
+            if max_repeat == 2:
+                # 1组重复2次（如03/13）- 理想
+                return 1.0
+            elif max_repeat == 3:
+                # 1组重复3次（如03/13/23）- 较好
+                return 0.9
+            else:
+                # 1组重复>=4次 - 过度集中
+                return 0.3
+        elif repeated_groups == 2:
+            if max_repeat == 2:
+                # 2组各重复2次（如03/13, 07/17）- 理想
+                return 1.0
+            elif max_repeat == 3:
+                # 1组3次+1组2次 - 可接受
+                return 0.8
+            else:
+                return 0.5
+        elif repeated_groups == 3:
+            # 3组重复 - 过多
+            return 0.4
+        else:
+            # >=4组重复 - 过度
+            return 0.2
+    
+    def _apply_tail_concentration(self, recommendations: list, game: str = 'ssq') -> list:
+        """
+        对5注推荐应用尾数集中度评分和调整
+        
+        参数：
+        - recommendations: 5注推荐列表
+        - game: 'ssq' 或 'dlt'
+        
+        返回：
+        - 调整后的推荐列表（按尾数集中度重新排序/调整）
+        """
+        tail_weight = self.model.get('tail_concentration', 0.10)
+        
+        if tail_weight <= 0:
+            return recommendations  # 权重为0，不调整
+        
+        # 对每注计算尾数集中度评分
+        scored_recs = []
+        for rec in recommendations:
+            if game == 'ssq':
+                numbers = rec.get('reds', [])
+            elif game == 'dlt':
+                numbers = rec.get('front', [])
+            else:
+                scored_recs.append((rec, 0.5))
+                continue
+            
+            tail_score = self._tail_concentration_score(numbers)
+            scored_recs.append((rec, tail_score))
+        
+        # 如果所有注的尾数集中度都很低（<0.6），尝试微调
+        avg_score = sum(s for _, s in scored_recs) / len(scored_recs)
+        
+        if avg_score < 0.6:
+            # 尝试对核心注A进行微调（替换1-2个号码）
+            best_rec, best_score = scored_recs[0]
+            if game == 'ssq':
+                reds = list(best_rec.get('reds', []))
+                # 尝试替换尾数过度集中的号码
+                tails = [n % 10 for n in reds]
+                tail_counts = {}
+                for t in tails:
+                    tail_counts[t] = tail_counts.get(t, 0) + 1
+                
+                # 找到重复最多的尾数
+                sorted_tails = sorted(tail_counts.items(), key=lambda x: x[1], reverse=True)
+                max_tail, max_count = sorted_tails[0]
+                
+                if max_count >= 3:
+                    # 替换1-2个该尾数的号码
+                    replace_count = min(2, max_count - 2)  # 保留2个，替换其余
+                    replaced = 0
+                    
+                    for i, n in enumerate(reds):
+                        if replaced >= replace_count:
+                            break
+                        if n % 10 == max_tail:
+                            # 尝试替换为不同尾数的号码（优先选权重高的）
+                            original_pool = list(range(1, 34))
+                            candidates = [c for c in original_pool 
+                                        if c % 10 != max_tail 
+                                        and c not in reds]
+                            
+                            if candidates:
+                                # 选一个随机数（保持随机性）
+                                import random
+                                new_num = random.choice(candidates)
+                                reds[i] = new_num
+                                replaced += 1
+                    
+                    best_rec['reds'] = sorted(reds)
+                    new_score = self._tail_concentration_score(reds)
+                    scored_recs[0] = (best_rec, new_score)
+                    logging.info(f"[TailConcentration] 调整核心注A: {max_tail}重复{max_count}次 → 替换{replaced}个 → 新评分{new_score:.2f}")
+            
+        return [rec for rec, score in scored_recs]
+    
+
     # ------ 双色球推荐 ------
 
     def _gen_ssq(self, analysis: dict, kelly_bias: float = 0.0) -> list:
@@ -368,13 +504,18 @@ class JinZhu:
         core_A = self._perturb(core_A, all_pool, max_swaps=1)
         core_B = self._perturb(core_B, all_pool, max_swaps=1)
 
-        return [
+        recommendations = [
             {'reds': core_A, 'blue': blues[0], 'strategy': f'{strategy_tag}A'},
             {'reds': core_B, 'blue': blues[1], 'strategy': f'{strategy_tag}B'},
             {'reds': ext1, 'blue': blues[2], 'strategy': Strategy.EXT1},
             {'reds': ext2, 'blue': blues[3], 'strategy': Strategy.EXT2},
             {'reds': cold, 'blue': blues[4], 'strategy': Strategy.COLD},
         ]
+        
+        # v8.6: 应用尾数集中度调整
+        recommendations = self._apply_tail_concentration(recommendations, game='ssq')
+
+        return recommendations
 
     # ------ 大乐透推荐 ------
 
@@ -416,13 +557,18 @@ class JinZhu:
         core_A = self._perturb(core_A, all_pool, max_swaps=1)
         core_B = self._perturb(core_B, all_pool, max_swaps=1)
 
-        return [
+        recommendations = [
             {'front': core_A, 'back': backs[0], 'strategy': f'{strategy_tag}A'},
             {'front': core_B, 'back': backs[1], 'strategy': f'{strategy_tag}B'},
             {'front': ext1, 'back': backs[2], 'strategy': Strategy.EXT1},
             {'front': ext2, 'back': backs[3], 'strategy': Strategy.EXT2},
             {'front': cold, 'back': backs[4], 'strategy': Strategy.COLD},
         ]
+        
+        # v8.6: 应用尾数集中度调整
+        recommendations = self._apply_tail_concentration(recommendations, game='dlt')
+
+        return recommendations
 
     # ------ 七星彩推荐 ------
 
