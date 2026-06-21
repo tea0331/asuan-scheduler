@@ -198,6 +198,15 @@ class JinZhu:
             # 邻号加分(从Model读取)
             analysis = self._apply_neighbor_bonus(game, analysis, history_data)
 
+            # v8.7: 注入 Markov 转移信号（ssq/dlt）
+            markov_cfg = {
+                'ssq': (list(range(1, 34)), lambda d: d['reds']),
+                'dlt': (list(range(1, 36)), lambda d: d['front']),
+            }
+            if game in markov_cfg:
+                nr, ef = markov_cfg[game]
+                analysis['_markov_signals'] = self._get_markov_signals(game, history_data, nr, ef)
+
             gen_map = {
                 'ssq': self._gen_ssq,
                 'dlt': self._gen_dlt,
@@ -334,6 +343,13 @@ class JinZhu:
         all_pool = self._kelly_sort(all_pool, kelly_bias)
         strategy_tag = self._kelly_tag(kelly_bias)
 
+        # v8.7: Stacking 多模型融合重排（失败降级原排序）
+        markov_signals = analysis.get('_markov_signals', {})
+        stacking_scores = self._stacking_fuse('ssq', analysis, list(range(1, 34)), markov_signals)
+        if stacking_scores:
+            all_pool = [(n, stacking_scores.get(n, 0), f, m) for n, w, f, m in all_pool]
+            all_pool.sort(key=lambda x: x[1], reverse=True)
+
         core_A = sorted([n for n, w, f, m in all_pool[:6]])
         core_B = self._select_independent_pool(all_pool, core_A, 6)
 
@@ -345,7 +361,7 @@ class JinZhu:
         ext2 = self._select_recovery_pool(analysis, all_pool, set(core_A) | set(core_B) | set(ext1), n_select=6)
 
         used = set(core_A) | set(core_B) | set(ext1) | set(ext2)
-        cold = self._select_cold_reds(analysis, used, game='ssq')
+        cold = self._select_cold_reds(analysis, used, game='ssq', markov_signals=analysis.get('_markov_signals'))
 
         blues = self._select_blues(analysis, n_blues=5)
 
@@ -375,6 +391,13 @@ class JinZhu:
         all_pool = self._kelly_sort(all_pool, kelly_bias)
         strategy_tag = self._kelly_tag(kelly_bias)
 
+        # v8.7: Stacking 多模型融合重排（失败降级原排序）
+        markov_signals = analysis.get('_markov_signals', {})
+        stacking_scores = self._stacking_fuse('dlt', analysis, list(range(1, 36)), markov_signals)
+        if stacking_scores:
+            all_pool = [(n, stacking_scores.get(n, 0), f, m) for n, w, f, m in all_pool]
+            all_pool.sort(key=lambda x: x[1], reverse=True)
+
         core_A = sorted([n for n, w, f, m in all_pool[:5]])
         core_B = self._select_independent_pool(all_pool, core_A, 5)
 
@@ -386,7 +409,7 @@ class JinZhu:
         ext2 = self._select_recovery_pool(analysis, all_pool, set(core_A) | set(core_B) | set(ext1), n_select=5)
 
         used = set(core_A) | set(core_B) | set(ext1) | set(ext2)
-        cold = self._select_cold_front(analysis, all_pool, used)
+        cold = self._select_cold_front(analysis, all_pool, used, markov_signals=analysis.get('_markov_signals'))
 
         backs = self._select_backs(analysis, n_pairs=5)
 
@@ -784,24 +807,73 @@ class JinZhu:
         scores.sort(key=lambda x: x[1], reverse=True)
         return sorted([n for n, s in scores[:n_select]])
 
-    def _select_cold_reds(self, analysis, used_set, game='ssq'):
-        """冷号注红球 - 差异化覆盖策略
+    def _get_markov_signals(self, game, history, number_range, extract_fn):
+        """v8.7: 获取 Markov 转移信号，失败返回空 dict（降级）"""
+        try:
+            from algo_module import AlgoDB
+            from algo_markov import MarkovPredictor
+            mp = MarkovPredictor(AlgoDB())
+            mp.fit(game, history, number_range, extract_fn)
+            signals = mp.get_transition_signals(game, history, number_range, extract_fn)
+            active = sum(1 for v in signals.values() if v > 0)
+            logging.info(f"[Markov] {game} 信号: {active}/{len(number_range)} 个号码有转移信号")
+            return signals
+        except Exception as e:
+            logging.warning(f"[Markov] {game} 信号获取失败，降级: {e}")
+            return {}
 
-        V20-fix: 冷号策略不再基于"遗漏值/赌徒谬误"——彩票是独立随机事件，
-        "很久没出"不代表"会出"。改为差异化覆盖：选其他4注没用过的号，
-        按均匀分布选取，最大化5注的整体覆盖面。
+    def _stacking_fuse(self, game, analysis, number_range, markov_signals):
+        """v8.7: Stacking 多模型融合，返回 {号码: 融合得分}，失败返回 None（降级）"""
+        try:
+            from algo_module import AlgoDB
+            from algo_stacking import StackingEnsemble
+
+            freq_key = 'red_freq' if game == 'ssq' else 'front_freq'
+            miss_key = 'red_miss' if game == 'ssq' else 'front_miss'
+            freq = analysis.get(freq_key, {})
+            miss = analysis.get(miss_key, {})
+            max_freq = max(freq.values()) if freq else 1
+            max_miss = max(miss.values()) if miss else 1
+
+            base_scores = {
+                'p0_freq':     {n: freq.get(n, 0) / max_freq for n in number_range},
+                'p2_miss':     {n: miss.get(n, 0) / max_miss for n in number_range},
+                'p4_markov':   {n: markov_signals.get(n, 0) for n in number_range},
+                'p5_bayesian': {n: 0.0 for n in number_range},
+            }
+
+            se = StackingEnsemble(AlgoDB())
+            scores = se.predict(game, number_range, base_scores)
+            logging.info(f"[Stacking] {game} 融合排序生效")
+            return scores
+        except Exception as e:
+            logging.warning(f"[Stacking] {game} 融合失败，降级原权重: {e}")
+            return None
+
+    def _select_cold_reds(self, analysis, used_set, game='ssq', markov_signals=None):
+        """冷号注红球 - Markov 转移信号 + 差异化覆盖
+
+        v8.7: 冷号注接入 Markov 转移信号，优先选"即将变热"(cold→hot)的号。
+        无信号时退回差异化覆盖（随机选其他4注没用过的号）。
         """
-        import random as _rng
         n_range = 34 if game == 'ssq' else 36
         n_need = 6 if game == 'ssq' else 5
         available = [n for n in range(1, n_range) if n not in used_set]
-        if len(available) >= n_need:
-            return sorted(_rng.sample(available, n_need))
-        return sorted(available[:n_need])
+        if len(available) < n_need:
+            return sorted(available[:n_need])
 
-    def _select_cold_front(self, analysis, all_pool, used_set):
+        # 有 Markov 信号：按信号排序选 top_n
+        if markov_signals:
+            ranked = sorted(available, key=lambda n: markov_signals.get(n, 0), reverse=True)
+            return sorted(ranked[:n_need])
+
+        # 无信号：退回随机（原逻辑）
+        import random as _rng
+        return sorted(_rng.sample(available, n_need))
+
+    def _select_cold_front(self, analysis, all_pool, used_set, markov_signals=None):
         """大乐透冷号注前区"""
-        return self._select_cold_reds(analysis, used_set, game='dlt')
+        return self._select_cold_reds(analysis, used_set, game='dlt', markov_signals=markov_signals)
 
     def _select_cold_back(self, analysis, used_set):
         """大乐透冷号注后区 - 2个号码"""
