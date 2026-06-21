@@ -3166,13 +3166,55 @@ if __name__ == '__main__':
         except Exception as e2:
             logging.error(f"[P0] 兜底写入也失败: {e2}")
 
-    # 7. 发邮件
+    # 7. 生成 5 行摘要（P0 决策点①）
+    def _generate_5line_summary(text):
+        """用 summarize skill 的逻辑把日报压成 5 行结论"""
+        import re
+        # 按句子分割（中文/英文句号、感叹号、问号）
+        sentences = re.split(r'([。！？.!?])', text)
+        # 合并句子和标点
+        sentences = [''.join(i) for i in zip(sentences[0::2], sentences[1::2])]
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        
+        # 评分：优先选包含数字、关键词（PE/价格/仓位/止损/PE/ROE/营收/利润）的句子
+        keywords = ['PE', '价格', '仓位', '止损', 'ROE', '营收', '利润', '推荐', '策略', '风险', '机会']
+        def _score(s):
+            score = 0
+            if re.search(r'\d', s): score += 2
+            for k in keywords:
+                if k in s: score += 1
+            return score
+        
+        scored = [(s, _score(s)) for s in sentences]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        
+        # 取前 5 个最高分句子，按原文顺序重排
+        top5 = [s for s, _ in scored[:8]]  # 多取几个候选
+        ordered = [s for s in sentences if s in top5][:5]
+        
+        # 如果不够 5 行，补后面的句子
+        if len(ordered) < 5:
+            for s in sentences:
+                if s not in ordered:
+                    ordered.append(s)
+                if len(ordered) >= 5:
+                    break
+        
+        return ordered[:5]
+    
+    summary_lines = _generate_5line_summary(full_content)
+    summary_text = '\n'.join([f'{i+1}. {line}' for i, line in enumerate(summary_lines)])
+    
+    # 把摘要插到邮件正文最前面
+    full_content_with_summary = f"【阿算日报 · {today_str}】\n\n{summary_text}\n\n---\n\n{full_content}"
+    
+    # 8. 发邮件
     if not SMTP_PASS:
         logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
     else:
         try:
             subject = '阿算帮刘老板发财日报 | ' + today_str
-            send_email(subject, full_content)
+            send_email(subject, full_content_with_summary)
         except Exception as e:
             logging.error(f"[P1] 邮件发送异常: {e}")
 
