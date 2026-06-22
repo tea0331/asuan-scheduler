@@ -13,7 +13,7 @@
       10
     ],
     "sales": 0,
-    "pool": 802145381
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -29,7 +29,7 @@
       11
     ],
     "sales": 0,
-    "pool": 791339917
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -45,7 +45,7 @@
       5
     ],
     "sales": 0,
-    "pool": 817519005
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -61,7 +61,7 @@
       8
     ],
     "sales": 0,
-    "pool": 802840285
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -77,7 +77,7 @@
       7
     ],
     "sales": 0,
-    "pool": 787631261
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -93,7 +93,7 @@
       12
     ],
     "sales": 0,
-    "pool": 762261292
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -109,7 +109,7 @@
       10
     ],
     "sales": 0,
-    "pool": 738675961
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -125,7 +125,7 @@
       12
     ],
     "sales": 0,
-    "pool": 807705564
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -141,7 +141,7 @@
       5
     ],
     "sales": 0,
-    "pool": 769160539
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -157,7 +157,7 @@
       8
     ],
     "sales": 0,
-    "pool": 818749861
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -173,7 +173,7 @@
       5
     ],
     "sales": 0,
-    "pool": 786536914
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -189,7 +189,7 @@
       10
     ],
     "sales": 0,
-    "pool": 801147297
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -205,7 +205,7 @@
       5
     ],
     "sales": 0,
-    "pool": 767589410
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -221,7 +221,7 @@
       11
     ],
     "sales": 0,
-    "pool": 757078646
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -237,7 +237,7 @@
       11
     ],
     "sales": 0,
-    "pool": 718927618
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -253,7 +253,7 @@
       9
     ],
     "sales": 0,
-    "pool": 738749152
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -269,7 +269,7 @@
       12
     ],
     "sales": 0,
-    "pool": 782179260
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -285,7 +285,7 @@
       11
     ],
     "sales": 0,
-    "pool": 799348751
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -301,7 +301,7 @@
       10
     ],
     "sales": 0,
-    "pool": 812279269
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -317,7 +317,7 @@
       3
     ],
     "sales": 0,
-    "pool": 786081563
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -333,7 +333,7 @@
       10
     ],
     "sales": 0,
-    "pool": 778139138
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -349,7 +349,7 @@
       11
     ],
     "sales": 0,
-    "pool": 776088009
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -365,7 +365,7 @@
       7
     ],
     "sales": 0,
-    "pool": 801117818
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -381,7 +381,7 @@
       7
     ],
     "sales": 0,
-    "pool": 795611860
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -397,7 +397,7 @@
       10
     ],
     "sales": 0,
-    "pool": 796949218
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -413,7 +413,7 @@
       12
     ],
     "sales": 0,
-    "pool": 835097420
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -429,7 +429,7 @@
       8
     ],
     "sales": 0,
-    "pool": 783361004
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -445,7 +445,7 @@
       6
     ],
     "sales": 0,
-    "pool": 804564900
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -461,7 +461,7 @@
       9
     ],
     "sales": 0,
-    "pool": 776038689
+    "pool": 0
   },
   {
     "lottery": "DLT",
@@ -477,6 +477,614 @@
       9
     ],
     "sales": 0,
-    "pool": 760888094
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26038",
+    "date": "",
+    "numbers": [
+      8,
+      17,
+      21,
+      33,
+      35,
+      6,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26037",
+    "date": "",
+    "numbers": [
+      7,
+      12,
+      13,
+      28,
+      32,
+      6,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26036",
+    "date": "",
+    "numbers": [
+      4,
+      7,
+      16,
+      26,
+      32,
+      5,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26035",
+    "date": "",
+    "numbers": [
+      2,
+      22,
+      30,
+      33,
+      34,
+      8,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26034",
+    "date": "",
+    "numbers": [
+      11,
+      12,
+      25,
+      26,
+      27,
+      8,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26033",
+    "date": "",
+    "numbers": [
+      3,
+      5,
+      7,
+      9,
+      18,
+      2,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26032",
+    "date": "",
+    "numbers": [
+      3,
+      4,
+      19,
+      26,
+      32,
+      1,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26031",
+    "date": "",
+    "numbers": [
+      6,
+      8,
+      22,
+      29,
+      34,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26030",
+    "date": "",
+    "numbers": [
+      2,
+      13,
+      22,
+      28,
+      34,
+      5,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26029",
+    "date": "",
+    "numbers": [
+      3,
+      5,
+      17,
+      33,
+      35,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26028",
+    "date": "",
+    "numbers": [
+      15,
+      27,
+      29,
+      30,
+      34,
+      1,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26027",
+    "date": "",
+    "numbers": [
+      9,
+      10,
+      11,
+      12,
+      16,
+      1,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26026",
+    "date": "",
+    "numbers": [
+      10,
+      11,
+      22,
+      26,
+      32,
+      1,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26025",
+    "date": "",
+    "numbers": [
+      3,
+      15,
+      24,
+      28,
+      29,
+      3,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26024",
+    "date": "",
+    "numbers": [
+      2,
+      4,
+      8,
+      10,
+      21,
+      9,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26023",
+    "date": "",
+    "numbers": [
+      9,
+      25,
+      26,
+      27,
+      28,
+      1,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26022",
+    "date": "",
+    "numbers": [
+      5,
+      9,
+      10,
+      18,
+      26,
+      5,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26021",
+    "date": "",
+    "numbers": [
+      5,
+      8,
+      12,
+      14,
+      17,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26020",
+    "date": "",
+    "numbers": [
+      1,
+      10,
+      21,
+      23,
+      29,
+      10,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26019",
+    "date": "",
+    "numbers": [
+      12,
+      13,
+      14,
+      16,
+      31,
+      4,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26018",
+    "date": "",
+    "numbers": [
+      9,
+      11,
+      19,
+      30,
+      35,
+      1,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26017",
+    "date": "",
+    "numbers": [
+      4,
+      5,
+      10,
+      23,
+      31,
+      7,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26016",
+    "date": "",
+    "numbers": [
+      8,
+      9,
+      12,
+      19,
+      24,
+      1,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26015",
+    "date": "",
+    "numbers": [
+      1,
+      4,
+      10,
+      13,
+      17,
+      3,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26014",
+    "date": "",
+    "numbers": [
+      16,
+      18,
+      23,
+      34,
+      35,
+      1,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26013",
+    "date": "",
+    "numbers": [
+      3,
+      5,
+      6,
+      23,
+      26,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26012",
+    "date": "",
+    "numbers": [
+      1,
+      2,
+      9,
+      22,
+      25,
+      1,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26011",
+    "date": "",
+    "numbers": [
+      14,
+      21,
+      23,
+      29,
+      33,
+      2,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26010",
+    "date": "",
+    "numbers": [
+      2,
+      3,
+      13,
+      18,
+      26,
+      2,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26009",
+    "date": "",
+    "numbers": [
+      5,
+      12,
+      13,
+      14,
+      33,
+      5,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26008",
+    "date": "",
+    "numbers": [
+      3,
+      6,
+      17,
+      21,
+      33,
+      5,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26007",
+    "date": "",
+    "numbers": [
+      1,
+      3,
+      13,
+      20,
+      26,
+      3,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26006",
+    "date": "",
+    "numbers": [
+      5,
+      12,
+      18,
+      23,
+      35,
+      6,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26005",
+    "date": "",
+    "numbers": [
+      2,
+      4,
+      16,
+      23,
+      35,
+      6,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26004",
+    "date": "",
+    "numbers": [
+      5,
+      18,
+      23,
+      25,
+      32,
+      5,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26003",
+    "date": "",
+    "numbers": [
+      2,
+      9,
+      11,
+      15,
+      16,
+      2,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26002",
+    "date": "",
+    "numbers": [
+      4,
+      8,
+      15,
+      20,
+      31,
+      7,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "DLT",
+    "issue": "26001",
+    "date": "",
+    "numbers": [
+      7,
+      9,
+      23,
+      27,
+      32,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
   }
 ]
