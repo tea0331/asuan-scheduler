@@ -1,8 +1,8 @@
 {
-  "freq": 0.3534,
-  "miss": 0.1525,
-  "trend": 0.3429,
-  "zone": 0.1512,
+  "freq": 0.3577,
+  "miss": 0.1482,
+  "trend": 0.3399,
+  "zone": 0.1552,
   "cold_miss_front": 0.394,
   "cold_cycle_front": 0.3446,
   "cold_freq_front": 0.2956,
@@ -10,9 +10,9 @@
   "cold_cycle_back": 0.409,
   "cold_freq_back": 0.2955,
   "neighbor_bonus": 0.04999999999999999,
-  "tail_concentration": 0.10,
+  "tail_concentration": 0.1,
   "gamma": 0.8099999999999999,
-  "version": 32,
+  "version": 33,
   "algo_version": "v8.5",
   "evolution_log": [
     {
@@ -701,6 +701,29 @@
         "miss": -0.003,
         "zone": 0.004,
         "cold_cycle_front": 0.003
+      }
+    },
+    {
+      "date": "2026-06-22",
+      "trigger": "结算驱动(投票合并)",
+      "sample_size": 4820,
+      "changes": [
+        "[ssq] 最优=[balanced]核心注(加权)B(命中20.0%, gap=20.0%) → freq +0.0070",
+        "[ssq] 最优=[balanced]核心注(加权)B → miss -0.0070",
+        "[ssq] 砍尾=扩展1(形态)(命中0.0%) → trend -0.0049",
+        "[dlt] 最优=[balanced]核心注(加权)A(命中20.0%, gap=20.0%) → freq +0.0070",
+        "[dlt] 最优=[balanced]核心注(加权)A → miss -0.0070",
+        "[dlt] 砍尾=扩展1(形态)(命中0.0%) → trend -0.0049",
+        "[qxc] 最优=核心注(次优)B(命中22.9%, gap=22.9%) → freq +0.0076",
+        "[qxc] 最优=核心注(次优)B → miss -0.0076",
+        "[qxc] 砍尾=[lhs]扩展1(形态)(命中0.0%) → trend -0.0053",
+        "[VU] 最优策略=extreme_zone(命中5.3%) → zone +0.004"
+      ],
+      "final_signals": {
+        "freq": 0.0043,
+        "miss": -0.0043,
+        "trend": -0.003,
+        "zone": 0.004
       }
     }
   ],
