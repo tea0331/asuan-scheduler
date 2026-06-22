@@ -1,0 +1,32 @@
+[
+  {
+    "test_id": "news_section",
+    "test_name": "资讯速报生成",
+    "model": "hy3-preview",
+    "success": true,
+    "tokens_used": 500,
+    "time_seconds": 1.0000882148742676,
+    "response_length": 51,
+    "format_score": 0.0
+  },
+  {
+    "test_id": "shortage_section",
+    "test_name": "短缺预警生成",
+    "model": "hy3-preview",
+    "success": true,
+    "tokens_used": 500,
+    "time_seconds": 1.0000972747802734,
+    "response_length": 43,
+    "format_score": 0.0
+  },
+  {
+    "test_id": "full_report",
+    "test_name": "完整日报生成",
+    "model": "hy3-preview",
+    "success": true,
+    "tokens_used": 2000,
+    "time_seconds": 1.000082015991211,
+    "response_length": 67,
+    "format_score": 1.0
+  }
+]
