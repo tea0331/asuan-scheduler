@@ -99,31 +99,47 @@ elif page == "📈 模型评测":
 # ============================================================
 elif page == "🔗 JinZhu 回测":
     st.title("🔗 JinZhu 回测")
-    st.caption("JinZhu 引擎回测结果（在 asuan-jinzhu 仓库）")
+    st.caption("JinZhu 引擎回测结果（从 asuan-jinzhu 仓库复制）")
     
-    st.info("""
-    JinZhu 回测结果已迁移到独立仓库：
-    [tea0331/asuan-jinzhu](https://github.com/tea0331/asuan-jinzhu)
+    results_dir = Path("/root/asuan-scheduler/backtest/results")
     
-    回测文件位置：`backtest/results/`
-    """)
-    
-    # 尝试读取本地 asuan-jinzhu 的回测结果
-    jinzhu_dir = Path("/root/asuan-jinzhu")
-    if jinzhu_dir.exists():
-        results_dir = jinzhu_dir / "backtest/results"
-        if results_dir.exists():
-            files = list(results_dir.glob("*.json"))
-            if files:
-                st.subheader("本地 JinZhu 回测结果")
-                for f in files:
-                    st.write(f"📊 {f.name}")
-            else:
-                st.warning("本地 asuan-jinzhu/backtest/results/ 为空")
-        else:
-            st.warning("本地 asuan-jinzhu/backtest/results/ 不存在")
+    if not results_dir.exists():
+        st.warning("⚠️ backtest/results/ 目录不存在")
     else:
-        st.warning("本地 asuan-jinzhu 仓库不存在")
+        files = list(results_dir.glob("*.json"))
+        if not files:
+            st.info("暂无回测结果")
+        else:
+            selected = st.selectbox("选择回测文件", [f.name for f in files])
+            if selected:
+                with open(results_dir / selected, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                st.metric("总期数", len(data))
+                
+                # 统计命中率
+                if data:
+                    levels = {}
+                    for r in data:
+                        lvl = r.get("hit", {}).get("level", 0)
+                        levels[lvl] = levels.get(lvl, 0) + 1
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("奖级分布")
+                        # 展示为表格
+                        import pandas as pd
+                        df = pd.DataFrame([{"奖级": f"{k}等奖", "期数": v} for k, v in levels.items()])
+                        st.dataframe(df)
+                    with col2:
+                        st.subheader("详细数据（前5期）")
+                        st.json(data[:5])
+                
+                # 展示链接（备用）
+                st.info("""
+                完整数据在 asuan-jinzhu 仓库：
+                [tea0331/asuan-jinzhu](https://github.com/tea0331/asuan-jinzhu)
+                """)
 
 # ============================================================
 # 页脚
