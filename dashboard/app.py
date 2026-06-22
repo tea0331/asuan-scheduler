@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
 阿算智能引擎 - Streamlit Dashboard
-阶段四交付物
+日报系统面板（asuan-scheduler）
 """
 
 import streamlit as st
 import json
-import sys
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-
-# 修复 Windows 11 的 os.path 问题
-if sys.platform == "win32" or True:  # 强制使用 pathlib
-    import pathlib
-    Path = pathlib.Path
 
 BASE_DIR = Path(__file__).parent.parent
 CST = timezone(timedelta(hours=8))
@@ -21,81 +15,23 @@ today_str = datetime.now(CST).strftime('%Y-%m-%d')
 
 # 页面配置
 st.set_page_config(
-    page_title="阿算智能引擎",
-    page_icon="🧠",
+    page_title="阿算日报系统",
+    page_icon="📰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # 侧边栏导航
-st.sidebar.title("🧠 阿算智能引擎")
+st.sidebar.title("📰 阿算日报系统")
 page = st.sidebar.radio(
     "导航",
-    ["📊 策略回测", "🎯 实时推荐", "📰 日报浏览", "📈 模型评测"]
+    ["📰 日报浏览", "📈 模型评测", "🔗 JinZhu 回测"]
 )
 
 # ============================================================
-# 页面1：策略回测
+# 页面1：日报浏览
 # ============================================================
-if page == "📊 策略回测":
-    st.title("📊 策略回测")
-    st.caption("加载 backtest/results/ 数据")
-    
-    results_dir = BASE_DIR / "backtest/results"
-    
-    if not results_dir.exists():
-        st.warning("⚠️ backtest/results/ 目录不存在")
-    else:
-        # 列出所有回测文件
-        files = list(results_dir.glob("*.json"))
-        if not files:
-            st.info("暂无回测结果")
-        else:
-            selected = st.selectbox("选择回测文件", [f.name for f in files])
-            if selected:
-                with open(results_dir / selected, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                
-                st.metric("总期数", len(data))
-                
-                # 统计命中率
-                if data:
-                    levels = {}
-                    for r in data:
-                        lvl = r.get("hit", {}).get("level", 0)
-                        levels[lvl] = levels.get(lvl, 0) + 1
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.subheader("奖级分布")
-                        st.bar_chart(levels)
-                    with col2:
-                        st.subheader("详细数据")
-                        st.json(data[:5])  # 展示前5期
-
-# ============================================================
-# 页面2：实时推荐
-# ============================================================
-elif page == "🎯 实时推荐":
-    st.title("🎯 实时推荐")
-    st.caption("展示 JinZhu 今日推荐")
-    
-    # 读取解释模块输出
-    explainer_dir = BASE_DIR / "explainer"
-    
-    st.subheader("双色球 SSQ")
-    st.info("调用 generate_explanation.py 生成解释文本")
-    
-    st.subheader("大乐透 DLT")
-    st.info("调用 generate_explanation.py 生成解释文本")
-    
-    if st.button("🔄 重新生成推荐"):
-        st.success("推荐已更新（模拟）")
-
-# ============================================================
-# 页面3：日报浏览
-# ============================================================
-elif page == "📰 日报浏览":
+if page == "📰 日报浏览":
     st.title("📰 日报浏览")
     st.caption("展示 daily-report/output/ 生成的日报")
     
@@ -115,7 +51,7 @@ elif page == "📰 日报浏览":
                 st.markdown(content)
 
 # ============================================================
-# 页面4：模型评测
+# 页面2：模型评测
 # ============================================================
 elif page == "📈 模型评测":
     st.title("📈 模型评测")
@@ -157,6 +93,37 @@ elif page == "📈 模型评测":
                     with col3:
                         avg_fmt = sum(r["format_score"] for r in results) / len(results)
                         st.metric("格式得分", f"{avg_fmt:.1%}")
+
+# ============================================================
+# 页面3：JinZhu 回测（链接）
+# ============================================================
+elif page == "🔗 JinZhu 回测":
+    st.title("🔗 JinZhu 回测")
+    st.caption("JinZhu 引擎回测结果（在 asuan-jinzhu 仓库）")
+    
+    st.info("""
+    JinZhu 回测结果已迁移到独立仓库：
+    [tea0331/asuan-jinzhu](https://github.com/tea0331/asuan-jinzhu)
+    
+    回测文件位置：`backtest/results/`
+    """)
+    
+    # 尝试读取本地 asuan-jinzhu 的回测结果
+    jinzhu_dir = Path("/root/asuan-jinzhu")
+    if jinzhu_dir.exists():
+        results_dir = jinzhu_dir / "backtest/results"
+        if results_dir.exists():
+            files = list(results_dir.glob("*.json"))
+            if files:
+                st.subheader("本地 JinZhu 回测结果")
+                for f in files:
+                    st.write(f"📊 {f.name}")
+            else:
+                st.warning("本地 asuan-jinzhu/backtest/results/ 为空")
+        else:
+            st.warning("本地 asuan-jinzhu/backtest/results/ 不存在")
+    else:
+        st.warning("本地 asuan-jinzhu 仓库不存在")
 
 # ============================================================
 # 页脚
