@@ -2054,7 +2054,7 @@ class JinZhu:
                 section += f"跳过({evolve_status})\n"
         else:
             section += "未执行\n"
-        section += f"**模型**: v{self.model.get('algo_version', '?')}·第{self.model.get('version', '?')}次进化\n"
+        section += f"**模型**: {self.model.get('algo_version', '?')}·第{self.model.get('version', '?')}次进化\n"
 
         return section
 
