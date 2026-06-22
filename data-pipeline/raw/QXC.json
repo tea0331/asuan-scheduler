@@ -1,31 +1,15 @@
 [
   {
     "lottery": "QXC",
-    "issue": "2024150",
-    "date": "2026-06-20",
+    "issue": "26070",
+    "date": "",
     "numbers": [
-      5,
-      8,
       3,
-      0,
+      1,
       5,
       1,
-      5
-    ],
-    "sales": 0,
-    "pool": 0
-  },
-  {
-    "lottery": "QXC",
-    "issue": "2024149",
-    "date": "2026-06-19",
-    "numbers": [
       4,
-      5,
-      5,
-      9,
-      5,
-      4,
+      6,
       6
     ],
     "sales": 0,
@@ -33,14 +17,430 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024148",
-    "date": "2026-06-18",
+    "issue": "26069",
+    "date": "2026-06-19",
+    "numbers": [
+      7,
+      9,
+      5,
+      4,
+      3,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26068",
+    "date": "2026-06-16",
+    "numbers": [
+      7,
+      5,
+      1,
+      1,
+      6,
+      2,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26067",
+    "date": "2026-06-14",
+    "numbers": [
+      3,
+      6,
+      5,
+      7,
+      1,
+      4,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26066",
+    "date": "2026-06-12",
+    "numbers": [
+      3,
+      5,
+      6,
+      9,
+      7,
+      0,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26065",
+    "date": "2026-06-09",
     "numbers": [
       7,
       4,
-      1,
       9,
+      0,
+      7,
       3,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26064",
+    "date": "2026-06-07",
+    "numbers": [
+      2,
+      3,
+      3,
+      7,
+      2,
+      5,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26063",
+    "date": "2026-06-05",
+    "numbers": [
+      5,
+      0,
+      7,
+      6,
+      6,
+      6,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26062",
+    "date": "2026-06-02",
+    "numbers": [
+      5,
+      6,
+      7,
+      0,
+      3,
+      1,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26061",
+    "date": "2026-05-31",
+    "numbers": [
+      0,
+      2,
+      0,
+      8,
+      4,
+      8,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26060",
+    "date": "2026-05-29",
+    "numbers": [
+      3,
+      1,
+      3,
+      0,
+      3,
+      2,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26059",
+    "date": "2026-05-26",
+    "numbers": [
+      0,
+      6,
+      9,
+      2,
+      3,
+      4,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26058",
+    "date": "2026-05-24",
+    "numbers": [
+      3,
+      7,
+      4,
+      1,
+      2,
+      3,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26057",
+    "date": "2026-05-22",
+    "numbers": [
+      3,
+      3,
+      5,
+      0,
+      5,
+      6,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26056",
+    "date": "2026-05-19",
+    "numbers": [
+      2,
+      0,
+      7,
+      2,
+      5,
+      0,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26055",
+    "date": "2026-05-17",
+    "numbers": [
+      5,
+      5,
+      6,
+      3,
+      8,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26054",
+    "date": "2026-05-15",
+    "numbers": [
+      9,
+      6,
+      4,
+      5,
+      3,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26053",
+    "date": "2026-05-12",
+    "numbers": [
+      4,
+      3,
+      3,
+      2,
+      1,
+      8,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26050",
+    "date": "2026-05-05",
+    "numbers": [
+      2,
+      2,
+      6,
+      2,
+      5,
+      3,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26046",
+    "date": "2026-04-26",
+    "numbers": [
+      8,
+      8,
+      5,
+      6,
+      2,
+      3,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26044",
+    "date": "2026-04-21",
+    "numbers": [
+      7,
+      6,
+      2,
+      0,
+      9,
+      1,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26043",
+    "date": "2026-04-19",
+    "numbers": [
+      6,
+      5,
+      9,
+      5,
+      8,
+      9,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26042",
+    "date": "2026-04-17",
+    "numbers": [
+      6,
+      5,
+      1,
+      8,
+      1,
+      3,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26041",
+    "date": "2026-04-14",
+    "numbers": [
+      7,
+      9,
+      1,
+      1,
+      4,
+      9,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26031",
+    "date": "2026-03-22",
+    "numbers": [
+      6,
+      8,
+      9,
+      5,
+      2,
+      2,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26029",
+    "date": "2026-03-17",
+    "numbers": [
+      1,
+      4,
+      0,
+      4,
+      3,
+      2,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26022",
+    "date": "2026-03-01",
+    "numbers": [
+      7,
+      9,
+      9,
+      1,
+      0,
+      2,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26017",
+    "date": "2026-02-08",
+    "numbers": [
+      8,
+      0,
+      2,
+      6,
+      8,
       0,
       0
     ],
@@ -49,15 +449,175 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024147",
-    "date": "2026-06-17",
+    "issue": "26016",
+    "date": "2026-02-06",
     "numbers": [
+      6,
+      4,
+      3,
+      7,
+      3,
+      4,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26015",
+    "date": "2026-02-03",
+    "numbers": [
+      0,
+      1,
+      9,
+      9,
+      1,
+      1,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "26002",
+    "date": "2026-01-04",
+    "numbers": [
+      3,
+      4,
+      5,
+      5,
       9,
       8,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25151",
+    "date": "2025-12-30",
+    "numbers": [
+      8,
+      8,
       7,
+      5,
+      7,
+      6,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25150",
+    "date": "2025-12-28",
+    "numbers": [
+      8,
+      5,
+      3,
+      1,
+      8,
+      7,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25140",
+    "date": "2025-12-05",
+    "numbers": [
+      3,
+      0,
+      6,
+      9,
       2,
+      7,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25137",
+    "date": "2025-11-28",
+    "numbers": [
+      6,
+      4,
+      9,
+      7,
+      5,
+      8,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25136",
+    "date": "2025-11-25",
+    "numbers": [
+      8,
+      9,
+      5,
+      9,
+      9,
+      4,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25128",
+    "date": "2025-11-07",
+    "numbers": [
+      3,
+      2,
+      1,
+      1,
+      1,
+      2,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25127",
+    "date": "2025-11-04",
+    "numbers": [
+      4,
+      1,
+      9,
       0,
       7,
+      5,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25123",
+    "date": "2025-10-26",
+    "numbers": [
+      8,
+      0,
+      6,
+      5,
+      7,
+      9,
       7
     ],
     "sales": 0,
@@ -65,15 +625,767 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024146",
-    "date": "2026-06-16",
+    "issue": "25114",
+    "date": "2025-10-05",
+    "numbers": [
+      8,
+      3,
+      3,
+      2,
+      8,
+      3,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25113",
+    "date": "2025-09-30",
+    "numbers": [
+      0,
+      9,
+      1,
+      4,
+      1,
+      1,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25112",
+    "date": "2025-09-28",
+    "numbers": [
+      5,
+      5,
+      7,
+      1,
+      4,
+      6,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25100",
+    "date": "2025-08-31",
+    "numbers": [
+      0,
+      7,
+      4,
+      3,
+      4,
+      6,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25098",
+    "date": "2025-08-26",
+    "numbers": [
+      2,
+      4,
+      8,
+      4,
+      0,
+      7,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25096",
+    "date": "2025-08-22",
+    "numbers": [
+      2,
+      6,
+      3,
+      0,
+      4,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25087",
+    "date": "2025-08-01",
+    "numbers": [
+      1,
+      6,
+      4,
+      7,
+      6,
+      4,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25086",
+    "date": "2025-07-29",
+    "numbers": [
+      9,
+      7,
+      6,
+      3,
+      1,
+      6,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25082",
+    "date": "2025-07-20",
+    "numbers": [
+      1,
+      8,
+      5,
+      9,
+      6,
+      3,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25073",
+    "date": "2025-06-29",
+    "numbers": [
+      1,
+      4,
+      2,
+      6,
+      3,
+      5,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25072",
+    "date": "2025-06-27",
+    "numbers": [
+      0,
+      8,
+      5,
+      7,
+      0,
+      3,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25071",
+    "date": "2025-06-24",
+    "numbers": [
+      5,
+      0,
+      3,
+      7,
+      2,
+      5,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25058",
+    "date": "2025-05-25",
+    "numbers": [
+      1,
+      3,
+      6,
+      6,
+      8,
+      6,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25057",
+    "date": "2025-05-23",
+    "numbers": [
+      0,
+      8,
+      7,
+      0,
+      0,
+      6,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25055",
+    "date": "2025-05-18",
+    "numbers": [
+      1,
+      4,
+      6,
+      1,
+      1,
+      7,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25044",
+    "date": "2025-04-22",
+    "numbers": [
+      0,
+      6,
+      1,
+      9,
+      0,
+      8,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25043",
+    "date": "2025-04-20",
+    "numbers": [
+      0,
+      3,
+      0,
+      8,
+      5,
+      7,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25040",
+    "date": "2025-04-13",
+    "numbers": [
+      7,
+      8,
+      3,
+      3,
+      9,
+      8,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25031",
+    "date": "2025-03-23",
+    "numbers": [
+      4,
+      7,
+      8,
+      1,
+      3,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25030",
+    "date": "2025-03-21",
+    "numbers": [
+      6,
+      4,
+      7,
+      8,
+      8,
+      8,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25026",
+    "date": "2025-03-11",
+    "numbers": [
+      9,
+      5,
+      4,
+      3,
+      4,
+      8,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25017",
+    "date": "2025-02-18",
+    "numbers": [
+      1,
+      3,
+      0,
+      6,
+      6,
+      8,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25016",
+    "date": "2025-02-16",
     "numbers": [
       9,
       1,
+      5,
+      4,
       7,
       6,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25015",
+    "date": "2025-02-14",
+    "numbers": [
+      0,
+      3,
+      6,
+      5,
+      4,
+      9,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25004",
+    "date": "2025-01-10",
+    "numbers": [
+      4,
+      7,
+      2,
+      0,
+      0,
+      2,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "25003",
+    "date": "2025-01-07",
+    "numbers": [
+      8,
+      9,
+      3,
+      5,
+      4,
+      8,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24143",
+    "date": "2024-12-13",
+    "numbers": [
+      2,
+      8,
+      7,
+      1,
+      2,
+      9,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24141",
+    "date": "2024-12-08",
+    "numbers": [
+      1,
+      5,
+      8,
+      5,
+      1,
+      3,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24139",
+    "date": "2024-12-03",
+    "numbers": [
+      9,
+      7,
+      0,
+      1,
+      5,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24137",
+    "date": "2024-11-29",
+    "numbers": [
+      3,
+      9,
+      1,
+      9,
+      2,
+      8,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24126",
+    "date": "2024-11-03",
+    "numbers": [
+      9,
+      8,
+      0,
+      2,
+      5,
+      1,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24125",
+    "date": "2024-11-01",
+    "numbers": [
+      9,
+      9,
+      2,
+      9,
+      9,
+      0,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24116",
+    "date": "2024-10-11",
+    "numbers": [
+      0,
+      4,
+      6,
+      7,
+      3,
+      4,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24113",
+    "date": "2024-09-29",
+    "numbers": [
+      2,
+      4,
+      6,
+      3,
+      4,
+      4,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24112",
+    "date": "2024-09-27",
+    "numbers": [
+      5,
+      3,
+      1,
+      6,
+      7,
+      3,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24111",
+    "date": "2024-09-24",
+    "numbers": [
+      3,
+      4,
+      2,
+      4,
+      1,
+      1,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24098",
+    "date": "2024-08-25",
+    "numbers": [
+      2,
+      4,
+      3,
+      9,
+      5,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24097",
+    "date": "2024-08-23",
+    "numbers": [
+      9,
+      8,
+      0,
+      1,
+      5,
+      0,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24096",
+    "date": "2024-08-20",
+    "numbers": [
+      2,
+      2,
+      7,
+      5,
+      9,
+      0,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24086",
+    "date": "2024-07-28",
+    "numbers": [
+      7,
+      5,
+      8,
+      0,
+      3,
+      4,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24083",
+    "date": "2024-07-21",
+    "numbers": [
+      4,
+      6,
+      6,
+      2,
       0,
       8,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24079",
+    "date": "2024-07-12",
+    "numbers": [
+      8,
+      3,
+      2,
+      0,
+      4,
+      9,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24071",
+    "date": "2024-06-23",
+    "numbers": [
+      3,
+      9,
+      9,
+      2,
+      2,
+      7,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24070",
+    "date": "2024-06-21",
+    "numbers": [
+      5,
+      5,
+      8,
+      8,
+      3,
+      8,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24067",
+    "date": "2024-06-14",
+    "numbers": [
+      3,
+      4,
+      6,
+      4,
+      3,
+      0,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24057",
+    "date": "2024-05-21",
+    "numbers": [
+      1,
+      9,
+      6,
+      8,
+      6,
+      2,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24055",
+    "date": "2024-05-17",
+    "numbers": [
+      6,
+      5,
+      2,
+      7,
+      6,
+      3,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24054",
+    "date": "2024-05-14",
+    "numbers": [
+      8,
+      6,
+      2,
+      3,
+      1,
+      4,
       7
     ],
     "sales": 0,
@@ -81,14 +1393,302 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024145",
-    "date": "2026-06-15",
+    "issue": "24044",
+    "date": "2024-04-21",
+    "numbers": [
+      1,
+      9,
+      9,
+      6,
+      7,
+      0,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24043",
+    "date": "2024-04-19",
+    "numbers": [
+      6,
+      7,
+      2,
+      3,
+      3,
+      8,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24040",
+    "date": "2024-04-12",
+    "numbers": [
+      6,
+      2,
+      2,
+      0,
+      7,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24031",
+    "date": "2024-03-22",
+    "numbers": [
+      5,
+      6,
+      8,
+      6,
+      3,
+      6,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24030",
+    "date": "2024-03-19",
+    "numbers": [
+      7,
+      5,
+      8,
+      2,
+      7,
+      9,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24029",
+    "date": "2024-03-17",
+    "numbers": [
+      0,
+      4,
+      1,
+      5,
+      7,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24017",
+    "date": "2024-02-18",
+    "numbers": [
+      1,
+      3,
+      9,
+      5,
+      7,
+      1,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24014",
+    "date": "2024-02-02",
+    "numbers": [
+      3,
+      7,
+      1,
+      9,
+      0,
+      5,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24011",
+    "date": "2024-01-26",
     "numbers": [
       2,
-      4,
+      1,
+      9,
+      2,
       5,
+      9,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24003",
+    "date": "2024-01-07",
+    "numbers": [
+      0,
       5,
+      1,
       4,
+      6,
+      2,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "24002",
+    "date": "2024-01-05",
+    "numbers": [
+      8,
+      9,
+      2,
+      9,
+      2,
+      1,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23151",
+    "date": "2023-12-31",
+    "numbers": [
+      3,
+      2,
+      8,
+      5,
+      7,
+      0,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23141",
+    "date": "2023-12-08",
+    "numbers": [
+      5,
+      1,
+      4,
+      4,
+      6,
+      2,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23139",
+    "date": "2023-12-03",
+    "numbers": [
+      6,
+      1,
+      4,
+      6,
+      1,
+      4,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23138",
+    "date": "2023-12-01",
+    "numbers": [
+      4,
+      6,
+      7,
+      2,
+      7,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23128",
+    "date": "2023-11-07",
+    "numbers": [
+      5,
+      2,
+      1,
+      2,
+      7,
+      4,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23126",
+    "date": "2023-11-03",
+    "numbers": [
+      2,
+      8,
+      1,
+      9,
+      6,
+      3,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23123",
+    "date": "2023-10-27",
+    "numbers": [
+      2,
+      3,
+      5,
+      2,
+      3,
+      4,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23113",
+    "date": "2023-09-29",
+    "numbers": [
+      2,
+      5,
+      1,
+      9,
+      8,
       0,
       3
     ],
@@ -97,15 +1697,95 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024144",
-    "date": "2026-06-14",
+    "issue": "23112",
+    "date": "2023-09-26",
     "numbers": [
+      1,
       8,
+      1,
+      6,
+      8,
+      8,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23111",
+    "date": "2023-09-24",
+    "numbers": [
+      5,
       3,
       8,
-      6,
+      8,
+      4,
+      8,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23101",
+    "date": "2023-09-01",
+    "numbers": [
       5,
+      6,
+      6,
       2,
+      9,
+      8,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23098",
+    "date": "2023-08-25",
+    "numbers": [
+      1,
+      6,
+      0,
+      9,
+      4,
+      9,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23095",
+    "date": "2023-08-18",
+    "numbers": [
+      9,
+      3,
+      3,
+      7,
+      7,
+      9,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23086",
+    "date": "2023-07-28",
+    "numbers": [
+      7,
+      0,
+      9,
+      8,
+      2,
+      5,
       5
     ],
     "sales": 0,
@@ -113,13 +1793,1533 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024143",
-    "date": "2026-06-13",
+    "issue": "23085",
+    "date": "2023-07-25",
     "numbers": [
+      9,
       7,
+      4,
+      6,
+      7,
+      3,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23081",
+    "date": "2023-07-16",
+    "numbers": [
+      3,
+      1,
+      0,
+      7,
+      1,
+      9,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23073",
+    "date": "2023-06-27",
+    "numbers": [
+      3,
+      0,
+      7,
+      7,
+      7,
+      0,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23071",
+    "date": "2023-06-23",
+    "numbers": [
+      4,
+      9,
+      9,
+      3,
+      1,
+      2,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23068",
+    "date": "2023-06-16",
+    "numbers": [
+      9,
+      1,
+      0,
+      1,
+      0,
+      1,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23060",
+    "date": "2023-05-28",
+    "numbers": [
+      8,
+      7,
+      1,
+      4,
+      2,
+      9,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23058",
+    "date": "2023-05-23",
+    "numbers": [
+      1,
+      9,
+      2,
+      8,
+      7,
+      5,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23057",
+    "date": "2023-05-21",
+    "numbers": [
+      0,
+      4,
+      2,
+      1,
+      8,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23046",
+    "date": "2023-04-25",
+    "numbers": [
+      3,
+      8,
+      2,
+      8,
+      4,
+      1,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23043",
+    "date": "2023-04-18",
+    "numbers": [
+      1,
+      4,
+      5,
+      3,
+      8,
+      3,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23040",
+    "date": "2023-04-11",
+    "numbers": [
+      8,
+      2,
+      1,
+      4,
+      6,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23031",
+    "date": "2023-03-21",
+    "numbers": [
+      4,
+      5,
+      0,
+      7,
+      2,
+      6,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23030",
+    "date": "2023-03-19",
+    "numbers": [
+      1,
+      1,
+      4,
+      4,
+      8,
+      5,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23023",
+    "date": "2023-03-03",
+    "numbers": [
+      5,
+      6,
+      0,
+      0,
+      8,
+      5,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23019",
+    "date": "2023-02-21",
+    "numbers": [
+      1,
+      7,
+      4,
+      7,
+      6,
+      7,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23018",
+    "date": "2023-02-19",
+    "numbers": [
+      2,
+      8,
+      0,
+      4,
+      2,
+      3,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23016",
+    "date": "2023-02-14",
+    "numbers": [
+      5,
+      2,
+      7,
+      8,
+      1,
+      8,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23004",
+    "date": "2023-01-08",
+    "numbers": [
+      1,
+      2,
+      5,
+      7,
+      7,
+      9,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23003",
+    "date": "2023-01-06",
+    "numbers": [
+      9,
+      0,
+      1,
+      0,
+      2,
+      9,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "23001",
+    "date": "2023-01-01",
+    "numbers": [
+      3,
+      5,
+      0,
+      9,
+      7,
+      8,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22140",
+    "date": "2022-12-06",
+    "numbers": [
+      8,
+      2,
+      4,
+      8,
+      0,
+      4,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22139",
+    "date": "2022-12-04",
+    "numbers": [
+      1,
+      3,
+      3,
+      6,
+      4,
+      9,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22133",
+    "date": "2022-11-20",
+    "numbers": [
+      1,
+      4,
+      7,
+      8,
+      6,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22128",
+    "date": "2022-11-08",
+    "numbers": [
+      2,
+      3,
+      6,
+      9,
+      7,
+      1,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22127",
+    "date": "2022-11-06",
+    "numbers": [
+      8,
+      9,
+      4,
+      7,
+      0,
+      0,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22121",
+    "date": "2022-10-23",
+    "numbers": [
+      6,
       2,
       8,
       3,
+      4,
+      9,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22115",
+    "date": "2022-10-09",
+    "numbers": [
+      8,
+      2,
+      3,
+      4,
+      5,
+      0,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22114",
+    "date": "2022-10-07",
+    "numbers": [
+      8,
+      8,
+      9,
+      5,
+      2,
+      6,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22109",
+    "date": "2022-09-20",
+    "numbers": [
+      9,
+      4,
+      8,
+      0,
+      6,
+      8,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22100",
+    "date": "2022-08-30",
+    "numbers": [
+      0,
+      7,
+      4,
+      2,
+      5,
+      6,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22099",
+    "date": "2022-08-28",
+    "numbers": [
+      9,
+      7,
+      9,
+      4,
+      2,
+      0,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22096",
+    "date": "2022-08-21",
+    "numbers": [
+      1,
+      7,
+      8,
+      7,
+      0,
+      6,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22088",
+    "date": "2022-08-02",
+    "numbers": [
+      6,
+      9,
+      6,
+      2,
+      6,
+      4,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22087",
+    "date": "2022-07-31",
+    "numbers": [
+      7,
+      8,
+      0,
+      7,
+      3,
+      9,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22086",
+    "date": "2022-07-29",
+    "numbers": [
+      4,
+      6,
+      4,
+      9,
+      6,
+      3,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22074",
+    "date": "2022-07-01",
+    "numbers": [
+      2,
+      9,
+      0,
+      3,
+      1,
+      1,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22073",
+    "date": "2022-06-28",
+    "numbers": [
+      8,
+      3,
+      8,
+      3,
+      6,
+      1,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22072",
+    "date": "2022-06-26",
+    "numbers": [
+      4,
+      1,
+      3,
+      8,
+      9,
+      3,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22061",
+    "date": "2022-05-31",
+    "numbers": [
+      6,
+      5,
+      6,
+      5,
+      4,
+      1,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22060",
+    "date": "2022-05-29",
+    "numbers": [
+      1,
+      3,
+      1,
+      4,
+      4,
+      9,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22057",
+    "date": "2022-05-22",
+    "numbers": [
+      8,
+      5,
+      6,
+      6,
+      8,
+      9,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22050",
+    "date": "2022-05-06",
+    "numbers": [
+      5,
+      5,
+      3,
+      4,
+      2,
+      4,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22049",
+    "date": "2022-05-03",
+    "numbers": [
+      4,
+      9,
+      0,
+      1,
+      7,
+      0,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22047",
+    "date": "2022-04-29",
+    "numbers": [
+      2,
+      9,
+      5,
+      1,
+      6,
+      3,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22036",
+    "date": "2022-04-03",
+    "numbers": [
+      3,
+      2,
+      1,
+      0,
+      1,
+      6,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22033",
+    "date": "2022-03-27",
+    "numbers": [
+      5,
+      8,
+      3,
+      5,
+      1,
+      1,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22031",
+    "date": "2022-03-22",
+    "numbers": [
+      7,
+      1,
+      8,
+      0,
+      8,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22023",
+    "date": "2022-03-04",
+    "numbers": [
+      5,
+      1,
+      2,
+      3,
+      7,
+      2,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22021",
+    "date": "2022-02-27",
+    "numbers": [
+      6,
+      1,
+      3,
+      0,
+      2,
+      9,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22020",
+    "date": "2022-02-25",
+    "numbers": [
+      2,
+      6,
+      5,
+      9,
+      5,
+      0,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22009",
+    "date": "2022-01-21",
+    "numbers": [
+      9,
+      3,
+      5,
+      6,
+      8,
+      4,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22007",
+    "date": "2022-01-16",
+    "numbers": [
+      6,
+      2,
+      1,
+      9,
+      8,
+      1,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "22006",
+    "date": "2022-01-14",
+    "numbers": [
+      8,
+      7,
+      5,
+      8,
+      8,
+      0,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21147",
+    "date": "2021-12-21",
+    "numbers": [
+      1,
+      6,
+      0,
+      2,
+      7,
+      9,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21146",
+    "date": "2021-12-19",
+    "numbers": [
+      0,
+      1,
+      3,
+      8,
+      0,
+      1,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21138",
+    "date": "2021-11-30",
+    "numbers": [
+      2,
+      3,
+      6,
+      6,
+      6,
+      9,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21132",
+    "date": "2021-11-16",
+    "numbers": [
+      1,
+      0,
+      6,
+      1,
+      2,
+      0,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21130",
+    "date": "2021-11-12",
+    "numbers": [
+      1,
+      1,
+      5,
+      3,
+      4,
+      5,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21128",
+    "date": "2021-11-07",
+    "numbers": [
+      7,
+      6,
+      4,
+      1,
+      0,
+      5,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21119",
+    "date": "2021-10-17",
+    "numbers": [
+      5,
+      6,
+      2,
+      6,
+      8,
+      9,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21117",
+    "date": "2021-10-12",
+    "numbers": [
+      6,
+      9,
+      6,
+      1,
+      7,
+      9,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21116",
+    "date": "2021-10-10",
+    "numbers": [
+      7,
+      7,
+      0,
+      3,
+      4,
+      0,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21106",
+    "date": "2021-09-12",
+    "numbers": [
+      4,
+      7,
+      9,
+      0,
+      2,
+      8,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21105",
+    "date": "2021-09-10",
+    "numbers": [
+      3,
+      8,
+      2,
+      8,
+      1,
+      3,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21104",
+    "date": "2021-09-07",
+    "numbers": [
+      0,
+      1,
+      8,
+      2,
+      5,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21093",
+    "date": "2021-08-13",
+    "numbers": [
+      7,
+      5,
+      6,
+      7,
+      3,
+      9,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21089",
+    "date": "2021-08-03",
+    "numbers": [
+      3,
+      8,
+      5,
+      9,
+      8,
+      3,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21088",
+    "date": "2021-08-01",
+    "numbers": [
+      9,
+      7,
+      5,
+      6,
+      2,
+      5,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21078",
+    "date": "2021-07-09",
+    "numbers": [
+      0,
+      7,
+      3,
+      3,
+      1,
+      8,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21073",
+    "date": "2021-06-27",
+    "numbers": [
+      3,
+      5,
+      9,
+      3,
+      3,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21071",
+    "date": "2021-06-22",
+    "numbers": [
+      7,
+      6,
+      3,
+      7,
+      5,
+      3,
+      11
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21065",
+    "date": "2021-06-08",
+    "numbers": [
+      8,
+      7,
+      4,
+      0,
+      8,
+      6,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21064",
+    "date": "2021-06-06",
+    "numbers": [
+      2,
+      0,
+      2,
+      5,
+      5,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21061",
+    "date": "2021-05-30",
+    "numbers": [
+      4,
+      5,
+      4,
+      6,
+      0,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21051",
+    "date": "2021-05-07",
+    "numbers": [
+      4,
+      6,
+      0,
+      0,
+      3,
+      9,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21050",
+    "date": "2021-05-04",
+    "numbers": [
+      3,
+      1,
+      9,
+      0,
+      3,
+      0,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21047",
+    "date": "2021-04-27",
+    "numbers": [
+      4,
+      0,
+      1,
+      9,
+      8,
+      3,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21037",
+    "date": "2021-04-04",
+    "numbers": [
+      7,
+      8,
+      1,
+      0,
+      0,
+      2,
+      13
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21036",
+    "date": "2021-04-02",
+    "numbers": [
+      2,
+      3,
+      3,
+      9,
+      5,
+      1,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21030",
+    "date": "2021-03-19",
+    "numbers": [
+      0,
+      2,
+      9,
+      2,
+      6,
+      3,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21023",
+    "date": "2021-03-02",
+    "numbers": [
+      9,
+      3,
+      9,
+      7,
+      9,
+      2,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21022",
+    "date": "2021-02-28",
+    "numbers": [
+      0,
+      2,
+      5,
+      9,
+      2,
+      6,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21020",
+    "date": "2021-02-23",
+    "numbers": [
+      9,
+      9,
+      4,
+      0,
+      0,
+      3,
+      14
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21010",
+    "date": "2021-01-22",
+    "numbers": [
+      4,
+      8,
+      1,
+      5,
+      5,
+      7,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "21009",
+    "date": "2021-01-19",
+    "numbers": [
+      9,
+      7,
+      9,
+      0,
+      8,
+      8,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20133",
+    "date": "2020-12-29",
+    "numbers": [
+      1,
+      9,
+      5,
+      9,
+      0,
+      2,
+      12
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20130",
+    "date": "2020-12-22",
+    "numbers": [
+      5,
+      3,
+      9,
+      8,
+      0,
+      6,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20129",
+    "date": "2020-12-20",
+    "numbers": [
+      7,
+      8,
+      3,
+      9,
+      1,
+      8,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20122",
+    "date": "2020-12-04",
+    "numbers": [
+      6,
+      0,
+      1,
+      9,
+      8,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20117",
+    "date": "2020-11-22",
+    "numbers": [
+      7,
+      9,
+      0,
+      5,
+      0,
+      6,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20116",
+    "date": "2020-11-20",
+    "numbers": [
+      9,
+      7,
+      3,
+      0,
+      3,
+      1,
+      10
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20115",
+    "date": "2020-11-17",
+    "numbers": [
+      1,
+      3,
+      4,
+      8,
+      8,
+      5,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20107",
+    "date": "2020-10-30",
+    "numbers": [
+      2,
+      3,
+      8,
+      9,
+      3,
+      7,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20106",
+    "date": "2020-10-27",
+    "numbers": [
+      3,
+      1,
+      8,
+      9,
+      0,
+      8,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20098",
+    "date": "2020-10-09",
+    "numbers": [
+      1,
+      2,
+      9,
+      2,
+      1,
+      6,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20093",
+    "date": "2020-09-22",
+    "numbers": [
+      6,
+      9,
+      3,
+      0,
       0,
       5,
       0
@@ -129,14 +3329,1886 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024142",
-    "date": "2026-06-12",
+    "issue": "20091",
+    "date": "2020-09-18",
     "numbers": [
+      2,
+      3,
+      3,
+      3,
+      9,
+      3,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20090",
+    "date": "2020-09-15",
+    "numbers": [
+      2,
+      5,
+      1,
+      7,
+      8,
+      6,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20080",
+    "date": "2020-08-23",
+    "numbers": [
+      5,
+      8,
+      3,
+      6,
+      8,
+      8,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20076",
+    "date": "2020-08-14",
+    "numbers": [
+      4,
+      8,
+      9,
+      0,
+      8,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20074",
+    "date": "2020-08-09",
+    "numbers": [
+      9,
+      7,
+      9,
+      3,
+      8,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20067",
+    "date": "2020-07-24",
+    "numbers": [
+      5,
+      6,
+      9,
+      2,
+      8,
+      1,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20066",
+    "date": "2020-07-21",
+    "numbers": [
+      8,
+      4,
+      3,
+      8,
+      3,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20065",
+    "date": "2020-07-19",
+    "numbers": [
+      9,
+      2,
+      8,
+      5,
+      6,
+      6,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20053",
+    "date": "2020-06-21",
+    "numbers": [
+      8,
+      2,
+      0,
+      5,
+      9,
+      3,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20052",
+    "date": "2020-06-19",
+    "numbers": [
+      5,
+      3,
+      4,
+      8,
+      9,
+      3,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20049",
+    "date": "2020-06-12",
+    "numbers": [
+      3,
+      1,
+      0,
+      3,
+      8,
+      5,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20038",
+    "date": "2020-05-17",
+    "numbers": [
+      3,
+      8,
+      0,
+      6,
+      3,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20037",
+    "date": "2020-05-15",
+    "numbers": [
+      9,
+      5,
+      3,
+      5,
+      2,
+      7,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20033",
+    "date": "2020-05-05",
+    "numbers": [
+      7,
+      4,
+      8,
+      3,
+      9,
+      0,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20024",
+    "date": "2020-04-14",
+    "numbers": [
+      8,
+      1,
+      5,
+      1,
+      5,
+      0,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20023",
+    "date": "2020-04-12",
+    "numbers": [
+      7,
+      5,
+      3,
+      3,
+      6,
+      0,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20016",
+    "date": "2020-03-27",
+    "numbers": [
+      2,
+      6,
+      6,
+      1,
+      3,
+      1,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20011",
+    "date": "2020-03-15",
+    "numbers": [
+      7,
+      8,
+      8,
+      7,
+      5,
+      8,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20009",
+    "date": "2020-01-21",
+    "numbers": [
+      6,
+      7,
+      4,
+      2,
+      4,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "20007",
+    "date": "2020-01-17",
+    "numbers": [
+      9,
+      4,
+      3,
+      1,
+      8,
+      4,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19149",
+    "date": "2019-12-27",
+    "numbers": [
+      4,
+      0,
+      5,
       1,
       6,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19148",
+    "date": "2019-12-24",
+    "numbers": [
+      7,
+      8,
+      9,
+      8,
+      1,
+      8,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19144",
+    "date": "2019-12-15",
+    "numbers": [
+      1,
+      8,
+      4,
+      8,
+      7,
+      4,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19134",
+    "date": "2019-11-22",
+    "numbers": [
+      4,
+      2,
+      0,
+      3,
+      4,
+      3,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19133",
+    "date": "2019-11-19",
+    "numbers": [
+      5,
+      5,
+      9,
+      3,
+      5,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19132",
+    "date": "2019-11-17",
+    "numbers": [
+      6,
+      1,
+      3,
+      8,
+      8,
+      2,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19122",
+    "date": "2019-10-25",
+    "numbers": [
+      6,
+      8,
+      7,
+      0,
+      9,
+      9,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19120",
+    "date": "2019-10-20",
+    "numbers": [
+      8,
+      4,
+      0,
+      3,
+      0,
+      2,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19116",
+    "date": "2019-10-11",
+    "numbers": [
+      3,
+      0,
+      5,
+      8,
+      8,
+      0,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19107",
+    "date": "2019-09-13",
+    "numbers": [
+      9,
+      2,
+      0,
+      2,
+      0,
+      3,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19104",
+    "date": "2019-09-06",
+    "numbers": [
+      5,
+      4,
+      5,
+      6,
+      0,
+      7,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19102",
+    "date": "2019-09-01",
+    "numbers": [
+      1,
+      0,
+      5,
+      3,
+      9,
+      6,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19094",
+    "date": "2019-08-13",
+    "numbers": [
+      4,
+      0,
+      8,
+      5,
+      6,
+      3,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19093",
+    "date": "2019-08-11",
+    "numbers": [
+      7,
+      6,
+      0,
+      9,
+      8,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19086",
+    "date": "2019-07-26",
+    "numbers": [
+      2,
+      3,
+      5,
+      3,
+      2,
+      9,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19080",
+    "date": "2019-07-12",
+    "numbers": [
+      3,
+      2,
+      5,
+      5,
+      8,
+      1,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19079",
+    "date": "2019-07-09",
+    "numbers": [
+      9,
+      8,
+      5,
+      4,
+      2,
+      0,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19078",
+    "date": "2019-07-07",
+    "numbers": [
+      4,
+      0,
+      7,
+      0,
+      3,
+      9,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19067",
+    "date": "2019-06-11",
+    "numbers": [
+      0,
+      8,
+      8,
+      5,
+      9,
+      7,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19066",
+    "date": "2019-06-09",
+    "numbers": [
+      6,
+      7,
+      7,
+      8,
+      6,
+      1,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19061",
+    "date": "2019-05-28",
+    "numbers": [
+      2,
+      9,
+      8,
+      8,
+      9,
+      6,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19052",
+    "date": "2019-05-07",
+    "numbers": [
+      8,
+      5,
+      0,
+      7,
+      8,
+      3,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19051",
+    "date": "2019-05-05",
+    "numbers": [
+      2,
+      9,
+      1,
+      5,
+      4,
+      9,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19048",
+    "date": "2019-04-28",
+    "numbers": [
+      6,
+      8,
+      2,
+      4,
+      2,
+      9,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19039",
+    "date": "2019-04-07",
+    "numbers": [
+      7,
+      7,
+      3,
+      1,
+      4,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19038",
+    "date": "2019-04-05",
+    "numbers": [
+      0,
+      0,
+      1,
+      7,
+      9,
+      9,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19036",
+    "date": "2019-03-31",
+    "numbers": [
+      5,
+      7,
+      5,
+      2,
+      0,
+      0,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19026",
+    "date": "2019-03-08",
+    "numbers": [
+      3,
+      7,
+      9,
+      0,
+      5,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19023",
+    "date": "2019-03-01",
+    "numbers": [
+      5,
+      2,
+      5,
+      5,
+      3,
+      5,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19021",
+    "date": "2019-02-24",
+    "numbers": [
+      2,
+      5,
+      0,
+      8,
+      7,
+      5,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19013",
+    "date": "2019-01-29",
+    "numbers": [
+      3,
+      1,
+      7,
+      8,
+      8,
+      6,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19011",
+    "date": "2019-01-25",
+    "numbers": [
+      9,
+      1,
+      8,
+      7,
+      5,
+      3,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "19009",
+    "date": "2019-01-20",
+    "numbers": [
+      7,
+      1,
+      9,
+      7,
+      1,
+      8,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18153",
+    "date": "2018-12-30",
+    "numbers": [
+      6,
+      5,
+      6,
+      9,
+      9,
+      4,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18152",
+    "date": "2018-12-28",
+    "numbers": [
+      4,
+      7,
+      2,
+      7,
+      6,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18148",
+    "date": "2018-12-18",
+    "numbers": [
+      2,
+      3,
+      3,
+      2,
+      0,
+      9,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18140",
+    "date": "2018-11-30",
+    "numbers": [
+      5,
+      5,
+      8,
+      0,
+      9,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18138",
+    "date": "2018-11-25",
+    "numbers": [
+      8,
+      9,
+      0,
+      2,
+      9,
+      0,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18133",
+    "date": "2018-11-13",
+    "numbers": [
+      9,
+      6,
+      8,
+      7,
+      3,
+      7,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18127",
+    "date": "2018-10-30",
+    "numbers": [
+      1,
+      0,
+      3,
+      3,
+      1,
+      2,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18126",
+    "date": "2018-10-28",
+    "numbers": [
+      5,
+      9,
+      2,
+      0,
+      3,
+      5,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18120",
+    "date": "2018-10-14",
+    "numbers": [
+      1,
+      8,
+      1,
+      2,
+      1,
+      1,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18115",
+    "date": "2018-10-02",
+    "numbers": [
+      0,
+      0,
+      5,
+      8,
+      7,
+      2,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18114",
+    "date": "2018-09-30",
+    "numbers": [
+      0,
+      5,
+      4,
+      3,
+      7,
+      8,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18111",
+    "date": "2018-09-23",
+    "numbers": [
+      5,
+      5,
+      9,
+      0,
+      7,
+      2,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18105",
+    "date": "2018-09-09",
+    "numbers": [
+      5,
+      5,
+      3,
+      2,
+      9,
+      1,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18103",
+    "date": "2018-09-04",
+    "numbers": [
+      1,
+      7,
+      8,
+      3,
+      9,
+      5,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18095",
+    "date": "2018-08-17",
+    "numbers": [
+      9,
+      6,
+      0,
+      1,
+      6,
+      3,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18092",
+    "date": "2018-08-10",
+    "numbers": [
+      9,
+      7,
+      5,
+      2,
+      5,
+      9,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18091",
+    "date": "2018-08-07",
+    "numbers": [
+      0,
+      7,
+      6,
+      3,
+      1,
+      3,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18089",
+    "date": "2018-08-03",
+    "numbers": [
+      1,
+      9,
+      6,
+      1,
+      8,
+      6,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18079",
+    "date": "2018-07-10",
+    "numbers": [
+      1,
+      1,
+      7,
+      5,
+      9,
+      5,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18078",
+    "date": "2018-07-08",
+    "numbers": [
+      3,
+      4,
+      8,
+      8,
+      0,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18072",
+    "date": "2018-06-24",
+    "numbers": [
+      7,
+      9,
+      6,
+      5,
+      7,
+      5,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18066",
+    "date": "2018-06-10",
+    "numbers": [
+      5,
+      5,
+      0,
+      3,
+      4,
+      5,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18065",
+    "date": "2018-06-08",
+    "numbers": [
+      2,
+      6,
+      4,
+      1,
+      3,
+      0,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18057",
+    "date": "2018-05-20",
+    "numbers": [
+      9,
+      4,
+      0,
+      0,
+      1,
+      9,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18051",
+    "date": "2018-05-06",
+    "numbers": [
+      6,
+      5,
+      6,
+      9,
+      6,
+      3,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18050",
+    "date": "2018-05-04",
+    "numbers": [
+      8,
+      0,
+      1,
+      2,
+      2,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18045",
+    "date": "2018-04-22",
+    "numbers": [
+      6,
+      6,
+      5,
+      0,
+      9,
+      0,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18038",
+    "date": "2018-04-06",
+    "numbers": [
+      7,
+      2,
+      8,
+      3,
+      9,
+      3,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18037",
+    "date": "2018-04-03",
+    "numbers": [
+      6,
+      8,
+      2,
+      0,
+      2,
+      9,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18034",
+    "date": "2018-03-27",
+    "numbers": [
+      3,
+      7,
+      3,
+      7,
+      3,
+      8,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18025",
+    "date": "2018-03-06",
+    "numbers": [
+      9,
+      6,
+      8,
+      6,
+      0,
+      7,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18024",
+    "date": "2018-03-04",
+    "numbers": [
+      1,
+      9,
+      6,
+      2,
+      7,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18021",
+    "date": "2018-02-25",
+    "numbers": [
+      4,
+      9,
+      8,
+      6,
+      3,
+      6,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18010",
+    "date": "2018-01-23",
+    "numbers": [
+      5,
+      1,
+      1,
+      8,
+      1,
+      3,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18009",
+    "date": "2018-01-21",
+    "numbers": [
+      4,
+      9,
+      9,
+      8,
+      8,
+      6,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "18007",
+    "date": "2018-01-16",
+    "numbers": [
+      1,
+      0,
+      4,
+      6,
+      9,
+      4,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17150",
+    "date": "2017-12-22",
+    "numbers": [
+      4,
+      2,
+      6,
+      5,
+      0,
+      4,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17146",
+    "date": "2017-12-12",
+    "numbers": [
+      3,
+      9,
+      7,
+      4,
+      2,
+      1,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17143",
+    "date": "2017-12-05",
+    "numbers": [
+      4,
+      7,
+      6,
+      3,
+      7,
+      6,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17136",
+    "date": "2017-11-19",
+    "numbers": [
+      9,
+      0,
+      4,
+      3,
+      1,
+      8,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17135",
+    "date": "2017-11-17",
+    "numbers": [
+      2,
+      3,
+      4,
+      6,
+      9,
+      6,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17134",
+    "date": "2017-11-14",
+    "numbers": [
+      1,
+      8,
+      3,
+      7,
+      2,
+      2,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17133",
+    "date": "2017-11-12",
+    "numbers": [
+      4,
+      6,
+      2,
+      9,
+      0,
+      9,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17132",
+    "date": "2017-11-10",
+    "numbers": [
+      8,
+      5,
+      8,
+      2,
+      6,
+      6,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17131",
+    "date": "2017-11-07",
+    "numbers": [
+      6,
+      5,
+      9,
+      3,
+      4,
+      9,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17130",
+    "date": "2017-11-05",
+    "numbers": [
+      9,
+      4,
+      1,
+      4,
+      1,
+      9,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17129",
+    "date": "2017-11-03",
+    "numbers": [
       4,
       8,
       0,
+      7,
+      0,
+      3,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17126",
+    "date": "2017-10-27",
+    "numbers": [
+      5,
+      3,
+      0,
+      4,
+      5,
+      5,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17119",
+    "date": "2017-10-10",
+    "numbers": [
+      2,
+      6,
+      6,
+      5,
+      0,
+      3,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17118",
+    "date": "2017-10-08",
+    "numbers": [
+      0,
+      7,
+      4,
+      7,
+      6,
+      1,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17111",
+    "date": "2017-09-22",
+    "numbers": [
+      8,
+      1,
+      0,
+      4,
+      3,
+      0,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17104",
+    "date": "2017-09-05",
+    "numbers": [
+      1,
+      3,
+      3,
+      8,
+      7,
+      1,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17103",
+    "date": "2017-09-03",
+    "numbers": [
+      7,
+      0,
+      6,
+      7,
+      2,
+      7,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17100",
+    "date": "2017-08-27",
+    "numbers": [
+      6,
+      8,
+      8,
+      3,
+      8,
+      6,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17090",
+    "date": "2017-08-04",
+    "numbers": [
+      6,
+      2,
+      0,
+      5,
+      4,
+      0,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17087",
+    "date": "2017-07-28",
+    "numbers": [
+      8,
+      1,
+      5,
+      5,
+      1,
+      8,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17086",
+    "date": "2017-07-25",
+    "numbers": [
+      4,
+      1,
+      7,
+      4,
+      2,
+      6,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17077",
+    "date": "2017-07-04",
+    "numbers": [
+      2,
+      4,
+      2,
+      3,
+      6,
+      9,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17075",
+    "date": "2017-06-30",
+    "numbers": [
+      3,
+      3,
+      2,
+      3,
+      5,
+      0,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17073",
+    "date": "2017-06-25",
+    "numbers": [
+      7,
+      2,
+      3,
+      0,
+      0,
+      2,
+      4
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17063",
+    "date": "2017-06-02",
+    "numbers": [
+      9,
+      0,
+      7,
+      8,
+      6,
+      9,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17061",
+    "date": "2017-05-28",
+    "numbers": [
+      6,
+      5,
+      6,
+      7,
+      8,
+      0,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17060",
+    "date": "2017-05-26",
+    "numbers": [
+      1,
+      7,
+      7,
+      6,
+      3,
+      4,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17048",
+    "date": "2017-04-28",
+    "numbers": [
+      6,
+      0,
+      6,
+      7,
+      7,
+      2,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17047",
+    "date": "2017-04-25",
+    "numbers": [
+      3,
+      9,
+      0,
+      3,
+      7,
       5,
       4
     ],
@@ -145,16 +5217,352 @@
   },
   {
     "lottery": "QXC",
-    "issue": "2024141",
-    "date": "2026-06-11",
+    "issue": "17041",
+    "date": "2017-04-11",
+    "numbers": [
+      5,
+      5,
+      6,
+      9,
+      6,
+      1,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17035",
+    "date": "2017-03-28",
+    "numbers": [
+      3,
+      5,
+      2,
+      5,
+      7,
+      6,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17034",
+    "date": "2017-03-26",
+    "numbers": [
+      2,
+      2,
+      7,
+      3,
+      6,
+      5,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17029",
+    "date": "2017-03-14",
+    "numbers": [
+      3,
+      9,
+      6,
+      0,
+      6,
+      1,
+      2
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17022",
+    "date": "2017-02-26",
+    "numbers": [
+      8,
+      7,
+      8,
+      3,
+      7,
+      3,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17021",
+    "date": "2017-02-24",
+    "numbers": [
+      1,
+      7,
+      2,
+      9,
+      2,
+      9,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "17018",
+    "date": "2017-02-17",
+    "numbers": [
+      4,
+      2,
+      4,
+      5,
+      6,
+      2,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16148",
+    "date": "2016-12-16",
+    "numbers": [
+      8,
+      7,
+      2,
+      5,
+      6,
+      0,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16147",
+    "date": "2016-12-13",
+    "numbers": [
+      4,
+      7,
+      5,
+      2,
+      8,
+      7,
+      7
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16142",
+    "date": "2016-12-02",
+    "numbers": [
+      7,
+      0,
+      7,
+      2,
+      8,
+      0,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16134",
+    "date": "2016-11-13",
+    "numbers": [
+      3,
+      4,
+      0,
+      1,
+      8,
+      6,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16133",
+    "date": "2016-11-11",
+    "numbers": [
+      7,
+      4,
+      1,
+      3,
+      3,
+      7,
+      5
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16129",
+    "date": "2016-11-01",
+    "numbers": [
+      9,
+      1,
+      8,
+      1,
+      2,
+      0,
+      9
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16120",
+    "date": "2016-10-11",
+    "numbers": [
+      4,
+      0,
+      4,
+      4,
+      4,
+      1,
+      6
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16119",
+    "date": "2016-10-09",
+    "numbers": [
+      6,
+      2,
+      5,
+      1,
+      2,
+      6,
+      0
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16117",
+    "date": "2016-10-04",
+    "numbers": [
+      9,
+      7,
+      9,
+      8,
+      8,
+      2,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16105",
+    "date": "2016-09-06",
+    "numbers": [
+      4,
+      0,
+      1,
+      5,
+      0,
+      9,
+      8
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16104",
+    "date": "2016-09-04",
     "numbers": [
       8,
       6,
+      1,
+      7,
+      8,
+      5,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16101",
+    "date": "2016-08-28",
+    "numbers": [
+      7,
+      3,
+      7,
       0,
       0,
       4,
+      3
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16091",
+    "date": "2016-08-05",
+    "numbers": [
+      2,
+      3,
+      8,
       4,
-      8
+      9,
+      3,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16090",
+    "date": "2016-08-02",
+    "numbers": [
+      0,
+      2,
+      5,
+      1,
+      1,
+      2,
+      1
+    ],
+    "sales": 0,
+    "pool": 0
+  },
+  {
+    "lottery": "QXC",
+    "issue": "16077",
+    "date": "2016-07-03",
+    "numbers": [
+      1,
+      8,
+      8,
+      6,
+      0,
+      1,
+      1
     ],
     "sales": 0,
     "pool": 0
