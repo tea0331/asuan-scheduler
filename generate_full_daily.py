@@ -56,6 +56,21 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 def _run_with_timeout(func, timeout=180):
     """直接执行，不用子进程（OpenClaw兼容）"""
     return func()
+# V7 用户画像关键词权重（原 USER_PROFILE_V7，补回）
+USER_PROFILE_V7 = {
+    # 台湾/两岸
+    '台湾': 5, '台北': 4, '高雄': 4, '台商': 4, '两岸': 4,
+    # 资金/操作
+    '百万': 3, '200万': 3, '300万': 3, '小额': 3, '轻资产': 3, '中间人': 3,
+    # 套利/灰色
+    '价差': 3, '套利': 3, '灰色': 3, '监管差': 3, '税率差': 3, '绕开': 2,
+    # 已知项目
+    '庙宇': 3, '财神': 3, '赵公明': 3, '刘海蟾': 3, '彩票': 3, '台彩': 3,
+    # 邪修偏好
+    '漏洞': 3, '盲区': 3, '规则差': 3, '信息差': 3,
+}
+
+
 def score_news(item):
     """根据用户画像给新闻打分 — V14: AI使用词边界匹配防止子串误匹配"""
     import re
@@ -1210,17 +1225,18 @@ def _fetch_cls(count=15):
 def fetch_raw_materials():
     """并发抓取所有新闻素材，返回(raw_items, source_stats)"""
     RSS_SOURCES = {
-    # 大陆科技/商业
+    # 大陆科技/商业（服务器可访问）
     '36氪': 'https://36kr.com/feed',
     '36氪快讯': 'https://36kr.com/feed-newsflash',
     '虎嗅': 'https://www.huxiu.com/rss/0.xml',
     '钛媒体': 'https://www.tmtpost.com/rss.xml',
     '创业邦': 'https://www.cyzone.cn/rss/',
-    # 台湾综合/财经（注：大陆服务器可能被墙，失败时自动跳过）
-    '中央社': 'https://www.cna.com.tw/rss/cna/rss.aspx?topic=first',
-    '经济日报': 'https://money.udn.com/rssfeed/news/1001/5588/12040?ch=money',
-    '工商时报': 'https://ctee.com.tw/rss',
-    '联合财经': 'https://udn.com/rssfeed/news/2/6642',
+    # 大陆财经/大宗商品补充源（替代台湾RSS）
+    '新浪财经': 'https://finance.sina.com.cn/roll/index.d.html?col=financenews&cid=56592',
+    '财联社': 'https://www.cls.cn/rss',
+    '华尔街见闻': 'https://wallstreetcn.com/feed',
+    '生意社': 'https://www.100ppi.com/rss',
+    '期货日报': 'http://www.qhrb.com.cn/rss',
 }
 
     all_raw = []
