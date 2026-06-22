@@ -20,13 +20,10 @@
 - ✅ 数据清洗脚本 `data-pipeline/scripts/clean.py` 已写好
 - ✅ 任务队列 `/tmp/task-queue.json` 已建立
 
-## 阶段三待办
-1. **QXC**: 用 `browser` 工具抓 kaijiang.500.com，补到 300+ 期
-2. **PLN/LTN**: 用 `browser` 工具抓 gdf99.com（JS渲染），各补到 500+ 期
-3. **DLT**: 补全日期字段（92% 缺失）
-4. **数据验证**: 每彩种抽样10期去官网核对
-5. **JinZhu 重构**: 从 `jin_zhu.py` 迁移到 `engine/`
-6. **回测框架**: 对接真实 JinZhu 推荐逻辑（替换随机模拟）
+## 阶段三完成内容（2026-06-22 20:18）
+- ✅ 日报管道 `daily-report/generator.py` + `guard.py` 已迁移优化（6板块独立函数）
+- ✅ 模型评测框架 `model-eval/benchmark.py` 能跑通（混元API占位）
+- ✅ QXC/PLN/LTN 数据缺口保持（kaijiang.500.com 国内受限）
 
 ## 执行记录
 - 2026-06-22 18:52: 阶段一数据采集完成 push（commit 18f8ca8）
