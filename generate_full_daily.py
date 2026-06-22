@@ -1398,7 +1398,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "hunyuan-turbos-latest",
+        "model": "hy3-preview",
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
