@@ -1408,7 +1408,9 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
     }
 
     try:
+        logging.info(f"[AI] 开始调用混元API: model=hy3-preview, system_msg长度={len(system_msg)}, user_msg长度={len(user_msg)}")
         resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        logging.info(f"[AI] 混元API响应: status={resp.status_code}, 长度={len(resp.text)}")
         if resp.status_code == 200:
             result = resp.json()
             content = result['choices'][0]['message']['content']
@@ -1462,11 +1464,15 @@ def generate_all_sections():
     chain_ctx, used_quotes = _build_xie_xiu_context(top_items)
 
     # 4. 构建AI Prompt — 6板块完整版
-    news_digest = "\n".join([
-        f"【{item.get('source', '')}】{item['title']} (画像分:{score_news_with_scene(item)})"
-        + (f" — {item.get('summary', '')[:60]}" if item.get('summary') else "")
-        for item in top_items
-    ])
+    if not top_items:
+        logging.warning("[日报] ⚠️ 新闻抓取为空，使用默认提示词调AI")
+        news_digest = f"（今日新闻抓取失败，请基于{today_str}的已知市场动态生成6板块日报，重点关注：AI/算力/GPU/英伟达、大宗商品价格、两岸经贸、台湾彩券、赵公明庙宇项目）"
+    else:
+        news_digest = "\n".join([
+            f"【{item.get('source', '')}】{item['title']} (画像分:{score_news_with_scene(item)})"
+            + (f" — {item.get('summary', '')[:60]}" if item.get('summary') else "")
+            for item in top_items
+        ])
 
     used_quotes_warn = ""
     if used_quotes:
@@ -2861,7 +2867,7 @@ if __name__ == '__main__':
     # 4. 拼接完整日报
     full_content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}{taiwan_content}"
 
-    # 5. 质量守护 — 发送前验证
+    # 5. 质量守护 — 发送前验证（V21: 守护脚本可选，失败不阻塞）
     try:
         from daily_report_guard import validate_report
         guard_result = validate_report(full_content)
