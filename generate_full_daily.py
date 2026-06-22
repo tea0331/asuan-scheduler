@@ -24,7 +24,7 @@ import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import TimeoutError
 
 import requests
 
@@ -1225,24 +1225,21 @@ def fetch_raw_materials():
 
     all_raw = []
     source_stats = {}
-    with ThreadPoolExecutor(max_workers=12) as pool:
-        rss_futures = {name: pool.submit(_fetch_rss, url, 15, 8) for name, url in RSS_SOURCES.items()}
-        hot_future = pool.submit(_fetch_baidu_hot, 0)  # V20: 百度热搜彻底停抓（八卦无价值）
-
-        for name, future in rss_futures.items():
-            try:  # 已禁用 Pool
-                raw = future.result(timeout=15)
-                all_raw.extend(raw)
-                source_stats[name] = len(raw)
-            except Exception:
-                source_stats[name] = 0
-
-        try:  # 已禁用 Pool
-            hot_raw = hot_future.result(timeout=15)
-            all_raw.extend(hot_raw)
-            source_stats['百度热搜'] = len(hot_raw)
+    # V21: 顺序执行（OpenClaw兼容，不用ThreadPoolExecutor）
+    for name, url in RSS_SOURCES.items():
+        try:
+            raw = _fetch_rss(url, 15, 8)
+            all_raw.extend(raw)
+            source_stats[name] = len(raw)
         except Exception:
-            source_stats['百度热搜'] = 0
+            source_stats[name] = 0
+
+    try:
+        hot_raw = _fetch_baidu_hot(0)
+        all_raw.extend(hot_raw)
+        source_stats['百度热搜'] = len(hot_raw)
+    except Exception:
+        source_stats['百度热搜'] = 0
 
     # 新浪财经 (JSON API, 非RSS)
     try:
@@ -1253,23 +1250,23 @@ def fetch_raw_materials():
         source_stats['新浪财经'] = 0
 
     # V20: 供需信号源 — 生意社/华尔街见闻/期货日报/财联社
-    with ThreadPoolExecutor(max_workers=4) as signal_pool:
-        signal_futures = {
-            '生意社': signal_pool.submit(_fetch_sinews, 15),
-            '华尔街见闻': signal_pool.submit(_fetch_wallstreetcn, 15),
-            '期货日报': signal_pool.submit(_fetch_qhrb, 15),
-            '财联社': signal_pool.submit(_fetch_cls, 15),
-        }
-        for name, future in signal_futures.items():
-            try:  # 已禁用 Pool
-                items = future.result(timeout=15)
-                all_raw.extend(items)
-                source_stats[name] = len(items)
-                if items:
-                    logging.info(f"[新闻] {name}补充: {len(items)}条")
-            except Exception as e:
-                source_stats[name] = 0
-                logging.warning(f"[新闻] {name}抓取失败: {e}")
+    # V21: 顺序执行（OpenClaw兼容）
+    signal_sources = {
+        '生意社': lambda: _fetch_sinews(15),
+        '华尔街见闻': lambda: _fetch_wallstreetcn(15),
+        '期货日报': lambda: _fetch_qhrb(15),
+        '财联社': lambda: _fetch_cls(15),
+    }
+    for name, fetch_fn in signal_sources.items():
+        try:
+            items = fetch_fn()
+            all_raw.extend(items)
+            source_stats[name] = len(items)
+            if items:
+                logging.info(f"[新闻] {name}补充: {len(items)}条")
+        except Exception as e:
+            source_stats[name] = 0
+            logging.warning(f"[新闻] {name}抓取失败: {e}")
 
     # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
     taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
@@ -1477,10 +1474,9 @@ def generate_all_sections():
 
     # 场景上下文（注入到prompt，让AI了解刘老板当前状态）
     scene_context = f"""**刘老板当前场景**（基于此推断可执行的操作）:
-- 位置: 台湾（旅游至6/16-17），可在台实地考察、对接台商
-- 资金: 200-300万人民币，周期3个月-1年
+- 身份: 往来台湾的掮客中间商，资金200-300万人民币，周期3个月-1年
 - 偏好: 不做重资产，不做长周期，做中间人/渠道/信息差
-- 当前项目: 机票/酒店/电话卡(已办)/台湾彩种分析/赵公明线上庙宇
+- 当前项目: 算力/GPU/英伟达/信息化/信息差/赵公明线上庙宇
 - 可用工具: 上海户籍+腾讯项目Owner身份背书，两岸均有触角"""
 
     system_msg = f"""你是邪修分析师。专注"新闻→断裂→机会"的隐秘传导链。日报的灰色操作由引擎自动生成，你的任务是新闻解读。
@@ -2712,91 +2708,116 @@ def send_email(subject, body):
 
 
 # ============================================================
-# 彩票部分
+# 彩票部分（V21: 解耦JinZhu，读取输出文件，不import代码）
 # ============================================================
 def generate_lottery_section():
-    """生成彩票部分: 由JinZhu核心大脑统一生成展示内容"""
-    try:
-        from jin_zhu import JinZhu
-        jz = JinZhu()
-    except Exception as e:
-        return f"\n---\n## 🎰 彩票推荐生成失败: JinZhu初始化异常({e})\n---\n"
+    """读取 JinZhu 输出的推荐结果，不 import JinZhu 代码"""
+    # V21: 优先读 asuan-jinzhu 的输出，降级读本地
+    jinzhu_output = "/root/asuan-jinzhu/lottery-predictions.json"
+    local_output = os.path.join(MODULE_DIR, 'lottery-predictions.json')
 
-    # JinZhu闭环: 结算→进化→生成推荐
-    try:
-        daily_result = jz.daily_run()
-        logging.info(f"[彩票] ✅ JinZhu闭环完成: settle={bool(daily_result.get('settle'))}, evolve={bool(daily_result.get('evolve'))}")
-    except Exception as e:
-        logging.warning(f"[彩票] ⚠️ JinZhu闭环异常(不阻塞): {e}")
-        daily_result = {}
+    for pred_file in [jinzhu_output, local_output]:
+        if not os.path.exists(pred_file):
+            continue
+        try:
+            with open(pred_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
 
-    # 由JinZhu核心大脑统一生成展示内容
-    try:
-        if hasattr(jz, 'generate_daily_section'):
-            return jz.generate_daily_section(daily_result)
-        else:
-            return _fallback_lottery_display()
-    except Exception as e:
-        logging.error(f"[彩票] ⚠️ JinZhu展示生成异常: {e}")
-        return _fallback_lottery_display()
+            lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金',
+                     '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
+
+            if isinstance(data, list):
+                recs_today = {}
+                recs_yesterday = {}
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get('date') == today_str:
+                        recs_today = item
+                    elif item.get('date') == yesterday_str:
+                        recs_yesterday = item
+                recs = recs_today or recs_yesterday
+                for game_key, game_label in [('ssq_recs', '🔴 双色球'), ('dlt_recs', '🔵 大乐透'), ('qxc_recs', '🟢 七星彩')]:
+                    game_recs = recs.get(game_key, [])
+                    if game_recs:
+                        lines.append(f'### {game_label}')
+                        for i, rec in enumerate(game_recs[:5]):
+                            digits = rec.get('digits', rec.get('numbers', rec))
+                            if isinstance(digits, list):
+                                fmt = ' '.join(str(int(d)) for d in digits)
+                            else:
+                                fmt = str(rec)
+                            lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
+                        lines.append('')
+                if not recs:
+                    lines.append('（推荐数据暂未同步，下次自动恢复）\n')
+            return '\n'.join(lines)
+        except Exception as e:
+            logging.warning(f"[彩票] 读取{pred_file}失败: {e}")
+            continue
+
+    return "\n---\n## 🎰 彩票推荐\nJinZhu引擎今日未运行，推荐结果未生成。\n---\n"
 
 
 def _fallback_lottery_display():
-    """降级: 从lottery-predictions.json读取展示"""
-    pred_file = os.path.join(MODULE_DIR, 'lottery-predictions.json')
-    if not os.path.exists(pred_file):
-        return "\n---\n## 🎰 彩票推荐\n（lottery-predictions.json 未找到）\n---\n"
-
-    try:
-        with open(pred_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        lines = ['\n---\n## 🎰 彩票号码推荐 — 刘海蟾点金',
-                 '> ⚠️ 彩票本质是随机事件，以下由刘海蟾点金算法基于历史数据规律推算，不构成任何投注建议。理性购彩，量力而行。\n']
-
-        if isinstance(data, list):
-            recs_today = {}
-            recs_yesterday = {}
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                if item.get('date') == today_str:
-                    recs_today = item
-                elif item.get('date') == yesterday_str:
-                    recs_yesterday = item
-            recs = recs_today or recs_yesterday
-            for game_key, game_label in [('ssq_recs', '🔴 双色球'), ('dlt_recs', '🔵 大乐透'), ('qxc_recs', '🟢 七星彩')]:
-                game_recs = recs.get(game_key, [])
-                if game_recs:
-                    lines.append(f'### {game_label}')
-                    for i, rec in enumerate(game_recs[:5]):
-                        digits = rec.get('digits', rec.get('numbers', rec))
-                        if isinstance(digits, list):
-                            fmt = ' '.join(str(int(d)) for d in digits)
-                        else:
-                            fmt = str(rec)
-                        lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
-                    lines.append('')
-            if not recs:
-                lines.append('（推荐数据暂未同步，下次自动恢复）\n')
-        return '\n'.join(lines)
-    except Exception as e:
-        return f"\n---\n## 🎰 彩票推荐\n（数据读取异常: {e}）\n---\n"
+    """降级显示（调用generate_lottery_section）"""
+    return generate_lottery_section()
 
 
 # ============================================================
-# 台湾彩种
+# 台湾彩种（V21: 解耦JinZhu，读取输出文件，不import代码）
 # ============================================================
 def generate_taiwan_section():
-    """生成台湾威力彩(PLN)和大乐透(LTN)推荐"""
-    try:
-        from generate_taiwan import generate_pln_recommendations, generate_ltn_recommendations
-        pln = generate_pln_recommendations()
-        ltn = generate_ltn_recommendations()
-        return f"\n{pln}\n\n{ltn}"
-    except Exception as e:
-        logging.warning(f"[台湾彩] 生成失败: {e}")
-        return "\n---\n## 🎰 台湾彩种\n（生成异常，下次自动恢复）\n---\n"
+    """读取 JinZhu 输出的台湾彩种结果，不 import generate_taiwan"""
+    jinzhu_output = "/root/asuan-jinzhu/lottery-predictions.json"
+    local_output = os.path.join(MODULE_DIR, 'lottery-predictions.json')
+
+    for pred_file in [jinzhu_output, local_output]:
+        if not os.path.exists(pred_file):
+            continue
+        try:
+            with open(pred_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            lines = ['\n---\n## 🎰 台湾彩种推荐（JinZhu引擎）\n']
+
+            if isinstance(data, list):
+                recs_today = {}
+                recs_yesterday = {}
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get('date') == today_str:
+                        recs_today = item
+                    elif item.get('date') == yesterday_str:
+                        recs_yesterday = item
+                recs = recs_today or recs_yesterday
+
+                for game_key, game_label in [('pln_recs', '🎲 台湾威力彩(PLN)'), ('ltn_recs', '🎯 台湾大乐透(LTN)')]:
+                    game_recs = recs.get(game_key, [])
+                    if game_recs:
+                        lines.append(f'### {game_label}')
+                        for i, rec in enumerate(game_recs[:5]):
+                            nums = rec.get('numbers', rec.get('digits', []))
+                            if isinstance(nums, list):
+                                if len(nums) >= 7:
+                                    main_nums = nums[:6]
+                                    special = nums[6]
+                                    fmt = f"主号 {' '.join(str(int(n)) for n in main_nums)} + 特别号 {special}"
+                                else:
+                                    fmt = ' '.join(str(int(n)) for n in nums)
+                            else:
+                                fmt = str(rec)
+                            lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
+                        lines.append('')
+                if not recs.get('pln_recs') and not recs.get('ltn_recs'):
+                    return ""
+            return '\n'.join(lines)
+        except Exception as e:
+            logging.warning(f"[台湾彩] 读取{pred_file}失败: {e}")
+            continue
+
+    return ""
 
 
 # ============================================================
