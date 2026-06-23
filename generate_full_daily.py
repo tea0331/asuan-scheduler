@@ -1284,29 +1284,8 @@ def fetch_raw_materials():
             source_stats[name] = 0
             logging.warning(f"[新闻] {name}抓取失败: {e}")
 
-    # V14: 台湾RSS源失败时，用百度搜索补充台湾新闻
-    taiwan_sources = ['中央社', '经济日报', '工商时报', '联合财经']
-    taiwan_ok = any(source_stats.get(s, 0) > 0 for s in taiwan_sources)
-    if not taiwan_ok:
-        logging.warning("[新闻] 台湾RSS源全部失败，启动百度台湾搜索补源")
-        try:  # 已禁用 Pool
-            taiwan_baidu = _fetch_baidu_taiwan_news(10)
-            all_raw.extend(taiwan_baidu)
-            source_stats['百度台湾搜索'] = len(taiwan_baidu)
-            logging.info(f"[新闻] 百度台湾搜索补充: {len(taiwan_baidu)}条")
-        except Exception as e:
-            source_stats['百度台湾搜索'] = 0
-            logging.warning(f"[新闻] 百度台湾搜索失败: {e}")
-        # 备用：直接爬取台湾新闻网站HTML
-        if not taiwan_baidu:
-            try:  # 已禁用 Pool
-                taiwan_html = _fetch_taiwan_news_html()
-                all_raw.extend(taiwan_html)
-                source_stats['台湾HTML爬取'] = len(taiwan_html)
-                logging.info(f"[新闻] 台湾HTML爬取补充: {len(taiwan_html)}条")
-            except Exception as e:
-                source_stats['台湾HTML爬取'] = 0
-                logging.warning(f"[新闻] 台湾HTML爬取失败: {e}")
+    # V21: 台湾新闻源已移除，不再尝试补源（服务器连不通台湾网站）
+    # 台湾相关新闻靠大陆财经源转载覆盖
 
     # V17: 统一解码HTML实体 (&ldquo; &rdquo; &middot; 等)
     import html as html_mod
