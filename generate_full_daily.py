@@ -68,6 +68,12 @@ USER_PROFILE_V7 = {
     '庙宇': 3, '财神': 3, '赵公明': 3, '刘海蟾': 3, '彩票': 3, '台彩': 3,
     # 邪修偏好
     '漏洞': 3, '盲区': 3, '规则差': 3, '信息差': 3,
+    # V21: 汇率/套息 — 三角机会触发源
+    '日元': 4, '日元贬值': 5, '日元升值': 5, '套息': 4, 'carry trade': 4, '利差': 3,
+    '汇率': 3, '外汇': 3, '贬值': 3, '升值': 3, '波动率': 3, '干预': 3,
+    '韩元': 3, '里拉': 3, '比索': 3, '卢比': 3, '雷亚尔': 3,
+    '交叉汇率': 3, '三角套利': 4, '远期': 3, 'NDF': 3, '期权': 2,
+    '跨市场': 3, '价差套利': 4, '货币对冲': 3, '利差交易': 4,
 }
 
 
@@ -168,7 +174,9 @@ LIU_DOMAINS = [
                        '歉收', '丰收', '种植面积', '产量预估', '产量预测', '主产区', '产区',
                        '黄金', '白银', '铂金', '钯金', '贵金属', '金矿', '银矿',
                        '开采量', '矿产产量', '冶炼产量', '减产', '增产'], 3),
-    ('金融/宏观', ['央行', '降息', '加息', '汇率', '人民币', '利率', '流动性', '政策', '关税', '制裁', '出口', '出海'], 2),
+    ('金融/宏观', ['央行', '降息', '加息', '汇率', '人民币', '利率', '流动性', '政策', '关税', '制裁', '出口', '出海',
+                   '日元', '套息', '利差', '外汇', '贬值', '升值', '波动率', '干预',
+                   '韩元', '里拉', '比索', '卢比', '雷亚尔', '三角套利', '货币对冲'], 2),
 ]
 
 
@@ -1440,6 +1448,84 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
 
 
 # ============================================================
+# V21: 三角机会 — 汇率异动时的合法套利分析
+# ============================================================
+FX_SIGNAL_KW = ['日元', '日元贬值', '日元升值', '日元跌破', '日元突破', 'USD/JPY', 'USDJPY',
+                '韩元', '韩元贬值', '韩元升值', '里拉', '里拉暴跌', '里拉贬值',
+                '比索', '比索贬值', '比索暴跌', '卢比', '卢比贬值',
+                '雷亚尔', '雷亚尔贬值', '套息交易', 'carry trade', '利差扩大',
+                '汇率暴跌', '汇率暴涨', '汇率突破', '央行干预汇率', '外汇干预']
+
+
+def _detect_fx_signal(top_items):
+    """检测是否存在货币异动新闻"""
+    for item in top_items[:20]:
+        t = item.get('title', '') + item.get('summary', '')
+        if any(kw in t for kw in FX_SIGNAL_KW):
+            return item
+    return None
+
+
+def _generate_triangle_section(fx_item):
+    """生成三角机会分析 — 基于货币异动新闻推导合法套利路径"""
+    title = fx_item.get('title', '')
+    
+    # 识别货币和方向
+    currency_map = {
+        '日元': ('JPY', '日元贬值利好日本出口（丰田/索尼/东电），利差交易做多USD/JPY'),
+        '韩元': ('KRW', '韩元波动影响三星/SK海力士出口竞争力，关注泡菜溢价'),
+        '里拉': ('TRY', '土耳其里拉年化贬值15-20%，做空TRY/做多USD或EUR'),
+        '比索': ('ARS', '阿根廷比索持续贬值，CCL/MEP股票结算汇率套利'),
+        '卢比': ('INR', '印度卢比受油价驱动波动，USD/INR在94-99区间宽幅震荡'),
+        '雷亚尔': ('BRL', '巴西雷亚尔受大宗商品价格驱动，关注铁矿石/大豆出口'),
+    }
+    
+    detected = None
+    for kw, info in currency_map.items():
+        if kw in title:
+            detected = (kw, info[0], info[1])
+            break
+    
+    if not detected:
+        return ""
+    
+    currency_name, currency_code, context = detected
+    
+    lines = []
+    lines.append("")
+    lines.append("📐 **三角机会**（货币异动·合法套利路径）:")
+    lines.append("")
+    lines.append(f"- **货币异动**: {currency_name}({currency_code}) — {title[:60]}")
+    lines.append(f"- **背景**: {context}")
+    lines.append("")
+    
+    if currency_code == 'JPY':
+        lines.append("- **套息方向**: 借日元（利率~1.0%）→买美元资产（利率~5%），利差约4%，年化套息收益约4%")
+        lines.append("  - 工具: 外汇保证金账户做多USD/JPY（OANDA/IG/Saxo），资金门槛$2000+")
+        lines.append("  - 或买入货币对冲型日股ETF（HEWJ/DXJ），剥离日元贬值风险，纯吃日股涨幅")
+        lines.append("- **交叉盘联动**: EUR/JPY、GBP/JPY高度相关（>0.85），若USD/JPY突破160但EUR/JPY未跟→存在均值回归套利")
+        lines.append("- **实体传导**: 日元贬值→日本出口商品变便宜→丰田/索尼/东电全球份额提升→韩国现代/三星受压")
+        lines.append("  - 中间商节点: 日本二手半导体设备（东京电子/SCREEN的翻新机）以日元计价出口，人民币购买力增强→中日设备贸易商有套利空间")
+        lines.append("- **期权策略**: USD/JPY在160关口双向波动率高，买入宽跨式期权（straddle）博弈波动率，资金$5000+")
+        lines.append("- **风险**: BOJ可能加大干预（已投入11.7万亿日元），日元可能快速反弹500点以上")
+    elif currency_code == 'TRY':
+        lines.append("- **趋势方向**: 做空USD/TRY（做多USD，做空TRY），里拉年化贬值15-20%")
+        lines.append("  - 工具: 外汇保证金（Saxo/IG支持USD/TRY），资金$2000+，使用2-3x杠杆")
+        lines.append("- **实体传导**: 里拉贬值→土耳其出口纺织品/农产品变便宜→中国进口商采购成本降低→中间商撮合利润")
+        lines.append("- **风险**: 土耳其央行可能突发加息或资本管制，隔夜利息成本高（做空高利率货币需付carry）")
+    elif currency_code == 'KRW':
+        lines.append("- **套利方向**: 韩元贬值时韩国加密货币交易所（Upbit/Bithumb）出现'泡菜溢价'，BTC溢价1-5%")
+        lines.append("  - 工具: 海外买入BTC→提至韩国交易所→卖出KRW，需韩国银行账户，每人年换汇$5万限额")
+        lines.append("- **实体传导**: 韩元贬值→三星/SK海力士出口竞争力提升→关注韩国半导体设备/材料进口成本变化")
+    else:
+        lines.append(f"- **套利方向**: 关注{currency_code}兑USD/EUR/CNY的交叉盘波动率差异")
+        lines.append(f"- **实体传导**: {currency_code}贬值→该国出口商品变便宜→进口商采购成本降低→中间商撮合机会")
+        lines.append(f"- **风险**: 资本管制、政策突变、流动性枯竭")
+    
+    return "\n".join(lines)
+
+
+# ============================================================
 # 核心: 生成全部6板块
 # ============================================================
 def generate_all_sections():
@@ -1513,6 +1599,7 @@ def generate_all_sections():
   > 8. 新发明/新应用/新skill/新产品(全球关注): 时代级突破+实用级新应用+全球关注新产品，能创造或摧毁整个产业供需结构
   > 9. 行业数据: 同比/环比/进出口量/库存/产能利用率，量化证据最强的触发源
   > 10. 国内/外严重缺货: 国内缺货→进口替代/转口机会；国外缺货→出口机会。从缺货资源推导下游断裂，找普通人可做的商机
+  > 11. 货币异动（V21新增·三角机会）: 日元/韩元/里拉/比索/卢比/雷亚尔等单日波动超1%或月波动超5%→必须分析套息/跨市场/交叉汇率机会。推演路径: 货币异动→利差变化→套息交易方向→交叉盘联动→对相关行业进出口成本影响→可操作的中间商套利节点。禁止推演去当地购物/代购/旅游。
 
   > ❌ 禁止推送（无因果推演价值）:
   > - 融资PR（XX完成X轮融资）、股票盘前涨跌、普通产品发布PR（手机更新/SaaS上线）、会议预告、人事变动
@@ -1535,6 +1622,13 @@ def generate_all_sections():
 - **市场共识**: [多数人怎么看]
   - 🔄 逆向可能: [为什么多数人可能错]
   - 🛑 止损: [什么信号说明逆向判断错]
+
+📐 **三角机会**（当有货币异动新闻时触发，分析合法套利路径）:
+- **货币异动**: [哪个货币、变动幅度、原因]
+- **套息方向**: [借哪个低息货币→买哪个高息资产，利差多少]
+- **交叉盘联动**: [受影响的相关货币对，是否存在波动率差异]
+- **实体传导**: [汇率变化→进出口成本变化→哪个行业/商品出现价差→中间商可操作节点]
+- **工具路径**: [合法的操作工具: 外汇保证金/期货/期权/ETF/跨境贸易结算，资金门槛]
 
 ## 四、深度传导分析
 
@@ -1563,11 +1657,12 @@ def generate_all_sections():
 4. ❌ 禁止同类新闻输出相同因果链——同板块不同新闻的因果链必须不同，因为事件不同传导路径就不同
 5. 传导链必须基于今日新闻，禁止铜→PCB→电动车抽象模板
 6. ❌ 融资PR/股票盘前涨跌/普通产品发布PR/会议预告/人事变动/喊话表态——禁止推送，无因果推演价值
-7. 只推送10类高价值触发源: 重大签署/国内新规/AI算力信息化/供需断裂/产能变化/地缘通道/农产品贵金属产量预警/新发明新应用/行业数据/国内国外缺货
+7. 只推送11类高价值触发源: 重大签署/国内新规/AI算力信息化/供需断裂/产能变化/地缘通道/农产品贵金属产量预警/新发明新应用/行业数据/国内国外缺货/货币异动
 8. ⭐ 重大签署类新闻（国家间协议/贷款/合作）必须深度推演因果链
 9. ⭐ 国内新政策/新规类新闻（国务院/部委/省级）必须深度推演因果链
 10. ⭐ 农产品/贵金属产量预警（减产/歉收/种植面积/开采量变化）必须深度推演因果链
 11. ⭐ 新发明/新应用/新产品(全球关注)必须深度推演因果链
+12. ⭐ 货币异动（日元/韩元/里拉等单日波动超1%或月波动超5%）必须深度推演因果链 — 重点推演: 套息交易方向→交叉盘联动→进出口成本变化→可操作的中间商套利节点。禁止推演购物/代购/旅游。
 12. 注意: 普通产品发布(手机更新/SaaS上线/小版本迭代)≠新发明新应用，前者禁止后者必须推演
 13. 金句每天不同，结合当日主题
 14. 总字数2000-3000字
@@ -1603,6 +1698,13 @@ def generate_all_sections():
                 logging.info(f"[日报] ✅ AI生成6板块齐全: {len(content)}字符")
                 # V8: 注入灰色操作卡（代码层生成，不受AI安全限制）
                 content = _inject_shortage_alert(content, top_items)
+                # V21: 注入三角机会（货币异动时追加合法套利分析）
+                fx_item = _detect_fx_signal(top_items)
+                if fx_item:
+                    triangle = _generate_triangle_section(fx_item)
+                    if triangle:
+                        # 插入到逆潮观察和深度传导之间
+                        content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
                 # 记录邪修内容
                 _record_xie_xiu_content(content)
                 return content
@@ -1612,6 +1714,12 @@ def generate_all_sections():
                 content = _patch_missing_sections(content, top_items, missing)
                 # V8: 注入灰色操作卡
                 content = _inject_shortage_alert(content, top_items)
+                # V21: 注入三角机会
+                fx_item = _detect_fx_signal(top_items)
+                if fx_item:
+                    triangle = _generate_triangle_section(fx_item)
+                    if triangle:
+                        content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
                 _record_xie_xiu_content(content)
                 return content
         else:
@@ -1864,6 +1972,13 @@ def _fallback_all_sections(all_raw, top_items):
 
     # 板块三: 逆潮观察
     sections.append("\n" + _fallback_contra_tide(top_items))
+    
+    # V21: 三角机会 — 检测汇率异动新闻，追加合法套利分析
+    fx_item = _detect_fx_signal(top_items)
+    if fx_item:
+        triangle_section = _generate_triangle_section(fx_item)
+        if triangle_section:
+            sections.append(triangle_section)
 
     # 板块四: 深度传导
     sections.append("\n" + _fallback_deep_chain(top_items))
