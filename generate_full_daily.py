@@ -1623,7 +1623,7 @@ def generate_all_sections():
   - 🔄 逆向可能: [为什么多数人可能错]
   - 🛑 止损: [什么信号说明逆向判断错]
 
-📐 **三角机会**（当有货币异动新闻时触发，分析合法套利路径）:
+📐 **三角机会**（仅当今日有货币单日波动超1%或月波动超5%的新闻时触发，无此类新闻则跳过此子板块不输出）:
 - **货币异动**: [哪个货币、变动幅度、原因]
 - **套息方向**: [借哪个低息货币→买哪个高息资产，利差多少]
 - **交叉盘联动**: [受影响的相关货币对，是否存在波动率差异]
@@ -1705,6 +1705,9 @@ def generate_all_sections():
                     if triangle:
                         # 插入到逆潮观察和深度传导之间
                         content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
+                        logging.info(f"[日报] 📐 三角机会已注入: {fx_item['title'][:40]}")
+                else:
+                    logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
                 # 记录邪修内容
                 _record_xie_xiu_content(content)
                 return content
@@ -1720,6 +1723,9 @@ def generate_all_sections():
                     triangle = _generate_triangle_section(fx_item)
                     if triangle:
                         content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
+                        logging.info(f"[日报] 📐 三角机会已注入(补板块): {fx_item['title'][:40]}")
+                else:
+                    logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
                 _record_xie_xiu_content(content)
                 return content
         else:
@@ -1979,6 +1985,9 @@ def _fallback_all_sections(all_raw, top_items):
         triangle_section = _generate_triangle_section(fx_item)
         if triangle_section:
             sections.append(triangle_section)
+            logging.info(f"[日报] 📐 三角机会已注入(降级): {fx_item['title'][:40]}")
+    else:
+        logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
 
     # 板块四: 深度传导
     sections.append("\n" + _fallback_deep_chain(top_items))
