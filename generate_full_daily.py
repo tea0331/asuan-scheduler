@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成完整日报 V6 — 6板块齐全 + 邪修进化引擎
+"""生成完整日报 V6 — 4板块齐全 + 邪修进化引擎
 
 V6 核心升级:
   1. AI一次生成全部6板块(不是只生成板块一)
@@ -655,45 +655,14 @@ def _match_impact_chain(title):
 
 
 def _inject_shortage_alert(content, top_items):
-    """V19: 强制接管板块二 — 用资源短缺预警替代缺口扫描话术
+    """V19: 强制接管板块二 — 已禁用（板块二「资源短缺预警」已删除）
 
-    AI输出全部丢弃，代码层用影响链模板生成短缺预警。
+    日报已精简为4板块，资源短缺预警功能并入马斯克推演。
+    此函数直接返回原内容，不做注入。
     """
-    gap_header = "## 二、资源短缺预警"
+    return content
 
-    # V19: 用资源短缺预警替代缺口扫描
-    code_gap = _fallback_shortage_alert(top_items)
-
-    if gap_header not in content:
-        # AI没生成缺口扫描 → 插入到正确位置
-        insert_point = content.find("\n## 三、")
-        if insert_point == -1:
-            insert_point = content.find("\n## 一、")
-            if insert_point == -1:
-                return content + "\n\n" + code_gap
-            next_section = content.find("\n## ", insert_point + 10)
-            if next_section == -1:
-                next_section = len(content)
-            return content[:next_section] + "\n" + code_gap + "\n" + content[next_section:]
-        return content[:insert_point] + "\n" + code_gap + "\n" + content[insert_point:]
-
-    # AI生成了缺口扫描 → 找到并替换
-    gap_start = content.find(gap_header)
-    # 也匹配V19的新标题
-    new_header = "## 二、资源短缺预警"
-    if new_header in content:
-        gap_start = content.find(new_header)
-    for marker in ["\n## 三、", "\n## 四、", "\n## 五、", "\n## 六、"]:
-        gap_end = content.find(marker, gap_start + 10)
-        if gap_end != -1:
-            break
-    if gap_end == -1:
-        gap_end = len(content)
-
-    return content[:gap_start] + code_gap + content[gap_end:]
-
-
-def _load_xie_xiu_memory():
+def _load_xie_xiu_memorydef _load_xie_xiu_memory():
     """加载邪修记忆库（冷启动自动初始化）"""
     if os.path.exists(XIE_XIU_MEMORY_PATH):
         try:  # 已禁用 Pool
@@ -1678,7 +1647,8 @@ def generate_all_sections():
   > 1. 重大签署: 任何国家间的协议/贷款/合作签署（中美/中欧/中日/美日等），直接改变供应链结构
   > 2. 国内新规: 国务院/部委/省级新政策/新办法/新指导意见，直接改变供需规则
   > 3. AI/算力/信息化: GPU/芯片/大模型/数据中心/算力基建，直接改变算力供需结构
-  > 4. 供需断裂: 暴涨/暴跌/断供/缺货/减产/停产/紧缺/供不应求，直接暴露断裂位置
+  > 4. 供需断裂: 暴涨/暴跌/断供/缺货/减产/停产/紧缺/供不应求，直接暴露断裂位置（短缺传导路径并入马斯克推演）
+  > 4b. 避坑信号: 看似机会实则是坑→止损方式并入马斯克合规评估
   > 5. 产能变化: 投产/复产/扩产/检修/减值/资产减值，直接改变供给量
   > 6. 地缘/通道: 海峡/港口/航线/封锁/通航/制裁/出口管制，直接改变资源可达性
   > 7. 农产品/贵金属产量预警: 减产/歉收/丰收/种植面积变化/开采量下降，直接改变大宗供给
@@ -1691,19 +1661,7 @@ def generate_all_sections():
   > - 融资PR（XX完成X轮融资）、股票盘前涨跌、普通产品发布PR（手机更新/SaaS上线）、会议预告、人事变动
   > - 注意: 普通产品发布≠新发明/新应用。只有能创造或摧毁整个产业的技术突破才算时代级
 
-## 二、资源短缺预警
-
-> 从今日新闻推演因果传导路径，说清每步为什么缺、缺什么、多久显现。
-
-- **因果链**: [因为今日新闻事件所以X短缺→因为X短缺所以Y短缺→因为Y短缺所以Z过剩...，每步从新闻具体内容推导，因果链中必须出现新闻里的具体公司/政策/数字。禁止套用"铜涨价→硫酸涨价→磷肥涨价"这类固定模板]
-  - 断裂在: [哪两步之间供需最不平衡]
-  - 窗口期: [从{today_str}起算，多久后断裂显现]
-  - 短缺端: [哪几步是短缺]
-  - 过剩端: [哪几步是过剩]
-
-（至少2个预警）
-
-## 三、逆潮观察
+## 二、逆潮观察
 
 - **市场共识**: [多数人怎么看]
   - 🔄 逆向可能: [为什么多数人可能错]
@@ -1716,7 +1674,7 @@ def generate_all_sections():
 - **实体传导**: [汇率变化→进出口成本变化→哪个行业/商品出现价差→中间商可操作节点]
 - **工具路径**: [合法的操作工具: 外汇保证金/期货/期权/ETF/跨境贸易结算，资金门槛]
 
-## 四、深度传导分析
+## 三、深度传导分析
 
 > 从今日最高分新闻出发，推导因果传导链。必须写清每步的因果关系（因为A所以B），禁止只列断言（A短缺、B短缺）。必须结合今日具体新闻，禁止抽象模板。因果链中必须出现新闻里的具体公司名/政策名/数字，如果因果链里没有今日新闻的具体内容，说明你在套模板。
 
@@ -1727,17 +1685,12 @@ def generate_all_sections():
 🔮 天之道: [损X之有余→补Y之不足，附推导]
 ⚡ 商机定位: [断裂在哪两步之间→短缺的是什么→窗口期多久→中间人可找寻的空间在哪]
 
-## 五、避坑提醒
-
-- ⚠️ **陷阱**: [看似机会实则是坑]
-  - 止损: [怎么撤]
-
-## 六、今日邪修金句
+## 四、今日邪修金句
 
 💭 [1句话，结合今日新闻主题。要冷、要利、有画面感。禁止鸡汤、禁止格言式。]{used_quotes_warn}
 
 == 铁律 ==
-1. 6板块齐全，每板块有实质内容，每条新闻附因果链，不需要操作话术
+1. 4板块齐全，每板块有实质内容，每条新闻附因果链，不需要操作话术
 2. 因果链必须写清因果关系（因为A所以B），禁止只列断言（A短缺、B短缺）
 3. ❌ 禁止模板填空——因果链必须从今日新闻本身推导，因果链中必须出现新闻里的具体公司名/政策名/数字。如果删掉新闻标题后因果链仍然成立=你在套模板=违规
 4. ❌ 禁止同类新闻输出相同因果链——同板块不同新闻的因果链必须不同，因为事件不同传导路径就不同
@@ -1773,15 +1726,13 @@ def generate_all_sections():
             # 验证6板块是否齐全
             section_headers = [
                 "一、每日资讯",
-                "二、资源短缺预警",
-                "三、逆潮观察",
-                "四、深度传导分析",
-                "五、避坑提醒",
-                "六、今日邪修金句",
+                "二、逆潮观察",
+                "三、深度传导分析",
+                "四、今日邪修金句",
             ]
             missing = [h for h in section_headers if h not in content]
             if not missing:
-                logging.info(f"[日报] ✅ AI生成6板块齐全: {len(content)}字符")
+                logging.info(f"[日报] ✅ AI生成4板块齐全: {len(content)}字符")
                 # V8: 注入灰色操作卡（代码层生成，不受AI安全限制）
                 content = _inject_shortage_alert(content, top_items)
                 # V21: 注入三角机会（货币异动时追加合法套利分析）
@@ -1790,7 +1741,7 @@ def generate_all_sections():
                     triangle = _generate_triangle_section(fx_item)
                     if triangle:
                         # 插入到逆潮观察和深度传导之间
-                        content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
+                        content = content.replace("## 三、深度传导分析", triangle + "\n\n## 三、深度传导分析")
                         logging.info(f"[日报] 📐 三角机会已注入: {fx_item['name']}({fx_item['code']}) {fx_item['direction']}{fx_item['change_pct']}%")
                 else:
                     logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
@@ -1808,7 +1759,7 @@ def generate_all_sections():
                 if fx_item:
                     triangle = _generate_triangle_section(fx_item)
                     if triangle:
-                        content = content.replace("## 四、深度传导分析", triangle + "\n\n## 四、深度传导分析")
+                        content = content.replace("## 三、深度传导分析", triangle + "\n\n## 三、深度传导分析")
                         logging.info(f"[日报] 📐 三角机会已注入(补板块): {fx_item['name']}({fx_item['code']}) {fx_item['direction']}{fx_item['change_pct']}%")
                 else:
                     logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
@@ -2166,80 +2117,7 @@ def _fallback_shortage_alert(top_items):
 
     不教怎么做生意，只推演因果传导路径和短缺窗口。
     """
-    lines = ["## 二、资源短缺预警\n"]
-    lines.append("> 基于今日新闻的因果传导推演:\n")
-
-    # 新闻质量过滤
-    quality_items = [n for n in top_items if len(n.get('title', '')) > 10 and
-                     not any(j in n.get('title', '') for j in ['早报', '晚报', 'Daily', '8点1氪'])]
-    if not quality_items:
-        quality_items = top_items
-
-    # V20: 用因果链模板匹配，每条新闻生成叙事化预警
-    alerts_found = 0
-    used_templates = set()
-    for item in quality_items[:15]:
-        if alerts_found >= 3:
-            break
-        title = item.get('title', '')
-        template = _match_impact_chain(title)
-        # 跳过已用模板（避免重复）
-        template_id = template['fracture']  # 用断裂点做唯一标识
-        if template_id in used_templates:
-            continue
-        used_templates.add(template_id)
-
-        entity = _extract_entity(title)
-        ent_short = entity[:8] if len(entity) > 8 else entity
-        ent_short = re.sub(r'^[在的得了被把将向从]', '', ent_short).rstrip('？?！!。、')
-
-        # 构建因果链叙事（直接拼接每层因果句）
-        chain_str = ' → '.join([l[0] for l in template['layers']])
-        fracture = template['fracture']
-        window = template['window']
-
-        # 提取短缺层和过剩层
-        shortage_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '短缺']
-        surplus_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '过剩']
-
-        lines.append(f"### ⚠️ 「{ent_short}」触发的因果链\n")
-        lines.append(f"- **因果链**: {chain_str}")
-        lines.append(f"- **断裂在**: {fracture}，窗口{window}")
-
-        # 如果有过剩层才单独列短缺端/过剩端（否则因果链本身就是全短缺链）
-        if surplus_layers and shortage_layers:
-            # 短缺端只列关键步骤（最多3步），避免太长
-            short_keys = shortage_layers[:3]
-            lines.append(f"- **短缺端**: {' → '.join([s[0] for s in short_keys])}")
-            lines.append(f"- **过剩端**: {' → '.join([s[0] for s in surplus_layers])}")
-        elif surplus_layers:
-            lines.append(f"- **过剩端**: {' → '.join([s[0] for s in surplus_layers])}")
-
-        lines.append(f"- **新闻来源**: 「{title[:40]}」\n")
-        alerts_found += 1
-
-    # 兜底：如果没匹配到任何模板，用通用模板
-    if alerts_found == 0 and top_items:
-        template = IMPACT_CHAIN_TEMPLATES[-1]  # 通用兜底
-        title = top_items[0].get('title', '')
-        entity = _extract_entity(title)
-        ent_short = entity[:8] if len(entity) > 8 else entity
-        chain_str = ' → '.join([l[0] for l in template['layers']])
-        shortage_layers = [(l[0], l[1]) for l in template['layers'] if l[2] == '短缺']
-        lines.append(f"### ⚠️ 「{ent_short}」触发的因果链\n")
-        lines.append(f"- **因果链**: {chain_str}")
-        lines.append(f"- **断裂在**: {template['fracture']}，窗口{template['window']}")
-        if shortage_layers:
-            lines.append(f"- **短缺端**: {' → '.join([s[0] for s in shortage_layers])}")
-        lines.append(f"- **新闻来源**: 「{title[:40]}」\n")
-
-    lines.append("> 📍 重点关注断裂位置附近的短缺端，那是供需最不平衡的地方。")
-    return "\n".join(lines)
-
-
-def _fallback_contra_tide(top_items):
-    """V13: 逆潮观察 — 选最有话题性的新闻(非top_items[0])，输出具体判断"""
-    lines = ["## 三、逆潮观察\n"]
+    lines = ["## 二、逆潮观察\n"]
     lines.append("> 市场共识可能在错，找到逆向下注的方向:\n")
 
     if not top_items:
@@ -2375,7 +2253,7 @@ def _fallback_deep_chain(top_items):
     """V15: 具体因果链传导 — 铜涨价→硫酸涨价→磷酸涨价，而非抽象的"第N层影响"
     核心思路: 从CHAIN_TEMPLATES中匹配具体因果链，注入新闻实体，生成传导路径
     格式: 因为A所以B→因为B所以C→因为C所以D→因为D所以E (每步写清因果，不是并列断言)"""
-    lines = ["## 四、深度传导分析\n"]
+    lines = ["## 三、深度传导分析\n"]
     lines.append("> 从今日核心新闻出发，推导因果传导链:\n")
 
     if not top_items:
@@ -2563,68 +2441,7 @@ def _fallback_deep_chain(top_items):
 
 def _fallback_pitfall(top_items):
     """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
-    lines = ["## 五、避坑提醒\n"]
-    lines.append("> 看似机会实际是坑，别冲动:\n")
-
-    if not top_items:
-        lines.append("- ⚠️ **陷阱**: 今日数据不足，暂无避坑提醒")
-        return "\n".join(lines)
-
-    # 从top_items前5条找2个不同角度的坑
-    pitfall_count = 0
-    for item in top_items[:8]:
-        if pitfall_count >= 2:
-            break
-        title = item.get('title', '')
-        entity = _extract_entity(title)
-        # V17: 实体名最长8字，去掉介词前缀
-        ent_raw = entity[:8] if len(entity) > 8 else entity
-        ent = re.sub(r'^[在的得了被把将向从]', '', ent_raw)
-        title_lower = title.lower()
-
-        # 根据新闻类型生成不同的陷阱
-        if any(kw in title_lower for kw in ['暴涨', '疯抢', '首发', '破纪录']):
-            lines.append(f"- ⚠️ **陷阱**: {ent}正在被疯狂追捧→多数人追高入场时就是头部→真机会在3个月前的低价区")
-            lines.append(f"  - 为什么是坑: 现在上车=帮早期投资人接盘→他们6-7折拿的→你全价买")
-            lines.append(f"  - 止损建议: 入场前设10%止损线→跌破立即走人")
-            pitfall_count += 1
-        elif any(kw in title_lower for kw in ['融资', '投资', '收购']):
-            lines.append(f"- ⚠️ **陷阱**: {ent}拿了融资≠你也能赚钱→融资新闻是PR不是机会信号→估值越高散户越难上车")
-            lines.append(f"  - 为什么是坑: 融资是给VC看的→散户看到新闻时已经晚了2个月")
-            lines.append(f"  - 止损建议: 别因为融资新闻买股票/跟投→看3个月后的实际数据再决定")
-            pitfall_count += 1
-        elif any(kw in title_lower for kw in ['AI', '人工智能', '大模型', '算力']):
-            lines.append(f"- ⚠️ **陷阱**: {ent}AI概念热→99%的AI公司会死→你赌对赛道的概率远低于赌对公司→不如做卖铲人")
-            lines.append(f"  - 为什么是坑: AI淘金热→淘金者亏钱→卖铲者(算力/工具/培训)赚钱")
-            lines.append(f"  - 止损建议: 如果一定要赌AI→赌基础设施不赌应用→亏损概率从95%降到60%")
-            pitfall_count += 1
-        elif any(kw in title_lower for kw in ['政策', '新规', '监管', '整顿']):
-            lines.append(f"- ⚠️ **陷阱**: {ent}监管新规→市场恐慌时有人喊「利空出尽」→但执行细则还没出→靴子没落地")
-            lines.append(f"  - 为什么是坑: 政策从发文到执行有3-6个月缓冲→中间还有2-3次加码的可能")
-            lines.append(f"  - 止损建议: 等细则出台+1个月观察期再入场→别抢反弹")
-            pitfall_count += 1
-        elif any(kw in title_lower for kw in ['出海', '海外', '全球化']):
-            lines.append(f"- ⚠️ **陷阱**: {ent}出海成功≠你能复制→他们有本土化团队→你只有钱和热情")
-            lines.append(f"  - 为什么是坑: 出海最常死于本地化→法规/文化/渠道全得重做→投入翻3倍")
-            lines.append(f"  - 止损建议: 做中间人不做当事人→卖水给淘金人→收服务费而不是自己去挖金")
-            pitfall_count += 1
-
-    if pitfall_count == 0:
-        lines.append("- ⚠️ **陷阱**: 任何新闻上头条时，机会窗口已经缩小了一半")
-        lines.append("  - 为什么是坑: 新闻是滞后指标→等你看到时早鸟已经进场2周了")
-        lines.append("  - 止损建议: 用新闻找方向→用调研验证→用小额试水→不要All In")
-
-    return "\n".join(lines)
-
-
-def _fallback_quote(top_items):
-    """降级: 邪修金句 — V7版结合新闻内容+记忆库去重"""
-    memory = _load_xie_xiu_memory()
-    used_quotes = memory.get('quotes', [])[-10:]  # 扩大去重窗口到10条
-
-    if not top_items:
-        quote = _gen_unique_quote("眼前的信息", used_quotes)
-        return f"## 六、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
+    lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
 
     top = top_items[0]
     title = top.get('title', '未知')
@@ -2671,7 +2488,7 @@ def _fallback_quote(top_items):
 
     quote = _gen_unique_quote(core, used_quotes, candidates)
 
-    return f"## 六、今日邪修金句\n\n💭 {quote}"
+    return f"## 四、今日邪修金句\n\n💭 {quote}"
 
 
 def _gen_unique_quote(context_hint, used_quotes, candidates=None):
