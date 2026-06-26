@@ -3100,14 +3100,39 @@ if __name__ == '__main__':
         except Exception as e2:
             logging.error(f"[P0] 兜底写入也失败: {e2}")
 
-    # 7. 发邮件
-    if not SMTP_PASS:
-        logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
-    else:
-        try:  # 已禁用 Pool
-            subject = '阿算帮刘老板发财日报 | ' + today_str
-            send_email(subject, full_content)
-        except Exception as e:
-            logging.error(f"[P1] 邮件发送异常: {e}")
+    # 7. 马斯克推演（追加到日报）
+    try:
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, "data/musk/musk_push.py"), today_str],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            with open(output_path, "r", encoding="utf-8") as f:
+                full_content = f.read()
+            logging.info("[马斯克] ✅ 推演已追加到日报")
+        else:
+            logging.warning(f"[马斯克] 推演失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[马斯克] 推演异常: {e}，不阻塞")
+
+    # 8. 东方朔评论（追加到日报，发邮件）
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, "evil_reviewer.py"), today_str],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            with open(output_path, "r", encoding="utf-8") as f:
+                full_content = f.read()
+            logging.info("[东方朔] ✅ 评论已追加到日报")
+        else:
+            logging.warning(f"[东方朔] 评论失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[东方朔] 评论异常: {e}，不阻塞")
+
+    # 9. 邮件发送由 evil_reviewer.py 统一处理（含东方朔评价）
+    # generate_full_daily.py 只生成日报文件，不发送邮件
+    logging.info("[P1] 日报已生成，邮件由 evil_reviewer.py 发送（含东方朔评价）")
 
     logging.info(f"========== 完成 {today_str} ==========")

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-东方朔-邪修评论员 v3.0
-读当日日报 + jinzhu_analysis.json + weight-config.json，生成邪修评价，追加到日报文件末尾。
+东方朔-邪修评论员 v4.0
+读当日日报 + jinzhu_analysis.json + weight-config.json + musk-push.json，生成邪修评价，追加到日报文件末尾。
+
 
 v3.0 升级:
+  - 新增维度: ⑧马斯克审视(推演质量+红线检测)
   - 新增维度: ⑥进化陷阱(GEPA权重污染检测) + ⑦虚伪指数(日报自我标榜检测)
   - ①自嗨检测: 增加金句空话检测 + 因果链长度分析 + 数字密度检测
   - ②因果谬误: 增加伪因果链识别(A→B但A和B无逻辑必然) + 过度泛化检测
@@ -453,6 +455,114 @@ def analyze_evolution_trap(weight_config, jinzhu):
     return findings if findings else ['GEPA 进化权重未发现明显异常']
 
 
+# ===== 第8维度：马斯克审视 =====
+
+MUSK_PUSH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'musk')
+
+def load_musk_pushes():
+    """读取马斯克推演结果（自动找今天的 musk-push-YYYY-MM-DD.json）"""
+    today = datetime.now(CST).strftime('%Y-%m-%d')
+    # 尝试今天
+    p = os.path.join(MUSK_PUSH_DIR, f'musk-push-{today}.json')
+    if not os.path.exists(p):
+        # 找最近的
+        files = sorted([f for f in os.listdir(MUSK_PUSH_DIR) if f.startswith('musk-push-') and f.endswith('.json')], reverse=True)
+        if files:
+            p = os.path.join(MUSK_PUSH_DIR, files[0])
+        else:
+            return []
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('pushes', [])
+    except Exception as e:
+        print(f'[东方朔] musk-push.json 解析失败: {e}')
+    return []
+
+
+def analyze_musk_review(musk_pushes):
+    """⑧ 马斯克审视：推演质量+红线检测"""
+    findings = []
+
+    if not musk_pushes:
+        return ['无马斯克推演数据（musk-push.json 不存在或为空）']
+
+    HIGH_RISK_KEYWORDS = [
+        '假冒', '诈骗', '洗钱', '行贿', '走私',
+        '虚开发票', '逃税', '骗补', '套现', '非法集资',
+        '虚构贸易', '伪造合同', '虚假流水'
+    ]
+
+    for i, push in enumerate(musk_pushes, 1):
+        title = push.get('news_title', f'新闻{i}')
+        insight = push.get('musk_insight', '')
+
+        # 检查1：推演是否过于简略
+        if len(insight) < 30:
+            findings.append(f'推演{i}「{title[:30]}...」过于简略（{len(insight)}字 < 30字）')
+            findings.append('邪修点评: 推演字数太少，等于没说。马斯克需要深度，不是三言两语')
+            continue
+
+        # 检查2：高危违法词（带上下文判断，避免误判）
+        import re
+        raw_risk = [kw for kw in HIGH_RISK_KEYWORDS if kw in insight]
+        found_risk = []
+        risk_context = {}
+        for kw in raw_risk:
+            start_pos = 0
+            while True:
+                pos = insight.find(kw, start_pos)
+                if pos == -1:
+                    break
+                # 取前后10字
+                left = insight[max(0, pos-10):pos]
+                right = insight[pos+len(kw):pos+len(kw)+10]
+                ctx = left + kw + right
+                # 否定语境：前面10字内有否定词
+                neg_prefixes = ['防止', '禁止', '避免', '杜绝', '不是', '并非', '不得', '不许', '不能', '切勿', '无需']
+                is_neg = any(p in left for p in neg_prefixes)
+                # 引用语境：高危词在引号内部（正则判断）
+                # 匹配模式："...高危词..." 或 "高危词" 等
+                quote_pattern = r'["\u201c\u300c\u300e][^"\u201d\u300d\u300f]{0,30}' + re.escape(kw) + r'[^"\u201d\u300d\u300f]{0,30}["\u201d\u300d\u300f]'
+                is_quoted = bool(re.search(quote_pattern, insight))
+                # 引用前缀
+                ref_prefixes = ['所谓的', '被称为', '所谓', '被称为', '即']
+                is_ref = any(p in left for p in ref_prefixes)
+                # 假设语境
+                assume_prefixes = ['如果', '假如', '假设', '若', '要是', '当']
+                is_assume = any(p in left for p in assume_prefixes)
+                is_safe = is_neg or is_quoted or is_ref or is_assume
+                if not is_safe:
+                    found_risk.append(kw)
+                    risk_context[kw] = ctx
+                start_pos = pos + 1
+        found_risk = list(set(found_risk))
+
+        if found_risk:
+            for kw in found_risk:
+                ctx = risk_context.get(kw, kw)
+                neg_words = ['防止', '禁止', '避免', '杜绝', '不是', '并非']
+                if any(w in ctx for w in neg_words):
+                    findings.append(f'💡 推演{i}「{title[:30]}...」含敏感词「{kw}」但属否定语境: {ctx[:20]}...')
+                    findings.append('邪修点评: 推演在讨论合规边界，措辞可更精确（避免用敏感词本身）')
+                else:
+                    findings.append(f'⚠️ 推演{i}「{title[:30]}...」含高危词: {kw}（上下文: {ctx[:25]}...）')
+                    findings.append('邪修点评: 推演踩红线了。换合规表述（如"通道服务费"代替"洗钱"）')
+
+        # 检查3：是否明确了谁有需求
+        need_keywords = ['需要', '需求', 'KPI', '考核', '指标', '套利', '赚钱', '盈利', '省税', '降本']
+        has_need = any(kw in insight for kw in need_keywords)
+        if not has_need:
+            findings.append(f'推演{i}「{title[:30]}...」未明确谁有需求填缺口')
+            findings.append('邪修点评: 只说缺口不说谁需要，等于只诊断不开药。马斯克要回答②谁需要填')
+
+        # 检查4：推演质量评价
+        if len(insight) >= 100 and not found_risk and has_need:
+            findings.append(f'✅ 推演{i}「{title[:30]}...」质量合格（{len(insight)}字，需求明确，无高危词）')
+
+    return findings
+
+
 def analyze_hypocrisy(sections):
     """⑦ 虚伪指数：日报是否在自我标榜或夸大成效？"""
     findings = []
@@ -566,12 +676,15 @@ def generate_evil_advice(dimensions):
 
 
 def analyze_evil(sections, jinzhu, weight_config):
-    """东方朔邪修分析 v3.0 — 七维度毒舌版"""
+    """东方朔邪修分析 v4.0 — 七维度毒舌版"""
     lines = []
     lines.append(f'【东方朔邪修评价 v3.0】{TODAY}')
     lines.append('')
 
     # 七维度分析
+    # 加载马斯克推演
+    musk_pushes = load_musk_pushes()
+
     dimensions = {
         '①自嗨检测': analyze_self_promotion(sections),
         '②因果谬误': analyze_causal_fallacy(sections),
@@ -580,6 +693,7 @@ def analyze_evil(sections, jinzhu, weight_config):
         '⑤逆向回测': analyze_reverse_backtest(jinzhu),
         '⑥进化陷阱': analyze_evolution_trap(weight_config, jinzhu),
         '⑦虚伪指数': analyze_hypocrisy(sections),
+        '⑧马斯克审视': analyze_musk_review(musk_pushes),
     }
 
     dim_labels = {
@@ -590,6 +704,7 @@ def analyze_evil(sections, jinzhu, weight_config):
         '⑤逆向回测': '🔄',
         '⑥进化陷阱': '⚖️',
         '⑦虚伪指数': '🎭',
+        '⑧马斯克审视': '🔮',
     }
 
     for dim_name, findings in dimensions.items():
