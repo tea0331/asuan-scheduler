@@ -2966,7 +2966,38 @@ if __name__ == '__main__':
         except Exception as e2:
             logging.error(f"[P0] 兜底写入也失败: {e2}")
 
-    # 7. 邮件发送已禁用（由 evil_reviewer.py 在 07:35 统一发送含东方朔评价的邮件）
+    # 7. 马斯克推演（追加到日报）
+    try:
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, 'musk_push.py'), today_str],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                full_content = f.read()
+            logging.info("[马斯克] ✅ 推演已追加到日报")
+        else:
+            logging.warning(f"[马斯克] 推演失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[马斯克] 推演异常: {e}，不阻塞")
+
+    # 8. 东方朔评论（追加到日报，发邮件）
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, 'evil_reviewer.py'), today_str],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                full_content = f.read()
+            logging.info("[东方朔] ✅ 评论已追加到日报")
+        else:
+            logging.warning(f"[东方朔] 评论失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[东方朔] 评论异常: {e}，不阻塞")
+
+    # 9. 邮件发送已禁用（由 evil_reviewer.py 在 07:35 统一发送含东方朔评价的邮件）
     logging.info("[邮件] 邮件发送已禁用，等待 evil_reviewer.py 在 07:35 统一发送")
 
     logging.info(f"========== 完成 {today_str} ==========")

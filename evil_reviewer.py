@@ -597,12 +597,15 @@ def generate_evil_advice(dimensions):
 
 
 def analyze_evil(sections, jinzhu, weight_config):
-    """东方朔邪修分析 v3.0 — 七维度毒舌版"""
+    """东方朔邪修分析 v4.1 — 八维度毒舌版"""
     lines = []
-    lines.append(f'【东方朔邪修评价 v3.0】{TODAY}')
+    lines.append(f'【东方朔邪修评价 v4.1】{TODAY}')
     lines.append('')
 
-    # 七维度分析
+    # 加载马斯克推演
+    musk_data = load_musk_pushes()
+
+    # 八维度分析
     dimensions = {
         '①自嗨检测': analyze_self_promotion(sections),
         '②因果谬误': analyze_causal_fallacy(sections),
@@ -611,6 +614,7 @@ def analyze_evil(sections, jinzhu, weight_config):
         '⑤逆向回测': analyze_reverse_backtest(jinzhu),
         '⑥进化陷阱': analyze_evolution_trap(weight_config, jinzhu),
         '⑦虚伪指数': analyze_hypocrisy(sections),
+        '⑧马斯克审视': analyze_musk_review_v2(musk_data),
     }
 
     dim_labels = {
@@ -621,6 +625,7 @@ def analyze_evil(sections, jinzhu, weight_config):
         '⑤逆向回测': '🔄',
         '⑥进化陷阱': '⚖️',
         '⑦虚伪指数': '🎭',
+        '⑧马斯克审视': '🔮',
     }
 
     for dim_name, findings in dimensions.items():
@@ -697,209 +702,56 @@ def main():
     print('✍️ 追加到日报末尾...')
     write_append(report_path, evil)
 
-    # 追加马斯克推演法律评估
-    print('📊 生成马斯克推演法律评估...')
-    try:
-        # 内嵌马斯克分析逻辑（避免函数定义顺序问题）
-        musk_push_path = os.path.join(MODULE_DIR, 'data/musk/musk-push.json')
-        if os.path.exists(musk_push_path):
-            with open(musk_push_path, 'r', encoding='utf-8') as f:
-                musk_data = json.load(f)
-            inference = musk_data.get('inference', {}).get('inference', '')
-            matched_laws = musk_data.get('matched_laws', [])
-            
-            report = '\n\n---\n\n## 第8维度：马斯克推演法律评估\n\n'
-            report += f'**1. 法律条文准确性：**\n'
-            if not matched_laws:
-                report += '⚠️ 马斯克未引用任何法律条文\n\n'
-            else:
-                report += f'✅ 引用了 {len(matched_laws)} 条法律条文\n\n'
-            
-            report += '**2. 合规评估完整性：**\n'
-            if 'data' in inference or '跨境' in inference:
-                report += '✅ 合规评估未发现重大遗漏\n\n'
-            else:
-                report += '⚠️ 合规评估可能遗漏\n\n'
-            
-            report += '**3. 合规变通质量：**\n'
-            if '建议咨询' in inference:
-                report += '⚠️ 合规变通含空话（建议咨询专业律师）\n\n'
-            else:
-                report += '✅ 合规变通有具体指引\n\n'
-            
-            report += '**总体评分：30/100**\n'
-            report += '🔴 法律评估不可靠，建议重新推演\n'
-            
-            with open(report_path, 'a', encoding='utf-8') as f:
-                f.write(report)
-            print('✅ 已追加马斯克推演到日报')
-        else:
-            print('⚠️ musk-push.json 不存在，跳过马斯克推演')
-    except Exception as e:
-        print(f'⚠️ 马斯克分析失败: {e}')
-
     print(f'✅ 完成，评价已追加到: {report_path}')
 
+def load_musk_pushes():
+    """加载马斯克推演数据"""
+    musk_path = os.path.join(MODULE_DIR, 'data/musk/musk-push.json')
+    if os.path.exists(musk_path):
+        try:
+            with open(musk_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
 
-if __name__ == '__main__':
-    main()
-    print('\n✅ evil_reviewer.py 执行完成（马斯克推演已在 main() 里追加）')
-import sqlite3
-import json
 
-def check_musk_law_accuracy(musk_push_path='data/musk/musk-push.json'):
-    """检查马斯克引用的法律条文是否准确"""
-    if not os.path.exists(musk_push_path):
-        return None
-    
-    with open(musk_push_path, 'r') as f:
-        musk_data = json.load(f)
-    
+def analyze_musk_review_v2(musk_data):
+    """第8维度：马斯克推演评论（v2，匹配新版 musk-push.json 格式）"""
+    findings = []
+
+    if not musk_data:
+        return ['今日无马斯克推演数据']
+
+    inference_text = musk_data.get('inference_text', '')
     matched_laws = musk_data.get('matched_laws', [])
+    evaluation = musk_data.get('self_evaluation', {})
+
+    # 1. 推演是否存在
+    if not inference_text or 'API调用失败' in inference_text:
+        findings.append('⚠️ 马斯克推演失败或为空')
+        findings.append('邪修点评: 推演都没跑出来，日报的马斯克板块是空的')
+        return findings
+
+    # 2. 法律条文引用
     if not matched_laws:
-        return "⚠️ 马斯克未引用任何法律条文"
-    
-    # 连接数据库核对
-    conn = sqlite3.connect('legal-knowledge/legal.db')
-    cursor = conn.cursor()
-    
-    accuracy_report = []
-    for law in matched_laws:
-        law_name = law.get('law_name', '')
-        article_number = law.get('article_number', '')
-        
-        cursor.execute("""
-            SELECT l.content FROM laws l
-            WHERE l.law_name = ? AND l.article_number = ?
-        """, (law_name, article_number))
-        
-        row = cursor.fetchone()
-        if row:
-            db_content = row[0]
-            # 简单比对：条文内容前30字是否匹配
-            if db_content[:30] in law.get('content', ''):
-                accuracy_report.append(f"✅ {law_name} {article_number}：准确")
-            else:
-                accuracy_report.append(f"⚠️ {law_name} {article_number}：内容不匹配")
-        else:
-            accuracy_report.append(f"❌ {law_name} {article_number}：数据库无此条文")
-    
-    conn.close()
-    return "\n".join(accuracy_report)
-
-def check_compliance_completeness(musk_push_path='data/musk/musk-push.json'):
-    """检查合规评估是否遗漏重要法条"""
-    if not os.path.exists(musk_push_path):
-        return None
-    
-    with open(musk_push_path, 'r') as f:
-        musk_data = json.load(f)
-    
-    inference_text = musk_data.get('inference', {}).get('inference', '')
-    matched_laws = musk_data.get('matched_laws', [])
-    
-    # 提取推演中的关键词
-    keywords = []
-    if '数据' in inference_text: keywords.append('数据')
-    if '跨境' in inference_text: keywords.append('跨境')
-    if '补贴' in inference_text: keywords.append('补贴')
-    if '绿电' in inference_text: keywords.append('绿电')
-    
-    # 去数据库查这些关键词有没有对应条文
-    conn = sqlite3.connect('legal-knowledge/legal.db')
-    cursor = conn.cursor()
-    
-    missing_laws = []
-    for kw in keywords:
-        cursor.execute("""
-            SELECT d.name, l.law_name, l.article_number
-            FROM domains d
-            JOIN laws l ON d.id = l.domain_id
-            WHERE d.name LIKE ? OR l.law_name LIKE ?
-            LIMIT 3
-        """, (f'%{kw}%', f'%{kw}%'))
-        
-        rows = cursor.fetchall()
-        if rows:
-            # 检查这些条文是否已被匹配
-            matched_refs = [(l['law_name'], l['article_number']) for l in matched_laws]
-            for row in rows:
-                if (row[1], row[2]) not in matched_refs:
-                    missing_laws.append(f"⚠️ 遗漏：{row[1]} {row[2]}（涉及{kw}）")
-    
-    conn.close()
-    
-    if missing_laws:
-        return "\n".join(missing_laws)
+        findings.append('⚠️ 马斯克未引用任何法律条文')
+        findings.append('邪修点评: 推演没有法律合规评估，等于裸奔')
     else:
-        return "✅ 合规评估未发现重大遗漏"
+        findings.append(f'✅ 马斯克引用了 {len(matched_laws)} 条法律条文')
 
-def evaluate_compliance_advice(musk_push_path='data/musk/musk-push.json'):
-    """评估合规变通方案是否真的合法"""
-    if not os.path.exists(musk_push_path):
-        return None
-    
-    with open(musk_push_path, 'r') as f:
-        musk_data = json.load(f)
-    
-    compliance = musk_data.get('compliance_assessment', '')
-    if not compliance:
-        return "⚠️ 无合规评估内容"
-    
-    # 检查是否包含空话
-    if '建议咨询专业律师' in compliance:
-        return "⚠️ 合规变通含空话（建议咨询专业律师）"
-    elif '遵守：' in compliance or '避免：' in compliance:
-        return "✅ 合规变通有具体指引"
-    else:
-        return "🟡 合规变通需进一步具体化"
+    # 3. 合规变通质量
+    if '建议咨询' in inference_text:
+        findings.append('⚠️ 推演含空话"建议咨询专业律师"')
+        findings.append('邪修点评: 合规变通要具体，不要"建议咨询律师"')
 
-def analyze_musk_review(musk_push_path='data/musk/musk-push.json'):
-    """第8维度：马斯克推演评论"""
-    accuracy = check_musk_law_accuracy(musk_push_path)
-    completeness = check_compliance_completeness(musk_push_path)
-    advice_quality = evaluate_compliance_advice(musk_push_path)
-    
-    report = "## 第8维度：马斯克推演法律评估\n\n"
-    report += f"**1. 法律条文准确性：**\n{accuracy}\n\n"
-    report += f"**2. 合规评估完整性：**\n{completeness}\n\n"
-    report += f"**3. 合规变通质量：**\n{advice_quality}\n\n"
-    
-    # 总体评分
-    score = 0
-    if accuracy and '✅' in accuracy: score += 40
-    if completeness and '✅' in completeness: score += 30
-    if advice_quality and '✅' in advice_quality: score += 30
-    
-    report += f"**总体评分：{score}/100**\n"
-    
-    if score >= 80:
-        report += "🟢 法律评估可靠，可以采信\n"
-    elif score >= 50:
-        report += "🟡 法律评估部分可靠，需人工复核\n"
-    else:
-        report += "🔴 法律评估不可靠，建议重新推演\n"
-    
-    return report
+    # 4. 自评估分数
+    total_score = evaluation.get('total_score', 0)
+    grade = evaluation.get('grade', '?')
+    if total_score < 60:
+        findings.append(f'⚠️ 马斯克自评估仅 {total_score}/100（{grade}级）')
+        findings.append('邪修点评: 推演质量不及格，下次需要深化')
+    elif total_score >= 75:
+        findings.append(f'✅ 马斯克自评估 {total_score}/100（{grade}级）')
 
-# 在 evil_reviewer 主逻辑中调用（示例）
-# if __name__ == '__main__':
-#     musk_review = analyze_musk_review()
-#     print(musk_review)
-
-
-# === 追加：马斯克推演评论（第8维度）===
-if os.path.exists('data/musk/musk-push.json'):
-    print("开始第8维度分析：马斯克推演法律评估...")
-    musk_review = analyze_musk_review()
-    print("✓ 第8维度分析完成")
-    print(musk_review)
-    
-    # 追加到东方朔评价末尾
-    output_path = 'output/latest_evil_review.md'
-    if os.path.exists(output_path):
-        with open(output_path, 'a') as f:
-            f.write("\n\n" + musk_review)
-        print(f"✓ 已追加马斯克评论到 {output_path}")
-else:
-    print("⚠️ 未找到 musk-push.json，跳过第8维度分析")
+    return findings if findings else ['马斯克推演今日无明显问题']
