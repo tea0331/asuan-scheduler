@@ -18,16 +18,6 @@ import sys
 import re
 import json
 import logging
-
-# 加载 .env
-env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-if os.path.exists(env_file):
-    with open(env_file) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                k, v = line.split('=', 1)
-                os.environ.setdefault(k.strip(), v.strip())
 import hashlib
 import smtplib
 import random
@@ -665,12 +655,33 @@ def _match_impact_chain(title):
 
 
 def _inject_shortage_alert(content, top_items):
-    """V19: 强制接管板块二 — 已禁用（板块二「资源短缺预警」已删除）
+    """V19: 强制接管板块二 — 用资源短缺预警替代缺口扫描话术
 
-    日报已精简为4板块，资源短缺预警功能并入马斯克推演。
-    此函数直接返回原内容，不做注入。
+    AI输出全部丢弃，代码层用影响链模板生成短缺预警。
     """
-    return content
+    gap_header = "## 三、")
+        if insert_point == -1:
+            insert_point = content.find("\n## 一、")
+            if insert_point == -1:
+                return content + "\n\n" + code_gap
+            next_section = content.find("\n## ", insert_point + 10)
+            if next_section == -1:
+                next_section = len(content)
+            return content[:next_section] + "\n" + code_gap + "\n" + content[next_section:]
+        return content[:insert_point] + "\n" + code_gap + "\n" + content[insert_point:]
+
+    # AI生成了缺口扫描 → 找到并替换
+    gap_start = content.find(gap_header)
+    # 也匹配V19的新标题
+    new_header = "## 三、", "\n## 四、", "\n## 五、", "\n## 六、"]:
+        gap_end = content.find(marker, gap_start + 10)
+        if gap_end != -1:
+            break
+    if gap_end == -1:
+        gap_end = len(content)
+
+    return content[:gap_start] + code_gap + content[gap_end:]
+
 
 def _load_xie_xiu_memory():
     """加载邪修记忆库（冷启动自动初始化）"""
@@ -1657,8 +1668,7 @@ def generate_all_sections():
   > 1. 重大签署: 任何国家间的协议/贷款/合作签署（中美/中欧/中日/美日等），直接改变供应链结构
   > 2. 国内新规: 国务院/部委/省级新政策/新办法/新指导意见，直接改变供需规则
   > 3. AI/算力/信息化: GPU/芯片/大模型/数据中心/算力基建，直接改变算力供需结构
-  > 4. 供需断裂: 暴涨/暴跌/断供/缺货/减产/停产/紧缺/供不应求，直接暴露断裂位置（短缺传导路径并入马斯克推演）
-  > 4b. 避坑信号: 看似机会实则是坑→止损方式并入马斯克合规评估
+  > 4. 供需断裂: 暴涨/暴跌/断供/缺货/减产/停产/紧缺/供不应求，直接暴露断裂位置
   > 5. 产能变化: 投产/复产/扩产/检修/减值/资产减值，直接改变供给量
   > 6. 地缘/通道: 海峡/港口/航线/封锁/通航/制裁/出口管制，直接改变资源可达性
   > 7. 农产品/贵金属产量预警: 减产/歉收/丰收/种植面积变化/开采量下降，直接改变大宗供给
@@ -1806,19 +1816,6 @@ def _patch_missing_sections(content, top_items, missing_headers):
         if len(candidate) < 50:
             candidate += " —— 邪修原则：不赌涨跌，只吃信息费；不追热点，只找断层。"
     return content
-
-
-def _fallback_contra_tide(top_items):
-    """逆潮观察降级: 从top_items找反直觉信号"""
-    lines = ["## 三、逆潮观察\n"]
-    # 找价格跌/供应增的反直觉新闻
-    contra = [n for n in top_items if any(k in n.get('title', '') for k in ['跌', '降', '过剩', '库存'])] or top_items[:1]
-    for item in contra[:2]:
-        title = item.get('title', '未知')
-        src = item.get('source', '未知')
-        lines.append(f"- **{title}** ({src})\n")
-        lines.append(f"  > 逆潮信号: 表面利空，关注资金是否借机吸筹\n")
-    return ''.join(lines)
 
 
 # ============================================================
@@ -2462,22 +2459,9 @@ def _fallback_deep_chain(top_items):
     return "\n".join(lines)
 
 
-def _fallback_quote(top_items):
-    """邪修金句降级: 从top_items提取金句"""
-    import random
-    templates = [
-        "信息差永远存在，关键是找到那个愿意为信息付费的人。",
-        "不赌涨跌，只吃信息费；不追热点，只找断层。",
-        "真正的机会不在新闻里，而在新闻背后的传导链里。",
-        "市场永远奖励第一个发现断层的人。",
-        "邪修之道：别人看价格，我们看供需；别人看供需，我们看传导。"
-    ]
-    return f"## 六、今日邪修金句\n\n💭 {random.choice(templates)}"
-
-
 def _fallback_pitfall(top_items):
     """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
-    lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"]
+    lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
 
     top = top_items[0]
     title = top.get('title', '未知')
@@ -2806,18 +2790,12 @@ def generate_lottery_section():
                     if game_recs:
                         lines.append(f'### {game_label}')
                         for i, rec in enumerate(game_recs[:5]):
-                            # V21: 适配实际字段格式 reds+blue(SSQ/DLT) 或 digits/numbers
-                            if 'reds' in rec and 'blue' in rec:
-                                reds = rec['reds']
-                                blue = rec['blue']
-                                fmt = ' '.join(str(int(r)) for r in reds) + '  +  ' + str(int(blue))
-                            elif 'digits' in rec:
-                                fmt = ' '.join(str(int(d)) for d in rec['digits'])
-                            elif 'numbers' in rec:
-                                fmt = ' '.join(str(int(n)) for n in rec['numbers'])
+                            digits = rec.get('digits', rec.get('numbers', rec))
+                            if isinstance(digits, list):
+                                fmt = ' '.join(str(int(d)) for d in digits)
                             else:
                                 fmt = str(rec)
-                            lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", rec.get("strategy", "策略"))}]')
+                            lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
                         lines.append('')
                 if not recs:
                     lines.append('（推荐数据暂未同步，下次自动恢复）\n')
@@ -2868,21 +2846,14 @@ def generate_taiwan_section():
                     if game_recs:
                         lines.append(f'### {game_label}')
                         for i, rec in enumerate(game_recs[:5]):
-                            # V21: 适配 reds+blue 格式（JinZhu输出）或 numbers/digits
-                            if 'reds' in rec and 'blue' in rec:
-                                reds = rec['reds']
-                                blue = rec['blue']
-                                fmt = ' '.join(str(int(r)) for r in reds) + '  + 特别号 ' + str(int(blue))
-                            elif 'numbers' in rec:
-                                nums = rec['numbers']
-                                if isinstance(nums, list) and len(nums) >= 7:
+                            nums = rec.get('numbers', rec.get('digits', []))
+                            if isinstance(nums, list):
+                                if len(nums) >= 7:
                                     main_nums = nums[:6]
                                     special = nums[6]
                                     fmt = f"主号 {' '.join(str(int(n)) for n in main_nums)} + 特别号 {special}"
                                 else:
-                                    fmt = ' '.join(str(int(n)) for n in nums) if isinstance(nums, list) else str(rec)
-                            elif 'digits' in rec:
-                                fmt = ' '.join(str(int(d)) for d in rec['digits'])
+                                    fmt = ' '.join(str(int(n)) for n in nums)
                             else:
                                 fmt = str(rec)
                             lines.append(f'注{i+1}: {fmt}  [{rec.get("strategy", "策略")}]')
@@ -2966,7 +2937,14 @@ if __name__ == '__main__':
         except Exception as e2:
             logging.error(f"[P0] 兜底写入也失败: {e2}")
 
-    # 7. 邮件发送已禁用（由 evil_reviewer.py 在 07:35 统一发送含东方朔评价的邮件）
-    logging.info("[邮件] 邮件发送已禁用，等待 evil_reviewer.py 在 07:35 统一发送")
+    # 7. 发邮件
+    if not SMTP_PASS:
+        logging.warning("[P1] SMTP密码未配置，跳过邮件发送")
+    else:
+        try:  # 已禁用 Pool
+            subject = '阿算帮刘老板发财日报 | ' + today_str
+            send_email(subject, full_content)
+        except Exception as e:
+            logging.error(f"[P1] 邮件发送异常: {e}")
 
     logging.info(f"========== 完成 {today_str} ==========")
