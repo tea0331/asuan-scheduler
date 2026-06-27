@@ -48,6 +48,9 @@ def send_email(report_path, date_str):
     with open(report_path, 'r', encoding='utf-8') as f:
         full_body = f.read()
 
+    print(f'📧 发送邮件: {report_path} ({len(full_body)}字符)')
+    print(f'   包含马斯克: {"第8维度" in full_body}')
+
     msg = MIMEMultipart('alternative')
     msg['Subject'] = f'阿算帮刘老板发财日报 | {date_str}（含东方朔邪修评价 + 马斯克推演）'
     msg['From'] = smtp_user

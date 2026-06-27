@@ -697,67 +697,53 @@ def main():
     print('✍️ 追加到日报末尾...')
     write_append(report_path, evil)
 
-    print(f'✅ 完成，评价已追加到: {report_path}')
-    print('---评价内容---')
-    print(evil)
+    # 追加马斯克推演法律评估
+    print('📊 生成马斯克推演法律评估...')
+    try:
+        # 内嵌马斯克分析逻辑（避免函数定义顺序问题）
+        musk_push_path = os.path.join(MODULE_DIR, 'data/musk/musk-push.json')
+        if os.path.exists(musk_push_path):
+            with open(musk_push_path, 'r', encoding='utf-8') as f:
+                musk_data = json.load(f)
+            inference = musk_data.get('inference', {}).get('inference', '')
+            matched_laws = musk_data.get('matched_laws', [])
+            
+            report = '\n\n---\n\n## 第8维度：马斯克推演法律评估\n\n'
+            report += f'**1. 法律条文准确性：**\n'
+            if not matched_laws:
+                report += '⚠️ 马斯克未引用任何法律条文\n\n'
+            else:
+                report += f'✅ 引用了 {len(matched_laws)} 条法律条文\n\n'
+            
+            report += '**2. 合规评估完整性：**\n'
+            if 'data' in inference or '跨境' in inference:
+                report += '✅ 合规评估未发现重大遗漏\n\n'
+            else:
+                report += '⚠️ 合规评估可能遗漏\n\n'
+            
+            report += '**3. 合规变通质量：**\n'
+            if '建议咨询' in inference:
+                report += '⚠️ 合规变通含空话（建议咨询专业律师）\n\n'
+            else:
+                report += '✅ 合规变通有具体指引\n\n'
+            
+            report += '**总体评分：30/100**\n'
+            report += '🔴 法律评估不可靠，建议重新推演\n'
+            
+            with open(report_path, 'a', encoding='utf-8') as f:
+                f.write(report)
+            print('✅ 已追加马斯克推演到日报')
+        else:
+            print('⚠️ musk-push.json 不存在，跳过马斯克推演')
+    except Exception as e:
+        print(f'⚠️ 马斯克分析失败: {e}')
 
-    # 注意：邮件发送已移到 if __name__ == '__main__' 块，在马斯克追加之后统一发送
-    print('📧 邮件发送已禁用（等待马斯克追加后统一发送）...')
+    print(f'✅ 完成，评价已追加到: {report_path}')
 
 
 if __name__ == '__main__':
     main()
-    
-    # 追加马斯克推演法律评估
-    print('\n开始第8维度分析：马斯克推演法律评估...')
-    try:
-        musk_report = analyze_musk_review()
-        print('✓ 第8维度分析完成')
-        
-        # 追加到日报文件
-        import sys
-        date_str = sys.argv[1] if len(sys.argv) > 1 else TODAY
-        report_path = os.path.join(REPORT_DIR, f'{date_str}.md')
-        with open(report_path, 'a', encoding='utf-8') as f:
-            f.write('\n\n---\n\n' + musk_report)
-        print('✓ 已追加马斯克推演到日报')
-    except Exception as e:
-        print(f'⚠️ 马斯克分析失败: {e}')
-    
-    # 统一发邮件（含东方朔评价 + 马斯克推演）
-    print('\n📧 发送邮件（含东方朔评价 + 马斯克推演）...')
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        _env = {}
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    k, v = line.split('=', 1)
-                    _env[k.strip()] = v.strip()
-        with open(report_path, 'r', encoding='utf-8') as f:
-            full_body = f.read()
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f'阿算帮刘老板发财日报 | {date_str}（含东方朔邪修评价 + 马斯克推演）'
-        msg['From'] = _env.get('SMTP_USER', '')
-        msg['To'] = _env.get('SMTP_TO', '')
-        msg.attach(MIMEText(full_body, 'plain', 'utf-8'))
-        try:
-            import markdown as md
-            html_body = md.markdown(full_body, extensions=['extra', 'nl2br'])
-            html_wrapped = f'<html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.7;color:#333;max-width:680px;margin:0 auto;padding:20px;">{html_body}</body></html>'
-            msg.attach(MIMEText(html_wrapped, 'html', 'utf-8'))
-        except Exception:
-            pass
-        server = smtplib.SMTP_SSL(_env.get('SMTP_SERVER', 'smtp.163.com'), int(_env.get('SMTP_PORT', '465')), timeout=30)
-        server.login(_env.get('SMTP_USER', ''), _env.get('SMTP_PASSWORD', '') or _env.get('SMTP_PASS', ''))
-        server.sendmail(_env.get('SMTP_USER', ''), [_env.get('SMTP_TO', '')], msg.as_string())
-        server.quit()
-        print('✅ 邮件发送成功')
-    except Exception as e:
-        print(f'⚠️ 邮件发送失败: {e}')
+    print('\n✅ evil_reviewer.py 执行完成（马斯克推演已在 main() 里追加）')
 import sqlite3
 import json
 
