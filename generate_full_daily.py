@@ -18,6 +18,16 @@ import sys
 import re
 import json
 import logging
+
+# 加载 .env
+env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.exists(env_file):
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                os.environ.setdefault(k.strip(), v.strip())
 import hashlib
 import smtplib
 import random
@@ -662,7 +672,7 @@ def _inject_shortage_alert(content, top_items):
     """
     return content
 
-def _load_xie_xiu_memorydef _load_xie_xiu_memory():
+def _load_xie_xiu_memory():
     """加载邪修记忆库（冷启动自动初始化）"""
     if os.path.exists(XIE_XIU_MEMORY_PATH):
         try:  # 已禁用 Pool
@@ -1798,6 +1808,19 @@ def _patch_missing_sections(content, top_items, missing_headers):
     return content
 
 
+def _fallback_contra_tide(top_items):
+    """逆潮观察降级: 从top_items找反直觉信号"""
+    lines = ["## 三、逆潮观察\n"]
+    # 找价格跌/供应增的反直觉新闻
+    contra = [n for n in top_items if any(k in n.get('title', '') for k in ['跌', '降', '过剩', '库存'])] or top_items[:1]
+    for item in contra[:2]:
+        title = item.get('title', '未知')
+        src = item.get('source', '未知')
+        lines.append(f"- **{title}** ({src})\n")
+        lines.append(f"  > 逆潮信号: 表面利空，关注资金是否借机吸筹\n")
+    return ''.join(lines)
+
+
 # ============================================================
 # 降级路径: 基于关键词推断生成6板块
 # ============================================================
@@ -2441,7 +2464,7 @@ def _fallback_deep_chain(top_items):
 
 def _fallback_pitfall(top_items):
     """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
-    lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"
+    lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"]
 
     top = top_items[0]
     title = top.get('title', '未知')
