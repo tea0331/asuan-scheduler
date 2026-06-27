@@ -2462,6 +2462,19 @@ def _fallback_deep_chain(top_items):
     return "\n".join(lines)
 
 
+def _fallback_quote(top_items):
+    """邪修金句降级: 从top_items提取金句"""
+    import random
+    templates = [
+        "信息差永远存在，关键是找到那个愿意为信息付费的人。",
+        "不赌涨跌，只吃信息费；不追热点，只找断层。",
+        "真正的机会不在新闻里，而在新闻背后的传导链里。",
+        "市场永远奖励第一个发现断层的人。",
+        "邪修之道：别人看价格，我们看供需；别人看供需，我们看传导。"
+    ]
+    return f"## 六、今日邪修金句\n\n💭 {random.choice(templates)}"
+
+
 def _fallback_pitfall(top_items):
     """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
     lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"]
