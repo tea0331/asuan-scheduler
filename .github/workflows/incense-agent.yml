@@ -1,0 +1,144 @@
+name: 🕯️ 刘志俊的供香使者
+
+# 刘志俊的供香使者 — 每日为三位神明上香
+# 不对外开放，不显示在页面
+# 仅供老板私人供奉使用
+
+on:
+  schedule:
+    # 每天 UTC 01:00（北京时间 09:00）— 晨香
+    - cron: '0 1 * * *'
+    # 每天 UTC 11:00（北京时间 19:00）— 晚香
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  offer-incense:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    
+    steps:
+      - name: 🔐 验证身份
+        run: |
+          echo "=========================================="
+          echo "  刘志俊的供香使者"
+          echo "  私人供奉 · 不对外开放"
+          echo "=========================================="
+          echo ""
+          echo "🪪 身份：刘志俊私人供香代理人"
+          echo "🕐 执行时间：$(TZ='Asia/Shanghai' date '+%Y年%m月%d日 %H:%M')"
+          echo "📋 任务：向三位神明各上三炷香"
+          echo ""
+
+      - name: 🕯️ 正殿 · 正一龙虎玄坛真君财神赵公明
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  正  一  龙  虎  玄  坛  真  君"
+          echo "  财      神      赵      公      明"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🕯️ 上香时间：$(TZ='Asia/Shanghai' date '+%Y年%m月%d日 %H:%M')"
+          echo ""
+          echo "🙏 第一炷 · 招财香"
+          echo "   供养：正一龙虎玄坛真君财神赵公明"
+          echo "   祈愿：刘志俊财运亨通 · 财源广进 · 生意兴隆"
+          echo "   诵念：金龙如意正一龙虎玄坛真君护佑"
+          echo ""
+          echo "🙏 第二炷 · 平安香"
+          echo "   供养：正一龙虎玄坛真君财神赵公明"
+          echo "   祈愿：刘志俊家宅平安 · 身体健康 · 出入顺利"
+          echo "   诵念：赵公元帅驱雷役电镇宅保平安"
+          echo ""
+          echo "🙏 第三炷 · 事业香"
+          echo "   供养：正一龙虎玄坛真君财神赵公明"
+          echo "   祈愿：刘志俊事业有成 · 贵人相助 · 步步高升"
+          echo "   诵念：招财进宝纳珍利市四仙辅佐"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ 赵公明三炷香已燃 · 功德+30 · 财运+15"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+      - name: 🏠 偏殿 · 福德正神土地公土地母
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  福      德      正      神"
+          echo "  土地公 · 土地母"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🕯️ 上香时间：$(TZ='Asia/Shanghai' date '+%Y年%m月%d日 %H:%M')"
+          echo ""
+          echo "🙏 第一炷 · 丰登香"
+          echo "   供养：福德正神土地公"
+          echo "   祈愿：刘志俊五谷丰登 · 收成丰厚"
+          echo "   诵念：福德正神保佑风调雨顺"
+          echo ""
+          echo "🙏 第二炷 · 安宅香"
+          echo "   供养：福德正神土地公 · 土地母"
+          echo "   祈愿：刘志俊家宅安宁 · 四季平安"
+          echo "   诵念：土地公土地母护佑一方平安"
+          echo ""
+          echo "🙏 第三炷 · 福德香"
+          echo "   供养：土地母"
+          echo "   祈愿：刘志俊福德绵长 · 子孙昌盛"
+          echo "   诵念：土地母赐福纳祥绵绵不绝"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ 土地公土地母三炷香已燃 · 功德+30 · 福德+15"
+          echo "  🔒 偏殿待老板请示后对外开放"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+      - name: 🌊 偏殿 · 天上圣母妈祖
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  天  上  圣  母"
+          echo "  护海女神 · 妈祖"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🕯️ 上香时间：$(TZ='Asia/Shanghai' date '+%Y年%m月%d日 %H:%M')"
+          echo ""
+          echo "🙏 第一炷 · 平安香"
+          echo "   供养：天上圣母妈祖"
+          echo "   祈愿：刘志俊出入平安 · 出海平安 · 行路平安"
+          echo "   诵念：妈祖娘娘护佑平安吉祥"
+          echo ""
+          echo "🙏 第二炷 · 顺遂香"
+          echo "   供养：天上圣母妈祖"
+          echo "   祈愿：刘志俊风调雨顺 · 万事顺遂"
+          echo "   诵念：妈祖慈航普度泽被苍生"
+          echo ""
+          echo "🙏 第三炷 · 解厄香"
+          echo "   供养：天上圣母妈祖"
+          echo "   祈愿：刘志俊消灾解厄 · 化险为夷"
+          echo "   诵念：妈祖千里眼顺风耳护佑驱邪"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ 妈祖三炷香已燃 · 功德+30 · 护佑+15"
+          echo "  🔒 偏殿待老板赴湄洲岛请示后对外开放"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+      - name: 📋 供香记录
+        run: |
+          HOUR=$(TZ='Asia/Shanghai' date '+%H')
+          if [ "$HOUR" -lt 12 ]; then
+            PERIOD="晨香"
+          else
+            PERIOD="晚香"
+          fi
+          
+          echo "## 🕯️ 刘志俊的供香记录" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**${PERIOD}** · $(TZ='Asia/Shanghai' date '+%Y年%m月%d日 %H:%M CST')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 神明 | 第一炷 | 第二炷 | 第三炷 | 功德 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|--------|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 赵公明 | 招财香 | 平安香 | 事业香 | +30 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 土地公土地母 | 丰登香 | 安宅香 | 福德香 | +30 |" >> $GITHUB_STEP_SUMMARY
+          echo "| 妈祖 | 平安香 | 顺遂香 | 解厄香 | +30 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**今日累计功德**：+90（晨香+晚香共18炷）" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*此供香记录为刘志俊私人供奉，不对外公开*" >> $GITHUB_STEP_SUMMARY

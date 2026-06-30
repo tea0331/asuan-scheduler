@@ -1,0 +1,56 @@
+__pycache__/
+*.pyc
+*.log
+*.db
+*.sqlite
+
+# 运行时生成的数据文件（不应入库）
+lottery-backtest.json
+lottery-predictions.json
+lottery-alerts.json
+lottery-digest.json
+xie_xiu_memory.json
+jinzhu_analysis.json
+evil_review_*.md
+sent-log.json*
+toku-daily-report.md
+
+# 环境和进程文件
+daemon.pid
+scheduler.pid
+
+# 摆设文件/工具脚本（不入库）
+audit.py
+toku_agent.py
+diagnose_git_push.sh
+FIX_REPORT.md
+TEST_CHECKLIST.md
+orchestrator_notice_for_ace.md
+orchestrator_ops_guide_for_ace.md
+scheduler.py
+send-lottery-email.py
+virtual_users.json
+
+# V20: 一次性通知/验证报告/任务清单 — 用完即弃，不入库
+阿策通知_*
+阿策答复_*
+ace_verification_report_*
+ace_final_verification_*
+PLN启动任务清单_*
+
+# V20: 图片/二进制文件不入库
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+
+# V20: reports目录只保留当前报告
+reports/*_recommendation_*.md
+.env
+
+# v8.6: 分步执行缓存目录（不入库）
+cache/
+
+# self-improving-agent Learnings（不提交）
+.learnings/
