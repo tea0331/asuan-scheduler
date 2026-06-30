@@ -2777,7 +2777,8 @@ def send_email(subject, body):
 def generate_lottery_section():
     """读取 JinZhu 输出的推荐结果，不 import JinZhu 代码"""
     import json
-    # V21: 优先读 asuan-jinzhu 的输出，降级读本地
+    import os
+    import sqlite3
     jinzhu_output = "/root/asuan-jinzhu/lottery-predictions.json"
     local_output = os.path.join(MODULE_DIR, 'lottery-predictions.json')
 
