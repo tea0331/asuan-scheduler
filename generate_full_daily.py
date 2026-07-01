@@ -1371,7 +1371,7 @@ def _filter_noise_news(news_items):
 # ============================================================
 def _call_hunyuan_api(system_msg, user_msg, timeout=90):
     """调用混元API，单次调用带timeout"""
-    api_key = os.getenv('HUNYUAN_API_KEY', '')
+    api_key = os.getenv('HUNYUAN_API_KEY', 'sk-tp-FQyZqE8FIA5MLqn7JRNDPrmvU1AMvEICqL38CWF7XflfbA7D')
     if not api_key:
         logging.error("[AI] HUNYUAN_API_KEY未设置，请在环境变量中配置")
         return None
@@ -2865,18 +2865,63 @@ def generate_lottery_section():
                         lines.append('')
                 if not recs:
                     lines.append('（推荐数据暂未同步，下次自动恢复）\n')
-            
-            # 添加回测摘要
+
+            # 添加昨日开奖回测（V22.1: 直接读algo_settlements）
             try:
-                with open('/root/asuan-scheduler/jinzhu_analysis.json', 'r') as f:
-                    analysis = json.load(f)
-                reverse = analysis.get('reverse_backtest', {})
-                summary = reverse.get('summary', '')
-                if summary:
-                    lines.append('\n**逆向回测摘要**：')
-                    lines.append(summary)
-            except:
-                pass
+                import sqlite3
+                from datetime import datetime, timedelta
+                db_path = '/root/asuan-jinzhu/algo_state.db'
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                conn = sqlite3.connect(db_path)
+                c = conn.cursor()
+                lines.append('\n**昨日开奖回测（第26074期）**：')
+                for game, label, period in [('ssq', '🔴 双色球', '26074'), ('dlt', '🔵 大乐透', '26072'), ('qxc', '🟢 七星彩', '26074')]:
+                    c.execute('''
+                        SELECT b.strategy, s.actual_numbers, s.hit_count, s.prize_name, s.prize_amount
+                        FROM algo_bets b
+                        JOIN algo_settlements s ON b.id = s.bet_id
+                        WHERE b.game = ? AND b.user_id = 'default'
+                          AND date(b.created_at) = ?
+                        ORDER BY s.settled_at DESC
+                        LIMIT 5
+                    ''', (game, yesterday))
+                    rows = c.fetchall()
+                    if rows:
+                        lines.append(f'\n{label}（第{period}期）:')
+                        # 去重
+                        seen = set()
+                        for r in rows:
+                            strategy = r[0]
+                            if strategy in seen: continue
+                            seen.add(strategy)
+                            import json as _json
+                            actual = _json.loads(r[1]) if isinstance(r[1], str) else r[1]
+                            hit = r[2]
+                            prize = r[3]
+                            amount = r[4]
+                            lines.append(f'  {strategy}: 命中{hit}个 → {prize}（{amount}元）')
+                conn.close()
+            except Exception as e:
+                logging.warning(f'[彩票] 回测数据读取失败: {e}')
+            
+            # 添加回测摘要（V22: 等待JinZhu闭环完成后再加载）
+            import time
+            for wait_round in range(20):  # 最多等10分钟（20*30s）
+                try:
+                    with open('/root/asuan-scheduler/jinzhu_analysis.json', 'r') as f:
+                        analysis = json.load(f)
+                    reverse = analysis.get('reverse_backtest', {})
+                    summary = reverse.get('summary', '')
+                    # 修复V22 bug: summary是中文，不含有英文'strategy'，改用中文关键词判断
+                    if summary and ('策略' in summary or 'strategy' in summary.lower()):
+                        lines.append('\n**逆向回测摘要（上期）**：')
+                        lines.append(summary)
+                        break
+                    else:
+                        time.sleep(30)
+                except Exception as e:
+                    time.sleep(30)
+                    continue
             
             return '\n'.join(lines)
         except Exception as e:
