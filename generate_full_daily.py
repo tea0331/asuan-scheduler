@@ -1369,31 +1369,31 @@ def _filter_noise_news(news_items):
 # ============================================================
 # AI调用
 # ============================================================
-def _call_hunyuan_api(system_msg, user_msg, timeout=90):
-    """调用混元API，单次调用带timeout"""
-    api_key = os.getenv('HUNYUAN_API_KEY', '')
+def _call_deepseek_api(system_msg, user_msg, timeout=90):
+    """调用DeepSeek V4 Flash"""
+    api_key = os.getenv('DEEPSEEK_API_KEY', '')
     if not api_key:
-        logging.error("[AI] HUNYUAN_API_KEY未设置，请在环境变量中配置")
+        logging.error("[AI] DEEPSEEK_API_KEY未设置，请在环境变量中配置")
         return None
-    url = "https://api.lkeap.cloud.tencent.com/plan/v3/chat/completions"
+    url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "hy3-preview",
+        "model": "deepseek-v4-flash",
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg}
         ],
-        "max_tokens": 6000,
-        "temperature": 0.75,
+        "max_tokens": 8000,
+        "temperature": 0.7,
     }
 
     try:
-        logging.info(f"[AI] 开始调用混元API: model=hy3-preview, system_msg长度={len(system_msg)}, user_msg长度={len(user_msg)}")
+        logging.info(f"[AI] 开始调用DeepSeek: model=deepseek-v4-flash, system_msg长度={len(system_msg)}, user_msg长度={len(user_msg)}")
         resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
-        logging.info(f"[AI] 混元API响应: status={resp.status_code}, 长度={len(resp.text)}")
+        logging.info(f"[AI] DeepSeek响应: status={resp.status_code}, 长度={len(resp.text)}")
         if resp.status_code == 200:
             result = resp.json()
             content = result['choices'][0]['message']['content']
@@ -1407,7 +1407,7 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
                 content = content[:-3]
             return content.strip()
         elif resp.status_code == 429 or (resp.status_code == 400 and 'rate_limit' in resp.text):
-            logging.warning("[AI] 混元API限流，等待5秒重试...")
+            logging.warning("[AI] DeepSeek限流，等待5秒重试...")
             import time; time.sleep(5)
             resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
             if resp.status_code == 200:
@@ -1417,13 +1417,13 @@ def _call_hunyuan_api(system_msg, user_msg, timeout=90):
                 logging.warning(f"[AI] 重试仍失败: {resp.status_code}")
                 return None
         else:
-            logging.warning(f"[AI] 混元API失败: {resp.status_code} {resp.text[:200]}")
+            logging.warning(f"[AI] DeepSeek失败: {resp.status_code} {resp.text[:200]}")
             return None
     except requests.exceptions.Timeout:
-        logging.warning(f"[AI] 混元API超时({timeout}秒)")
+        logging.warning(f"[AI] DeepSeek超时({timeout}秒)")
         return None
     except Exception as e:
-        logging.warning(f"[AI] 混元API异常: {e}")
+        logging.warning(f"[AI] DeepSeek异常: {e}")
         return None
 
 
@@ -1729,7 +1729,7 @@ def generate_all_sections():
     # 5. 调用AI生成 (外层超时180秒)
     try:
         content = _run_with_timeout(
-            lambda: _call_hunyuan_api(system_msg, user_msg, timeout=120),
+            lambda: _call_deepseek_api(system_msg, user_msg, timeout=120),
             timeout=180
         )
         if content and len(content) > 500:
@@ -2866,48 +2866,84 @@ def generate_lottery_section():
                 if not recs:
                     lines.append('（推荐数据暂未同步，下次自动恢复）\n')
 
-            # 添加昨日开奖回测（V22.2: 直接读algo_settlements，期号动态查询）
+            # 添加昨日开奖回测（V22.3: 仅显示有开奖的彩种+展示推荐号码vs实际号码）
             try:
                 import sqlite3 as _sqlite3
                 from datetime import datetime as _dt, timedelta as _td
                 db_path = '/root/asuan-jinzhu/algo_state.db'
                 yesterday = (_dt.now() - _td(days=1)).strftime('%Y-%m-%d')
+                # 彩种开奖日映射：weekday() Mon=0 ~ Sun=6
+                # SSQ: 二/四/日(1,3,6)  DLT: 一/三/六(0,2,5)  QXC: 二/五/日(1,4,6)
+                draw_schedule = {'ssq': (1,3,6), 'dlt': (0,2,5), 'qxc': (1,4,6)}
+                yesterday_wd = (_dt.now() - _td(days=1)).weekday()
                 conn = _sqlite3.connect(db_path)
                 c = conn.cursor()
                 lines.append('\n**昨日开奖回测**：')
                 for game, label in [('ssq', '🔴 双色球'), ('dlt', '🔵 大乐透'), ('qxc', '🟢 七星彩')]:
-                    # 动态查期号
+                    # 跳过非开奖日彩种
+                    if yesterday_wd not in draw_schedule.get(game, ()):
+                        continue
+                    # 查期号
                     c.execute('''
-                        SELECT s.period FROM algo_settlements s
-                        JOIN algo_bets b ON b.id = s.bet_id
-                        WHERE b.game = ? AND date(b.created_at) = ?
-                        ORDER BY s.settled_at DESC LIMIT 1
+                        SELECT b.date FROM algo_bets b
+                        WHERE b.game = ? AND b.user_id = 'default' AND date(b.created_at) = ?
+                        ORDER BY b.created_at DESC LIMIT 1
                     ''', (game, yesterday))
                     period_row = c.fetchone()
                     period = period_row[0] if period_row else '?'
-                    # 查回测结果
+                    # 查回测结果（含推荐号码和实际号码）
                     c.execute('''
-                        SELECT b.strategy, s.actual_numbers, s.hit_count, s.prize_name, s.prize_amount
+                        SELECT b.strategy, s.actual_numbers, s.hit_count, s.prize_name, s.prize_amount, b.numbers
                         FROM algo_bets b
                         JOIN algo_settlements s ON b.id = s.bet_id
                         WHERE b.game = ? AND b.user_id = 'default'
                           AND date(b.created_at) = ?
                         ORDER BY s.settled_at DESC
-                        LIMIT 5
                     ''', (game, yesterday))
                     rows = c.fetchall()
                     if rows:
-                        lines.append(f'\n{label}（第{period}期）:')
+                        # 实际号码格式化
+                        first_actual = json.loads(rows[0][1]) if isinstance(rows[0][1], str) else rows[0][1]
+                        if game == 'ssq':
+                            period_str = first_actual.get('period', period)
+                            reds = first_actual.get('reds', [])
+                            blue = first_actual.get('blue', '')
+                            actual_str = f"红球: {' '.join(map(str, reds))}  蓝球: {blue}"
+                        elif game == 'dlt':
+                            period_str = first_actual.get('period', period)
+                            front = first_actual.get('front', [])
+                            back = first_actual.get('back', [])
+                            actual_str = f"前区: {' '.join(map(str, front))}  后区: {' '.join(map(str, back))}"
+                        else:  # qxc
+                            period_str = first_actual.get('period', period)
+                            digits = first_actual.get('digits', [])
+                            actual_str = f"号码: {' '.join(map(str, digits))}"
+                        lines.append(f'\n{label}（第{period_str}期）')
+                        lines.append(f'  📊 开奖号码: {actual_str}')
                         seen = set()
                         for r in rows:
                             strategy = r[0]
                             if strategy in seen: continue
                             seen.add(strategy)
-                            actual = json.loads(r[1]) if isinstance(r[1], str) else r[1]
+                            pred_raw = r[5]
                             hit = r[2]
                             prize = r[3]
                             amount = r[4]
-                            lines.append(f'  {strategy}: 命中{hit}个 → {prize}（{amount}元）')
+                            # 格式化推荐号码
+                            pred_str = ''
+                            if pred_raw:
+                                try:
+                                    pred = json.loads(pred_raw) if isinstance(pred_raw, str) else pred_raw
+                                    if game == 'ssq':
+                                        pred_str = f"推荐: {' '.join(map(str, pred.get('reds',[])))} + {pred.get('blue','?')}"
+                                    elif game == 'dlt':
+                                        pred_str = f"推荐: {' '.join(map(str, pred.get('front',[])))} + {' '.join(map(str, pred.get('back',[])))}"
+                                    else:  # qxc
+                                        pred_str = f"推荐: {' '.join(map(str, pred.get('digits',[])))}"
+                                except Exception:
+                                    pred_str = ''
+                            lines.append(f'  {strategy}: {pred_str}')
+                            lines.append(f'    → 命中{hit}个 | {prize}（{amount}元）')
                 conn.close()
             except Exception as e:
                 logging.warning(f'[彩票] 回测数据读取失败: {e}')
