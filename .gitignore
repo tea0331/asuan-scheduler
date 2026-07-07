@@ -47,6 +47,17 @@ PLN启动任务清单_*
 
 # V20: reports目录只保留当前报告
 reports/*_recommendation_*.md
+
+# 多角色圆桌推演输出（不入库）
+data/lottery-roundtable.json
+
+# 日报输出文件
+output/*.md
+
+# JinZhu 算法文件（位于 asuan-jinzhu 仓库）
+algo_*.py
+lottery_analyzer.py
+jin_zhu.py
 .env
 
 # v8.6: 分步执行缓存目录（不入库）
