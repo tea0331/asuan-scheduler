@@ -1498,6 +1498,10 @@ def _call_deepseek_api(system_msg, user_msg, timeout=90):
         ],
         "max_tokens": 8000,
         "temperature": 0.7,
+        # 根治: 关闭深度推理(reasoning_content), 避免超长任务把 token 预算
+        # 全烧进内部推理导致 content 返回空, 进而被误判失败触发降级模板。
+        # (实测同日负载: 开启时 content=0/reasoning=12743; 关闭后 content=3965)
+        "reasoning": {"enabled": False},
     }
 
     try:
@@ -1506,8 +1510,32 @@ def _call_deepseek_api(system_msg, user_msg, timeout=90):
         logging.info(f"[AI] DeepSeek响应: status={resp.status_code}, 长度={len(resp.text)}")
         if resp.status_code == 200:
             result = resp.json()
-            content = result['choices'][0]['message']['content']
-            content = content.strip()
+            content = (result['choices'][0]['message'].get('content') or '').strip()
+            # 若 content 为空(推理爆表占满token, reasoning_content 12743+字而 content=0),
+            # 自动带强约束重试一次拿真正正文。不把 reasoning_content(思考草稿)当正文交稿——那会出草稿腔日报。
+            if not content:
+                logging.warning("[AI] content为空(疑推理占满token), 自动重试保正文...")
+                sys2 = system_msg + "\n\n⚠️ 直接输出最终正文。严禁输出任何思路/推理/规划/草稿/元注释, 不要以'好的''我来''用户给了'开头, 直接从第一个板块标题开始写成品。"
+                rp = dict(payload)
+                rp['messages'] = [{'role': 'system', 'content': sys2}, {'role': 'user', 'content': user_msg}]
+                rp['max_tokens'] = 6000
+                try:
+                    r2 = requests.post(url, json=rp, headers=headers, timeout=timeout)
+                    if r2.status_code == 200:
+                        j2 = r2.json()
+                        c2 = (j2['choices'][0]['message'].get('content') or '').strip()
+                        if c2:
+                            logging.info(f"[AI] ✅ 重试成功, 获取正文 {len(c2)}字符")
+                            content = c2
+                        else:
+                            logging.warning("[AI] 重试后 content 仍为空")
+                            return None
+                    else:
+                        logging.warning(f"[AI] 重试状态码 {r2.status_code}")
+                        return None
+                except Exception as e2:
+                    logging.warning(f"[AI] 重试异常 {e2}")
+                    return None
             # 清理markdown代码块包裹
             if content.startswith('```markdown'):
                 content = content[len('```markdown'):]
@@ -1522,7 +1550,10 @@ def _call_deepseek_api(system_msg, user_msg, timeout=90):
             resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
             if resp.status_code == 200:
                 result = resp.json()
-                return result['choices'][0]['message']['content'].strip()
+                retry_content = result['choices'][0]['message'].get('content')
+                if not retry_content:
+                    retry_content = result['choices'][0]['message'].get('reasoning_content') or ''
+                return (retry_content or '').strip()
             else:
                 logging.warning(f"[AI] 重试仍失败: {resp.status_code}")
                 return None
@@ -1941,6 +1972,11 @@ def generate_all_sections():
 16. 📍 优先挖掘台湾相关机会
 {scene_context}
 {chain_ctx}
+
+## 硬性输出要求
+- 直接输出最终正文, 从 `## 一、每日资讯` 开始。
+- 严禁输出任何思路说明/推理过程/草稿/规划/元注释；不要以"好的""我来""用户给了"“先看看”等开头。
+- 这是最终成稿不是起草草稿。
 
 ## 社区共识（last30days — Reddit/X/YouTube/HN 近7天真实讨论）
 {community_ctx}"""
