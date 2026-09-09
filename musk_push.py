@@ -3,7 +3,7 @@
 马斯克推演引擎 v2.1
 功能：
 1. 读取日报 output/{date}.md
-2. 调用 hy3-preview 生成推演
+2. 调用 deepseek-v4-flash 生成推演
 3. 法律合规评估（查 legal.db）
 4. 自评估推演质量
 5. 输出 musk-push.json
@@ -36,10 +36,10 @@ GAP_CASES_PATH = os.path.join(DATA_DIR, 'gap-cases.json')
 MUSK_PUSH_PATH = os.path.join(DATA_DIR, 'musk-push.json')
 LEGAL_DB_PATH = os.path.join(MODULE_DIR, 'legal-knowledge', 'legal.db')
 
-# API 配置（和 generate_full_daily.py 一致）
-API_URL = "https://api.lkeap.cloud.tencent.com/plan/v3/chat/completions"
-API_KEY = os.getenv('HUNYUAN_API_KEY', '')
-MODEL = "hy3-preview"
+# API 配置 — 统一用 DeepSeek V4 Flash
+API_URL = "https://api.deepseek.com/v1/chat/completions"
+API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
+MODEL = "deepseek-v4-flash"
 
 
 def load_json(path):
@@ -49,32 +49,52 @@ def load_json(path):
         return json.load(f)
 
 
-def call_hy3(system_msg, user_msg, max_tokens=2000, temperature=0.3):
-    """调用混元 API — 和 generate_full_daily.py 同一套配置"""
+def call_deepseek(system_msg, user_msg, max_tokens=2000, temperature=0.3):
+    """调用 DeepSeek V4 Flash（推理模型）
+
+    注意：deepseek-v4-flash 是推理模型，会先输出 reasoning_content 消耗 token，
+    若 max_tokens 过小会导致 content 为空（finish_reason=length）。
+    因此 content 为空时自动用更大预算重试一次。
+    """
     if not API_KEY:
-        print("❌ HUNYUAN_API_KEY 未设置")
+        print("❌ DEEPSEEK_API_KEY 未设置")
         return None
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg}
-        ],
-        "max_tokens": max_tokens,
-        "temperature": temperature
-    }
-    try:
-        resp = requests.post(API_URL, json=payload, headers=headers, timeout=90)
-        if resp.status_code == 200:
-            result = resp.json()
-            return result['choices'][0]['message']['content'].strip()
-        else:
+
+    def _call(mt):
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg}
+            ],
+            "max_tokens": mt,
+            "temperature": temperature
+        }
+        resp = requests.post(API_URL, json=payload, headers=headers, timeout=120)
+        if resp.status_code != 200:
             print(f"❌ API返回 {resp.status_code}: {resp.text[:200]}")
             return None
+        result = resp.json()
+        msg = result['choices'][0]['message']
+        finish = result['choices'][0].get('finish_reason', '')
+        content = (msg.get('content') or '').strip()
+        if not content:
+            print(f"⚠️ content 为空 (finish_reason={finish})，尝试更大预算")
+            return ''
+        return content
+
+    try:
+        content = _call(max_tokens)
+        # 推理模型吞 token 导致空输出：翻倍预算重试一次
+        if content == '':
+            content = _call(max_tokens * 2)
+        if content == '':
+            return None
+        return content
     except Exception as e:
         print(f"❌ API调用失败: {e}")
         return None
@@ -138,11 +158,11 @@ def run_inference(daily_content, gap_cases):
 3. 输出格式：Markdown，结构化
 4. 总字数：800-1500字"""
 
-    return call_hy3(system_msg, user_msg, max_tokens=2500, temperature=0.4)
+    return call_deepseek(system_msg, user_msg, max_tokens=4000, temperature=0.4)
 
 
 def ask_hy3_for_law(inference_text):
-    """让 hy3 判断推演触及哪条法律"""
+    """让 DeepSeek 判断推演触及哪条法律"""
     system_msg = "你是法律分析助手。根据推演内容判断最可能触及的中国法律条文。"
     user_msg = f"""基于以下推演内容，判断最可能触及的中国法律条文：
 
@@ -165,7 +185,7 @@ def ask_hy3_for_law(inference_text):
 
 只返回JSON数组，不要其他文字。"""
 
-    result = call_hy3(system_msg, user_msg, max_tokens=500, temperature=0.2)
+    result = call_deepseek(system_msg, user_msg, max_tokens=1500, temperature=0.2)
     if not result:
         return []
 
@@ -310,7 +330,7 @@ def main(date=None):
     print(f"  日报长度: {len(daily_content)} 字符")
 
     # 3. 推演
-    print("  调用 hy3-preview 推演...")
+    print("  调用 deepseek-v4-flash 推演...")
     inference_text = run_inference(daily_content, gap_cases)
     if not inference_text:
         inference_text = "（推演失败，API调用异常）"

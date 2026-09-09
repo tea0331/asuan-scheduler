@@ -108,47 +108,61 @@ def load_jinzhu_analysis():
 
 
 def build_agent_user_msg(daily_content, jinzhu_data, agent_name, agent_config):
-    """为每个角色构建个性化输入"""
-    # 日报关键内容剪裁（取前2000字 + 新闻标题 + 彩票部分）
-    sections = {}
-    sections['news_titles'] = re.findall(r'### .+?\n\n- \*\*(.+?)\*\*', daily_content)[:10]
-    sections['jinzhu'] = ""
-    if jinzhu_data:
-        js_str = json.dumps(jinzhu_data, ensure_ascii=False, indent=2)
-        sections['jinzhu'] = js_str[:1500]
+    """为每个角色构建个性化输入 - 聚焦新闻内容，不讨论JinZhu/彩票"""
+    # 提取新闻部分（从## 一、每日资讯到下一个行首##之前，避免被###误匹配）
+    news_section = ""
+    m = re.search(r'## 一、每日资讯(.+?)(?=\n## |\Z)', daily_content, re.DOTALL)
+    if m:
+        news_section = m.group(1).strip()[:2000]
 
-    # 角色特定的关注点
+    # 提取逆潮观察
+    nichao_section = ""
+    m = re.search(r'## 二、逆潮观察(.+?)(?=\n## |\Z)', daily_content, re.DOTALL)
+    if m:
+        nichao_section = m.group(1).strip()[:1000]
+
+    # 从新闻中提取标题
+    news_titles = re.findall(r'\*\*(.+?)\*\*', news_section)[:8]
+
+    # 角色特定的关注点 - 全部聚焦新闻，不涉及彩票
     focus_map = {
-        "东方朔": "重点关注日报的结构漏洞、伪因果链、自嗨内容、彩票分析的逻辑缺陷",
-        "王阳明": "重点关注全文逻辑链条是否闭环、假设是否合理",
-        "马斯克": "重点关注市场缺口、被忽视的机会、颠覆性方案",
-        "巴菲特": "重点关注赔率、安全边际、长期风险",
-        "散户老王": "重点关注情绪面、韭菜会怎么理解内容",
-        "西蒙斯": "重点关注彩票预测的数据质量、统计显著性",
+        "东方朔": "剥离新闻中的公关话术，提纯事实，追溯利益关系",
+        "反共识思考者": "挑战新闻中隐含的产业共识，寻找被忽视的盲区",
+        "纲纳·缪达尔": "追踪新闻事件的循环累积因果链，识别正/负反馈环",
+        "蓝海赛道设计师": "从新闻中挖掘可落地的商业机会和新赛道",
+        "政策专家": "解读政策信号的真实意图，预测传导效应和制度套利空间",
+        "老王": "从一线供需水位和情绪风向判断市场实际温度",
+        "雷军": "判断新闻事件对普通人和下沉市场的实际影响，趋势拐点分析",
     }
-    focus = focus_map.get(agent_name, "全面评价")
+    focus = focus_map.get(agent_name, "全面评价今日新闻")
 
-    user_msg = f"""你是【{agent_name}】({agent_config['title']})，请评价以下日报内容。
+    user_msg = f"""你是【{agent_name}】({agent_config['title']})，请评价以下日报中的**新闻内容**（不包括彩票分析部分）。
 
 【你的关注点】
 {focus}
 
-【日报内容摘要】
+【日报新闻标题摘要】
 日期: {TODAY}
-新闻标题: {json.dumps(sections['news_titles'], ensure_ascii=False)}
+{json.dumps(news_titles, ensure_ascii=False, indent=2)}
 
-【彩票/JinZhu分析】
-{sections['jinzhu']}
+【每日资讯详细内容】
+{news_section}
+
+【逆潮观察】
+{nichao_section}
+
+⚠️ 请只评价上述新闻内容。不要涉及彩票/JinZhu策略分析。
 
 请按你的角色输出评价（包含评分、核心发现、推荐操作）。"""
 
     return user_msg
 
 
-def run_single_agent(agent_name, agent_config, daily_content, jinzhu_data):
-    """单个 agent 执行评价"""
+def run_single_agent(agent_name, agent_config, daily_content):
+    """单个 agent 执行评价，只关注新闻内容"""
     log(f"  开始评价: {agent_name}")
-    user_msg = build_agent_user_msg(daily_content, jinzhu_data, agent_name, agent_config)
+    # 不传 jinzhu_data，让角色只看新闻
+    user_msg = build_agent_user_msg(daily_content, None, agent_name, agent_config)
     result = call_deepseek(agent_config['system_prompt'], user_msg)
     if result:
         log(f"  ✅ {agent_name} 评价完成")
@@ -365,7 +379,7 @@ def main():
     results = []
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {
-            executor.submit(run_single_agent, name, cfg, daily_content, jinzhu_data): name
+            executor.submit(run_single_agent, name, cfg, daily_content): name
             for name, cfg in all_agents.items()
         }
         for future in as_completed(futures):

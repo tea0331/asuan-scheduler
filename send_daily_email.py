@@ -81,7 +81,22 @@ def main():
     date_str = sys.argv[1] if len(sys.argv) > 1 else TODAY
     report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', f'{date_str}.md')
 
+    # ⛔ 完整性检查：日报必须包含东方朔评价才发邮件
+    if os.path.exists(report_path):
+        with open(report_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        has_evil = '【东方朔邪修评价' in content
+        has_musk = '马斯克推演' in content
+        if not has_evil:
+            print(f'⚠️ 日报缺少东方朔评价，跳过发邮件（等主流程完成）')
+            return
+    else:
+        print(f'❌ 日报文件不存在: {report_path}')
+        return
+
     print(f'📧 发送日报邮件: {report_path}')
+    print(f'   ├─ 含东方朔: {"✅" if has_evil else "❌"}')
+    print(f'   └─ 含马斯克: {"✅" if has_musk else "❌"}')
     send_email(report_path, date_str)
 
 if __name__ == '__main__':

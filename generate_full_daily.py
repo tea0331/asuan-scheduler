@@ -36,6 +36,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
 import time
 from concurrent.futures import TimeoutError
+import subprocess
 
 import requests
 
@@ -67,6 +68,115 @@ MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 def _run_with_timeout(func, timeout=180):
     """直接执行，不用子进程（OpenClaw兼容）"""
     return func()
+
+
+# ============================================================
+# P0 Skill 集成: last30days / content-risk-detector / shuorenhua
+# ============================================================
+LAST30DAYS_DIR = os.path.expanduser('~/.openclaw/workspace/skills/last30days')
+SHUORENHUA_DIR = os.path.expanduser('~/.openclaw/workspace/skills/shuorenhua')
+
+def _fetch_last30days_community_consensus(topics=None):
+    """调用 last30days 引擎，获取 Reddit/X/YouTube/HN 社区共识
+    返回格式: markdown 文本，无 API key 或失败返回 None
+    """
+    if not os.path.exists(os.path.join(LAST30DAYS_DIR, 'scripts', 'last30days.py')):
+        logging.info("[last30days] 引擎未安装，跳过")
+        return None
+    
+    # 无 API key 时跳过联网搜索（last30days 需要 Brave/Perplexity/OpenRouter 等 key）
+    has_api_key = any(os.environ.get(k) for k in [
+        'BRAVE_API_KEY', 'PERPLEXITY_API_KEY', 'OPENROUTER_API_KEY',
+        'SCRAPECREATORS_API_KEY', 'PARALLEL_API_KEY'
+    ])
+    if not has_api_key:
+        logging.info("[last30days] 无 API key 可用，跳过联网搜索")
+        return None
+    
+    if topics is None:
+        topics = [
+            'AI agent coding tools',
+            'China Taiwan trade opportunities',
+            'GPU AI chip shortage 2026',
+        ]
+    
+    try:
+        results = []
+        for topic in topics:
+            cmd = [
+                sys.executable,
+                os.path.join(LAST30DAYS_DIR, 'scripts', 'last30days.py'),
+                topic,
+                '--emit=compact',
+                '--quick',
+                '--days=7',
+            ]
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=15, cwd=LAST30DAYS_DIR)
+                if r.returncode == 0 and r.stdout and len(r.stdout) > 100:
+                    lines = r.stdout.split('\n')
+                    body_lines = []
+                    for line in lines:
+                        if 'END OF last30days' in line or 'PASS-THROUGH FOOTER' in line:
+                            break
+                        if not line.startswith('#'):
+                            body_lines.append(line)
+                    body = '\n'.join(body_lines).strip()
+                    if len(body) > 50:
+                        results.append(f"### 社区共识: {topic}\n\n{body}")
+                        logging.info(f"[last30days] ✅ {topic}: 获取到社区共识")
+            except subprocess.TimeoutExpired:
+                continue
+            except Exception as e:
+                continue
+        
+        if results:
+            return '\n\n---\n\n'.join(results)
+        return None
+    except Exception as e:
+        return None
+
+
+def _de_ai_text(text, scene='chat', agg_level='standard'):
+    """调用 shuorenhua 去 AI 味（浅改写，不调用外部 API）
+    shuorenhua 是 SKILL.md 指令集，无法 CLI 调用。
+    这里用本地规则做基础去 AI 味：去模板腔、保留事实。
+    """
+    if not text or len(text) < 30:
+        return text
+    
+    # 本地规则：去最明显的 AI 模板腔
+    import re
+    replacements = [
+        (r'值得注意的是，', ''),
+        (r'总的来说，', ''),
+        (r'综上所述，', ''),
+        (r'需要指出的是，', ''),
+        (r'从某种程度上来说，', ''),
+        (r'值得一提的是，', ''),
+        (r'毋庸置疑，', '说实话，'),
+        (r'显而易见，', '明摆着，'),
+        (r'不可否认，', '话说回来，'),
+        (r'从这个角度', '换角度'),
+        (r'意味着', '≈'),
+        (r'至关重要', '关键'),
+        (r'不可或缺', '少不了'),
+        (r'数字化的浪潮', '数字化'),
+        (r'在当今.*?背景下', ''),
+        (r'随着.*?的到来', ''),
+        (r'正在重塑.*?格局', '在变'),
+        (r'赋能', '帮'),
+        (r'抓手', '入口'),
+        (r'闭环', '回路'),
+        (r'底层逻辑', '本质'),
+        (r'顶层设计', '规划'),
+    ]
+    for pattern, repl in replacements:
+        text = re.sub(pattern, repl, text)
+    
+    return text
+
+
 # V7 用户画像关键词权重（原 USER_PROFILE_V7，补回）
 USER_PROFILE_V7 = {
     # 台湾/两岸
@@ -1239,7 +1349,7 @@ def fetch_raw_materials():
             source_stats[name] = 0
 
     try:
-        hot_raw = _fetch_baidu_hot(0)
+        hot_raw = _fetch_baidu_hot(20)
         all_raw.extend(hot_raw)
         source_stats['百度热搜'] = len(hot_raw)
     except Exception:
@@ -1593,6 +1703,92 @@ def _generate_triangle_section(fx_signal):
 # ============================================================
 # 核心: 生成全部6板块
 # ============================================================
+
+
+# ============================================================
+# 结构规整器: 把 AI/降级产生的任意 markdown 结构强行还原为标准 5 板块
+# 根治章节重复 / 跳号 / 缺失 / 错乱。AI 只管内容, 标题与顺序由代码保证。
+# ============================================================
+_NEW_STANDARD_SECTIONS = [
+    ("## 一、每日资讯",     ["每日资讯"]),
+    ("## 二、逆潮观察",     ["逆潮观察", "逆潮"]),
+    ("## 三、深度传导分析", ["深度传导分析", "深度传导", "传导分析"]),
+    ("## 四、今日邪修金句", ["今日邪修金句", "邪修金句"]),
+    ("## 五、科技套利案例", ["科技套利案例", "科技套利"]),
+]
+
+def _match_standard_section(title_text):
+    """判断标题属于哪个标准板块; 返回标准标题; 不识别返回 None"""
+    for std_title, keys in _NEW_STANDARD_SECTIONS:
+        for k in keys:
+            if k in title_text:
+                return std_title
+    # 含"金句"但前缀编号错乱(如 六、今日邪修金句)也能被上方"今日邪修金句"命中
+    return None
+
+def normalize_sections_structure(text):
+    """核心规整: 把 text 中的零散/重复/乱序板块标题还原成固定顺序的 5 板块。
+
+    规则:
+    1. 按 `## `(二级)标题切块; `### ` 三级分类标题留在内容内不切.
+    2. 每个能识别为标准板块的标题 => 归档到该板块(首次=锚, 重复内容并到该板块).
+    3. 不能识别的 `## `(如外部注入的 彩票/马斯克/东方朔/圆桌 等) => 归入"游离", 
+       原样保留(由上层决定放哪).
+    4. 输出: 固定 5 板块标题(唯一、有序), 各板块内容追加其间.
+    5. 每板块若 AI 完全没给内容, 补一行提示占位, 避免空标题.
+    """
+    lines = text.split("\n")
+    blocks = []          # {'title':str, 'body':[line,...]}
+    cur_title, cur_body = "", []
+    for ln in lines:
+        if ln.startswith("## "):
+            if cur_title or cur_body:
+                blocks.append({"title": cur_title, "body": cur_body})
+            cur_title, cur_body = ln, []
+        else:
+            cur_body.append(ln)
+    if cur_title or cur_body:
+        blocks.append({"title": cur_title, "body": cur_body})
+
+    sections = {}        # std_title -> [body0, body1, ...]
+    free_blocks = []     # [(title, body)]  无法识别的外部块
+    lead = []            # 文件头/正文尾部不属于任何 ## 的散行(极小概率)
+    for b in blocks:
+        t = b["title"]
+        body = "\n".join(b["body"]).strip("\n")
+        if not t:
+            # 无标题的散内容: 若出现在最前且后续还有板块, 可归每日资讯; 否则丢尾部散段
+            if body.strip():
+                lead.append(body)
+            continue
+        std = _match_standard_section(t)
+        if std:
+            sections.setdefault(std, []).append(body)
+        else:
+            free_blocks.append((t, body))
+    # 头部散内容并入每日资讯
+    if lead:
+        sections.setdefault("## 一、每日资讯", [])
+        sections["## 一、每日资讯"][0:0] = ["\n".join(lead)]
+
+    out_parts = []
+    for std_title, _ in _NEW_STANDARD_SECTIONS:
+        out_parts.append(std_title)
+        bodies = [b for b in sections.get(std_title, []) if b and b.strip()]
+        if bodies:
+            out_parts.append("\n\n".join(bodies))
+        else:
+            out_parts.append("（本节正文由 AI 生成缺失，待上层补齐）")
+    # 游离外部块(彩票/马斯克/东方朔/圆桌 等)保持原有相对顺序追加
+    for t, body in free_blocks:
+        out_parts.append("")
+        out_parts.append(t)
+        if body.strip():
+            out_parts.append(body)
+    return "\n\n".join(out_parts)
+
+
+
 def generate_all_sections():
     """生成日报全部6大板块 — V6核心函数
 
@@ -1608,6 +1804,14 @@ def generate_all_sections():
 
     # 3. 构建邪修上下文
     chain_ctx, used_quotes = _build_xie_xiu_context(top_items)
+
+    # 3.5 P0 Skill: 获取社区共识增强上下文
+    community_ctx = _fetch_last30days_community_consensus()
+    if community_ctx:
+        logging.info("[日报] ✅ last30days 社区共识已注入 prompt")
+    else:
+        community_ctx = ""
+        logging.info("[日报] last30days 社区共识不可用，跳过")
 
     # 4. 构建AI Prompt — 6板块完整版
     if not top_items:
@@ -1699,8 +1903,26 @@ def generate_all_sections():
 
 💭 [1句话，结合今日新闻主题。要冷、要利、有画面感。禁止鸡汤、禁止格言式。]{used_quotes_warn}
 
+## 五、科技套利案例
+
+从今日新闻中提取1个「低成本技术 + 场景信息差 = 套利空间」的真实商业案例。
+
+构思框架：
+- **问题**: [传统方式做这件事成本多高/多麻烦]
+- **方案**: [谁用了什么低成本技术（开源/硬件/AI）切入]
+- **套利点**: [怎么赚钱，赚谁的钱]
+- **门槛**: [启动资金/技能要求]
+- **启发**: [这个模式还能复制到什么其他场景]
+
+要求：
+1. 基于今日新闻中的真实事件/技术趋势，不编造
+2. 强调低成本+信息差，不是高大上的融资故事
+3. 门槛要低（启动资金<1万，技能2周可学）
+4. 如果不适合从新闻提炼，可以写近期全球真实科技套利案例（注明来源）
+5. 字数200-400字
+
 == 铁律 ==
-1. 4板块齐全，每板块有实质内容，每条新闻附因果链，不需要操作话术
+1. 5板块齐全，每板块有实质内容，每条新闻附因果链，不需要操作话术
 2. 因果链必须写清因果关系（因为A所以B），禁止只列断言（A短缺、B短缺）
 3. ❌ 禁止模板填空——因果链必须从今日新闻本身推导，因果链中必须出现新闻里的具体公司名/政策名/数字。如果删掉新闻标题后因果链仍然成立=你在套模板=违规
 4. ❌ 禁止同类新闻输出相同因果链——同板块不同新闻的因果链必须不同，因为事件不同传导路径就不同
@@ -1714,11 +1936,14 @@ def generate_all_sections():
 12. ⭐ 货币异动（日元/韩元/里拉等单日波动超1%或月波动超5%）必须深度推演因果链 — 重点推演: 套息交易方向→交叉盘联动→进出口成本变化→可操作的中间商套利节点。禁止推演购物/代购/旅游。
 12. 注意: 普通产品发布(手机更新/SaaS上线/小版本迭代)≠新发明新应用，前者禁止后者必须推演
 13. 金句每天不同，结合当日主题
-14. 总字数2000-3000字
+14. 总字数2500-4000字（含科技套利案例）
 15. ⏰ 所有时间窗口基于{today_str}推算
 16. 📍 优先挖掘台湾相关机会
 {scene_context}
-{chain_ctx}"""
+{chain_ctx}
+
+## 社区共识（last30days — Reddit/X/YouTube/HN 近7天真实讨论）
+{community_ctx}"""
 
     user_msg = f"""今日新闻素材（已按画像打分排序）:
 
@@ -1739,10 +1964,11 @@ def generate_all_sections():
                 "二、逆潮观察",
                 "三、深度传导分析",
                 "四、今日邪修金句",
+                "五、科技套利案例",
             ]
             missing = [h for h in section_headers if h not in content]
             if not missing:
-                logging.info(f"[日报] ✅ AI生成4板块齐全: {len(content)}字符")
+                logging.info(f"[日报] ✅ AI生成5板块齐全: {len(content)}字符")
                 # V8: 注入灰色操作卡（代码层生成，不受AI安全限制）
                 content = _inject_shortage_alert(content, top_items)
                 # V21: 注入三角机会（货币异动时追加合法套利分析）
@@ -1757,11 +1983,9 @@ def generate_all_sections():
                     logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
                 # 记录邪修内容
                 _record_xie_xiu_content(content)
-                return content
+                return normalize_sections_structure(content)
             else:
-                logging.warning(f"[日报] AI生成缺板块: {missing}，补齐后使用")
-                # 补齐缺失板块
-                content = _patch_missing_sections(content, top_items, missing)
+                logging.warning(f"[日报] AI生成缺板块: {missing}，交由结构规整器补齐占位")
                 # V8: 注入灰色操作卡
                 content = _inject_shortage_alert(content, top_items)
                 # V21: 注入三角机会
@@ -1774,38 +1998,16 @@ def generate_all_sections():
                 else:
                     logging.info("[日报] 📐 三角机会: 无货币异动新闻，跳过")
                 _record_xie_xiu_content(content)
-                return content
+                return normalize_sections_structure(content)
         else:
             logging.warning("[日报] AI生成内容过短或为空，使用降级模式")
-            return _fallback_all_sections(all_raw, top_items)
+            return normalize_sections_structure(_fallback_all_sections(all_raw, top_items))
     except TimeoutError:
         logging.warning("[日报] AI生成超时(180秒)，使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
     except Exception as e:
         logging.warning(f"[日报] AI生成异常: {e}，使用降级模式")
         return _fallback_all_sections(all_raw, top_items)
-
-
-def _patch_missing_sections(content, top_items, missing_headers):
-    """补齐AI生成中缺失的板块"""
-    for header in missing_headers:
-        if header == "二、资源短缺预警":
-            patch = _fallback_shortage_alert(top_items)
-        elif header == "三、逆潮观察":
-            patch = _fallback_contra_tide(top_items)
-        elif header == "四、深度传导分析":
-            patch = _fallback_deep_chain(top_items)
-        elif header == "五、避坑提醒":
-            patch = _fallback_pitfall(top_items)
-        elif header == "六、今日邪修金句":
-            patch = _fallback_quote(top_items)
-        else:
-            continue
-        content += "\n\n" + patch
-        # 扩展金句（确保≥50字）
-        if len(candidate) < 50:
-            candidate += " —— 邪修原则：不赌涨跌，只吃信息费；不追热点，只找断层。"
-    return content
 
 
 def _fallback_contra_tide(top_items):
@@ -2361,6 +2563,8 @@ def _fallback_deep_chain(top_items):
             chain = f"{ent}事件 → 相关方利益重新分配 → 信息不对称出现 → 套利窗口 → 中间人机会"
             surplus = f"{ent}信息优势方"
             deficit = f"{ent}信息劣势方"
+            tian_dao = f"天之道: 损信息优势方之有余→补信息劣势方之不足\n  > 推导: {ent}事件→利益重分配→信息不对称→套利窗口→有余在先知端、不足在后知端"
+            xie_xiu = f"商机定位: 断裂在{ent}事件→信息不对称→短缺=滞后信息方→窗口2-4个月→中间人空间: 先知方与后知方对接"
         else:
             chain = f"AI大模型训练需求爆发 → GPU/HBM供不应求 → 散热/电源/PCB配套涨价 → 数据中心建设加速 → 电力消耗激增→核电/绿电需求"
             surplus = "IDC的过剩算力（有供给但找不到客户）"
@@ -2462,9 +2666,11 @@ def _fallback_deep_chain(top_items):
     return "\n".join(lines)
 
 
-def _fallback_quote(top_items):
+def _fallback_quote(top_items, used_quotes=None):
     """邪修金句降级: 从top_items提取金句"""
     import random
+    if used_quotes is None:
+        used_quotes = []
     templates = [
         "信息差永远存在，关键是找到那个愿意为信息付费的人。",
         "不赌涨跌，只吃信息费；不追热点，只找断层。",
@@ -2475,8 +2681,10 @@ def _fallback_quote(top_items):
     return f"## 六、今日邪修金句\n\n💭 {random.choice(templates)}"
 
 
-def _fallback_pitfall(top_items):
+def _fallback_pitfall(top_items, used_quotes=None):
     """V13: 避坑提醒 — 从多条新闻中找2个真实陷阱"""
+    if used_quotes is None:
+        used_quotes = []
     lines = ["## 四、今日邪修金句\n\n💭 {quote}\n\n> 邪修提示：信息差永远存在，关键是找到那个愿意为信息付费的人。"]
 
     top = top_items[0]
@@ -3057,13 +3265,13 @@ if __name__ == '__main__':
         logging.warning("[P1] 新闻生成超时(200秒)，使用降级模式")
         all_raw_fb, _ = fetch_raw_materials()
         top_items_fb = filter_by_profile(all_raw_fb, min_score=0, top_n=20)
-        news_content = _fallback_all_sections(all_raw_fb, top_items_fb)
+        news_content = normalize_sections_structure(_fallback_all_sections(all_raw_fb, top_items_fb))
     except Exception as e:
         logging.error(f"[P1] 新闻生成异常: {e}，使用降级模式")
         try:  # 已禁用 Pool
             all_raw_fb, _ = fetch_raw_materials()
             top_items_fb = filter_by_profile(all_raw_fb, min_score=0, top_n=20)
-            news_content = _fallback_all_sections(all_raw_fb, top_items_fb)
+            news_content = normalize_sections_structure(_fallback_all_sections(all_raw_fb, top_items_fb))
         except Exception as e2:
             logging.error(f"[P1] 降级模式也失败: {e2}")
             news_content = "## 一、每日资讯\n（今日新闻抓取异常，下次自动恢复）\n"
@@ -3081,6 +3289,10 @@ if __name__ == '__main__':
     except Exception as e:
         logging.warning(f"[P1] 台湾彩种异常: {e}")
         taiwan_content = ""
+
+    # 3.9 结构规整(总闸): 无论主路径/降级, 强制还原为标准5板块唯一有序结构
+    if news_content:
+        news_content = normalize_sections_structure(news_content)
 
     # 4. 拼接完整日报
     full_content = f"# 阿算帮刘老板发财日报 — {today_str}\n\n---\n\n{news_content}{lottery_content}{taiwan_content}"
@@ -3146,7 +3358,32 @@ if __name__ == '__main__':
     except Exception as e:
         logging.warning(f"[东方朔] 评论异常: {e}，不阻塞")
 
-    # 9. 邮件发送已禁用（由 evil_reviewer.py 在 07:35 统一发送含东方朔评价的邮件）
-    logging.info("[邮件] 邮件发送已禁用，等待 evil_reviewer.py 在 07:35 统一发送")
+    # 9. 圆桌推演（追加评论文本到日报末尾）
+    try:
+        roundtable_result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, 'multi_roundtable.py'), today_str],
+            capture_output=True, text=True, timeout=300
+        )
+        if roundtable_result.returncode == 0:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                full_content = f.read()
+            logging.info("[圆桌] ✅ 推演已追加到日报")
+        else:
+            logging.warning(f"[圆桌] 推演失败: {roundtable_result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[圆桌] 推演异常: {e}，不阻塞")
+
+    # 10. 发送邮件（完整日报，含东方朔+马斯克+圆桌）
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, 'send_daily_email.py'), today_str],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode == 0:
+            logging.info("[邮件] ✅ 邮件发送成功")
+        else:
+            logging.warning(f"[邮件] 发送失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[邮件] 发送异常: {e}")
 
     logging.info(f"========== 完成 {today_str} ==========")

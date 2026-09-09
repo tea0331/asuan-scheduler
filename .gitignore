@@ -65,3 +65,11 @@ cache/
 
 # self-improving-agent Learnings（不提交）
 .learnings/
+
+# 本地轮备份/临时脚本(不入库)
+*.bak_*
+*.bak
+*.newfix_*
+*.NORMALIZED_*
+resend_daily_with_evil.py
+games/

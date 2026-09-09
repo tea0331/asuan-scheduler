@@ -685,6 +685,15 @@ def main():
 
     print(f'📖 读日报: {report_path}')
     md = read_file(report_path)
+
+    # ⛔ 去重检查：如果文件末尾已有今日东方朔评价，跳过
+    if '【东方朔邪修评价' in md and TODAY in md:
+        # 精确检查：评价标签 + 今日日期
+        evil_marker = f'【东方朔邪修评价 v4.1】{TODAY}'
+        if evil_marker in md:
+            print(f'⚠️ 今日东方朔评价已存在，跳过（避免重复追加）')
+            return
+
     sections = extract_sections(md)
 
     print('📊 加载 JinZhu 数据...')

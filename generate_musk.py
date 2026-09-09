@@ -4,6 +4,7 @@
 直接调用混元 API，生成基于当日新闻的缺口模式分析
 """
 import os
+import sys
 import requests
 import json
 from datetime import datetime, timezone, timedelta
@@ -24,8 +25,8 @@ def load_env():
 def generate_musk_inference(daily_content):
     """调用混元 API 生成马斯克推演"""
     env = load_env()
-    api_key = env.get('HUNYUAN_API_KEY', '')
-    url = 'https://api.lkeap.cloud.tencent.com/plan/v3/chat/completions'
+    api_key = env.get('DEEPSEEK_API_KEY', '')
+    url = 'https://api.deepseek.com/chat/completions'
     
     headers = {
         'Authorization': f'Bearer {api_key}',
@@ -46,7 +47,7 @@ def generate_musk_inference(daily_content):
 输出："""
     
     payload = {
-        'model': 'hy3-preview',
+        'model': 'deepseek-v4-flash',
         'messages': [
             {'role': 'system', 'content': '你是马斯克系统，专门分析套利缺口模式。'},
             {'role': 'user', 'content': prompt}
@@ -66,11 +67,19 @@ def generate_musk_inference(daily_content):
         result = r.json()
         # 标准 OpenAI 格式
         if 'choices' in result:
-            text = result['choices'][0]['message']['content']
+            msg = result['choices'][0]['message']
+            text = (msg.get('content') or '').strip()
+            # 部分模型（deepseek-v4-flash 等）可能把正文放在 reasoning_content
+            if not text and msg.get('reasoning_content'):
+                text = msg['reasoning_content'].strip()
         else:
             print(f'   ❌ 未知响应格式: {result}')
             return None
-        
+
+        if not text:
+            print('   ❌ API 返回空内容')  
+            return None
+
         print(f'   ✅ 推演生成成功，长度: {len(text)} 字符')
         return text
     except Exception as e:
