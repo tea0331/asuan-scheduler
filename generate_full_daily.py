@@ -1820,6 +1820,73 @@ def normalize_sections_structure(text):
 
 
 
+# ============================================================
+# V26: 板块正文校验器 — 根治"标题在、正文空"的假齐全
+# ============================================================
+_STD_SECTION_HEADERS = [
+    "一、每日资讯",
+    "二、逆潮观察",
+    "三、深度传导分析",
+    "四、今日邪修金句",
+    "五、科技套利案例",
+]
+
+def _split_ai_sections(content):
+    """把 AI 原始正文按 `## ` 切成 {标准标题: 正文字符串}。
+    仅用于诊断校验, 不改写内容。
+    """
+    if not content:
+        return {}
+    lines = content.split("\n")
+    blocks = []
+    cur_title, cur_body = "", []
+    for ln in lines:
+        if ln.startswith("## "):
+            if cur_title or cur_body:
+                blocks.append((cur_title, "\n".join(cur_body)))
+            cur_title, cur_body = ln, []
+        else:
+            cur_body.append(ln)
+    if cur_title or cur_body:
+        blocks.append((cur_title, "\n".join(cur_body)))
+    out = {}
+    for t, body in blocks:
+        std = _match_standard_section(t)
+        if std:
+            # 键统一为不带 `## ` 的标准标题, 与 _STD_SECTION_HEADERS 对齐
+            key = std[3:] if std.startswith("## ") else std
+            out[key] = (out.get(key, "") + "\n" + body).strip()
+    return out
+
+# 各板块正文的最小字符阈值(剔除占位符后)。金句板块天然短, 单独放宽。
+_SECTION_MIN_BODY = {
+    "一、每日资讯": 200,
+    "二、逆潮观察": 150,
+    "三、深度传导分析": 150,
+    "四、今日邪修金句": 15,
+    "五、科技套利案例": 150,
+}
+
+def _validate_sections(content, min_body=None):
+    """校验5板块是否"标题在且正文有实质内容"。
+    返回 (是否齐全, 缺正文的板块标题列表)。
+    - 标题完全缺失 → 计入缺
+    - 标题在但正文 < 对应板块阈值(剔除占位符后) → 计入缺
+    """
+    if min_body is None:
+        mins = _SECTION_MIN_BODY
+    else:
+        mins = {h: min_body for h in _STD_SECTION_HEADERS}
+    secs = _split_ai_sections(content)
+    bad = []
+    for h in _STD_SECTION_HEADERS:
+        body = secs.get(h, "")
+        cleaned = body.replace("（本节正文由 AI 生成缺失，待上层补齐）", "").strip()
+        if len(cleaned) < mins.get(h, 80):
+            bad.append(h)
+    return (not bad), bad
+
+
 def generate_all_sections():
     """生成日报全部6大板块 — V6核心函数
 
@@ -1994,15 +2061,42 @@ def generate_all_sections():
             timeout=180
         )
         if content and len(content) > 500:
-            # 验证6板块是否齐全
-            section_headers = [
-                "一、每日资讯",
-                "二、逆潮观察",
-                "三、深度传导分析",
-                "四、今日邪修金句",
-                "五、科技套利案例",
-            ]
-            missing = [h for h in section_headers if h not in content]
+            # V26: 板块校验升级 — 必须"标题在且正文有实质内容"(防假齐全)
+            complete, missing = _validate_sections(content)
+            if not complete:
+                # 首轮不达标: 带强约束重试一次, 明确要求补齐缺正文的板块
+                logging.warning(f"[日报] ⚠️ AI首轮板块不全/正文过短: {missing}，自动重试补齐...")
+                retry_sys = system_msg + (
+                    "\n\n⚠️ 上一轮输出存在问题: 以下板块标题存在但正文缺失或过短 -> "
+                    + "、".join(missing)
+                    + "。请重新输出完整日报, 确保每个板块标题下都有充分正文(逆潮观察≥3条、深度传导分析含完整因果链、邪修金句1句、科技套利案例200-400字)。严禁只输出标题不写正文。"
+                )
+                try:
+                    retry_content = _run_with_timeout(
+                        lambda: _call_deepseek_api(retry_sys, user_msg, timeout=120),
+                        timeout=180
+                    )
+                except Exception as e_retry:
+                    logging.warning(f"[日报] 重试异常: {e_retry}")
+                    retry_content = None
+                if retry_content:
+                    complete2, missing2 = _validate_sections(retry_content)
+                    if complete2 and len(retry_content) >= len(content):
+                        content = retry_content
+                        missing = []
+                        logging.info(f"[日报] ✅ 重试成功, 板块齐全: {len(content)}字符")
+                    else:
+                        if len(retry_content) > len(content):
+                            content = retry_content
+                        missing = missing2
+                        logging.warning(f"[日报] ⚠️ 重试仍不全: {missing2}")
+                if missing:
+                    # 重试后仍不全 -> 走降级模板(有实质内容), 不交占位符
+                    logging.warning(f"[日报] AI两轮均不全: {missing}，改用降级模板生成实质内容")
+                    content = _fallback_all_sections(all_raw, top_items)
+                    content = _inject_shortage_alert(content, top_items)
+                    _record_xie_xiu_content(content)
+                    return normalize_sections_structure(content)
             if not missing:
                 logging.info(f"[日报] ✅ AI生成5板块齐全: {len(content)}字符")
                 # V8: 注入灰色操作卡（代码层生成，不受AI安全限制）
