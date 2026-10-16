@@ -3480,11 +3480,18 @@ if __name__ == '__main__':
             capture_output=True, text=True, timeout=240
         )
         if result.returncode == 0:
+            # 返回码 0 不代表真写入（可能是"已存在跳过"）；读回正文确认是否含寓言段
             with open(output_path, 'r', encoding='utf-8') as f:
                 full_content = f.read()
-            logging.info("[寓言] ✅ 已追加到日报")
+            if '今日寓言' in full_content:
+                logging.info("[寓言] ✅ 已追加到日报")
+            else:
+                logging.warning("[寓言] ⏭️ 脚本正常退出但日报中未见寓言段（可能已存在跳过或内容为空）")
         else:
-            logging.warning(f"[寓言] 生成失败: {result.stderr[:200]}")
+            stderr = (result.stderr or '').strip()
+            stdout = result.stdout or ''
+            detail = stderr[:200] if stderr else stdout[-300:]
+            logging.warning(f"[寓言] 生成失败(rc={result.returncode}): {detail}")
     except Exception as e:
         logging.warning(f"[寓言] 生成异常: {e}，不阻塞")
 

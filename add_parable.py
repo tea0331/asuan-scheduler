@@ -4,7 +4,7 @@
 
 功能：
 1. 从 data/parable_topics.json 主题池里按序取一个概念（记录已用，避免重复）
-2. 调用 DeepSeek V4 生成"寓言故事 + 概念解释 + 隐喻对应表"
+2. 调用 DeepSeek V4 Flash 生成"寓言故事 + 概念解释 + 隐喻对应表"
 3. 追加到日报 output/YYYY-MM-DD.md 末尾
 
 用法：
@@ -14,6 +14,14 @@
 - 全程不点破概念名，直到最后一小段
 - 结构化输出：寓言 + ①概念解释 ②逐条隐喻拆解
 - 极简硬核，拒绝意义空话
+
+v26.2 修复（2026-10-17）：
+- API_MODEL 改为与主流程一致的 deepseek-v4-flash（原 deepseek-chat 存在模型名不一致的静默失败风险）
+- 显式关闭 reasoning（对齐 b478d81 的根治方案，避免推理爆表导致 content 为空）
+- temperature 1.0 → 0.8（写作任务降随机性，稳定质量）
+- content 为空时带强约束自动重试一次（复用主流程同款策略）
+- 修正主流程误导日志：返回码为 0 不等于真写入（可能是"已存在跳过"）
+- 主题池用完的重置逻辑：保留最近 RESET_KEEP 条，避免刚讲完又重讲
 """
 
 import os
@@ -30,7 +38,13 @@ TOPICS_PATH = os.path.join(DATA_DIR, 'parable_topics.json')
 USED_PATH = os.path.join(DATA_DIR, 'parable_used.json')
 
 API_URL = "https://api.deepseek.com/v1/chat/completions"
-API_MODEL = "deepseek-chat"
+# 与 generate_full_daily.py 主流程保持一致，避免模型名漂移导致静默失败。
+# 可用环境变量 DEEPSEEK_MODEL 覆盖，默认 deepseek-v4-flash。
+API_MODEL = os.environ.get('DEEPSEEK_MODEL', 'deepseek-v4-flash')
+API_TEMPERATURE = 0.8
+
+# 主题池全轮完后，保留最近 N 条已用记录，避免"刚讲完的概念又第一个冒出来"
+RESET_KEEP = 12
 
 
 def _load_env():
@@ -44,37 +58,36 @@ def _load_env():
                     os.environ.setdefault(k.strip(), v.strip())
 
 
-def _pick_topic():
-    """按序取一个未用过的主题；全用完则按日期哈希取，避免立刻重复"""
-    with open(TOPICS_PATH, encoding='utf-8') as f:
-        topics = json.load(f)['topics']
-
-    used = []
+def _read_used():
     if os.path.exists(USED_PATH):
         try:
             with open(USED_PATH, encoding='utf-8') as f:
-                used = json.load(f).get('used', [])
+                return json.load(f).get('used', [])
         except Exception:
-            used = []
+            return []
+    return []
 
+
+def _pick_topic():
+    """按序取一个未用过的主题；全用完则重置（保留最近 RESET_KEEP 条，避免立刻重复）"""
+    with open(TOPICS_PATH, encoding='utf-8') as f:
+        topics = json.load(f)['topics']
+
+    used = _read_used()
     used_set = set(used)
+
     for t in topics:
         key = f"{t['domain']}::{t['concept']}"
         if key not in used_set:
             return t, key, used, topics
 
-    # 全部用过：重置，从头再来
-    return topics[0], f"{topics[0]['domain']}::{topics[0]['concept']}", [], topics
+    # 全部用过：重置，但保留最近 RESET_KEEP 条，让新一轮不会从 topics[0] 立刻重讲
+    kept = used[-RESET_KEEP:] if len(used) > RESET_KEEP else []
+    return topics[0], f"{topics[0]['domain']}::{topics[0]['concept']}", kept, topics
 
 
-def _mark_used(key):
-    used = []
-    if os.path.exists(USED_PATH):
-        try:
-            with open(USED_PATH, encoding='utf-8') as f:
-                used = json.load(f).get('used', [])
-        except Exception:
-            used = []
+def _mark_used(key, base_used=None):
+    used = list(base_used) if base_used is not None else _read_used()
     if key not in used:
         used.append(key)
     with open(USED_PATH, 'w', encoding='utf-8') as f:
@@ -85,25 +98,48 @@ def _call_deepseek(system_msg, user_msg, timeout=180):
     key = os.environ.get('DEEPSEEK_API_KEY', '')
     if not key:
         raise RuntimeError('DEEPSEEK_API_KEY 未配置')
-    resp = requests.post(
-        API_URL,
-        headers={
-            'Authorization': f'Bearer {key}',
-            'Content-Type': 'application/json',
-        },
-        json={
-            'model': API_MODEL,
-            'messages': [
-                {'role': 'system', 'content': system_msg},
-                {'role': 'user', 'content': user_msg},
-            ],
-            'temperature': 1.0,
-            'max_tokens': 4000,
-        },
-        timeout=timeout,
-    )
+
+    headers = {
+        'Authorization': f'Bearer {key}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'model': API_MODEL,
+        'messages': [
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user', 'content': user_msg},
+        ],
+        'temperature': API_TEMPERATURE,
+        'max_tokens': 4000,
+        # 关闭深度推理：与主流程 b478d81 的根治方案一致，
+        # 避免推理占满 token 预算导致 content 返回空。
+        'reasoning': {'enabled': False},
+    }
+
+    resp = requests.post(API_URL, headers=headers, json=payload, timeout=timeout)
     resp.raise_for_status()
-    return resp.json()['choices'][0]['message']['content'].strip()
+    content = (resp.json()['choices'][0]['message'].get('content') or '').strip()
+
+    # content 为空（推理爆表/被截断）时，带强约束重试一次拿正文
+    if not content:
+        sys2 = system_msg + (
+            "\n\n⚠️ 直接输出最终正文。严禁输出任何思路/推理/规划/草稿/元注释，"
+            "不要以'好的''我来''用户给了'开头，直接从故事第一句开始写成品。"
+        )
+        retry_payload = dict(payload)
+        retry_payload['messages'] = [
+            {'role': 'system', 'content': sys2},
+            {'role': 'user', 'content': user_msg},
+        ]
+        retry_payload['max_tokens'] = 3500
+        r2 = requests.post(API_URL, headers=headers, json=retry_payload, timeout=timeout)
+        if r2.status_code == 200:
+            content = (r2.json()['choices'][0]['message'].get('content') or '').strip()
+
+    if not content:
+        raise RuntimeError('模型返回 content 为空（重试后仍为空）')
+
+    return content
 
 
 SYSTEM_MSG = (
@@ -120,7 +156,7 @@ SYSTEM_MSG = (
 
 def generate(date_str):
     _load_env()
-    topic, key, _, _ = _pick_topic()
+    topic, key, base_used, _ = _pick_topic()
     domain = topic['domain']
     concept = topic['concept']
 
@@ -128,11 +164,6 @@ def generate(date_str):
         f"请为「{domain}」领域的核心概念「{concept}」写一则研究生难度的寓言故事，"
         f"并按要求附带【模块一】概念解释和【模块二】隐喻拆解表。"
     )
-
-    print(f"[寓言] 生成中: {domain} / {concept}")
-    content = _call_deepseek(SYSTEM_MSG, user_msg)
-
-    section = f"\n\n---\n\n## 🧩 今日寓言：{domain}·{concept}\n\n{content}\n"
 
     output_path = os.path.join(OUTPUT_DIR, f'{date_str}.md')
     if not os.path.exists(output_path):
@@ -146,10 +177,15 @@ def generate(date_str):
         print('[寓言] 已存在，跳过')
         return False
 
+    print(f"[寓言] 生成中: {domain} / {concept} (model={API_MODEL})")
+    content = _call_deepseek(SYSTEM_MSG, user_msg)
+
+    section = f"\n\n---\n\n## 🧩 今日寓言：{domain}·{concept}\n\n{content}\n"
+
     with open(output_path, 'a', encoding='utf-8') as f:
         f.write(section)
 
-    _mark_used(key)
+    _mark_used(key, base_used)
     print(f'✅ [寓言] 已追加: {output_path} ({len(section)}字符)')
     return True
 
