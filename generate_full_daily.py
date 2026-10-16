@@ -3471,7 +3471,12 @@ if __name__ == '__main__':
                 full_content = f.read()
             logging.info("[马斯克] ✅ 推演已追加到日报")
         else:
-            logging.warning(f"[马斯克] 推演失败: {result.stderr[:200]}")
+            # 修正: 原仅取 stderr，而 goal 脚本的失败信息多打在 stdout，导致日志出现
+            # "[马斯克] 推演失败: " 后为空、无法定位真实原因。改为 stderr 优先、回退 stdout。
+            stderr = (result.stderr or '').strip()
+            stdout = (result.stdout or '').strip()
+            detail = stderr[:300] if stderr else (stdout[-400:] if stdout else '(无输出)')
+            logging.warning(f"[马斯克] 推演失败(rc={result.returncode}): {detail}")
     except Exception as e:
         logging.warning(f"[马斯克] 推演异常: {e}，不阻塞")
 
@@ -3508,7 +3513,11 @@ if __name__ == '__main__':
                 full_content = f.read()
             logging.info("[东方朔] ✅ 评论已追加到日报")
         else:
-            logging.warning(f"[东方朔] 评论失败: {result.stderr[:200]}")
+            # 修正: 同步改为 stderr 优先、回退 stdout，避免错误信息为空。
+            stderr = (result.stderr or '').strip()
+            stdout = (result.stdout or '').strip()
+            detail = stderr[:300] if stderr else (stdout[-400:] if stdout else '(无输出)')
+            logging.warning(f"[东方朔] 评论失败(rc={result.returncode}): {detail}")
     except Exception as e:
         logging.warning(f"[东方朔] 评论异常: {e}，不阻塞")
 
@@ -3523,7 +3532,12 @@ if __name__ == '__main__':
                 full_content = f.read()
             logging.info("[圆桌] ✅ 推演已追加到日报")
         else:
-            logging.warning(f"[圆桌] 推演失败: {roundtable_result.stderr[:200]}")
+            # 修正: Traceback 的真正异常在最后一行，原 stderr[:200] 只截到堆栈头部，
+            # 导致 KeyError 等真实原因被截掉。改为取 stderr 尾部（含异常类型与消息）。
+            stderr = (roundtable_result.stderr or '').strip()
+            stdout = (roundtable_result.stdout or '').strip()
+            detail = stderr[-500:] if stderr else (stdout[-400:] if stdout else '(无输出)')
+            logging.warning(f"[圆桌] 推演失败(rc={roundtable_result.returncode}): {detail}")
     except Exception as e:
         logging.warning(f"[圆桌] 推演异常: {e}，不阻塞")
 

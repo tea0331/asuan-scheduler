@@ -234,6 +234,10 @@ def run_debate(conflict, results_map):
 
     return {
         "topic": conflict['topic'],
+        # 从 conflict 带入 diff（评分差距），供 calculate_consensus 选出"最大分歧"。
+        # 此前遗漏该字段，导致 line 261 的 max(d.get('diff',0)) 对所有元素都得 0、
+        # 且 line 328 的 max_conflict["diff"] 直接 KeyError 崩溃（圆桌报告生成失败）。
+        "diff": conflict.get('diff', 0),
         "a_rebuttal": r1,
         "b_rebuttal": r2,
         "a_final": agent_a,
@@ -292,8 +296,8 @@ def generate_report_output(results, debates, consensus, side_names):
     # 参与角色
     all_names = []
     for r in results:
-        all_names.append(r['emoji'] + r['name'] + '(' + r['title'] + ')')
-    for sn in side_names:
+        all_names.append(r['emoji'] + r['name'] + '(' + r.get('title', '') + ')')
+    for sn in (side_names or []):
         all_names.append(SIDE_AGENTS[sn]['emoji'] + sn)
     output.append('**参与角色**: ' + ' | '.join(all_names))
     output.append('')
@@ -325,7 +329,8 @@ def generate_report_output(results, debates, consensus, side_names):
     for d in consensus['details']:
         output.append(f'- {d}')
     if consensus['max_conflict']:
-        output.append(f'**最大分歧**: {consensus["max_conflict"]["topic"]}（差距{consensus["max_conflict"]["diff"]}分）')
+        _mc = consensus['max_conflict']
+        output.append(f'**最大分歧**: {_mc.get("topic", "未知")}（差距{_mc.get("diff", 0)}分）')
     output.append(f'**辩论场次**: {consensus["debate_count"]}')
     output.append('')
 
