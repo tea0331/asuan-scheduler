@@ -3473,6 +3473,21 @@ if __name__ == '__main__':
     except Exception as e:
         logging.warning(f"[马斯克] 推演异常: {e}，不阻塞")
 
+    # 7.5 每日寓言（追加到日报）
+    try:
+        result = subprocess.run(
+            [sys.executable, os.path.join(MODULE_DIR, 'add_parable.py'), today_str],
+            capture_output=True, text=True, timeout=240
+        )
+        if result.returncode == 0:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                full_content = f.read()
+            logging.info("[寓言] ✅ 已追加到日报")
+        else:
+            logging.warning(f"[寓言] 生成失败: {result.stderr[:200]}")
+    except Exception as e:
+        logging.warning(f"[寓言] 生成异常: {e}，不阻塞")
+
     # 8. 东方朔评论（追加到日报，发邮件）
     try:
         result = subprocess.run(
