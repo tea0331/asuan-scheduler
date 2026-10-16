@@ -50,11 +50,13 @@ def load_json(path):
 
 
 def call_deepseek(system_msg, user_msg, max_tokens=2000, temperature=0.3):
-    """调用 DeepSeek V4 Flash（推理模型）
+    """调用 DeepSeek V4 Flash（已关闭思考模式）
 
-    注意：deepseek-v4-flash 是推理模型，会先输出 reasoning_content 消耗 token，
-    若 max_tokens 过小会导致 content 为空（finish_reason=length）。
-    因此 content 为空时自动用更大预算重试一次。
+    deepseek-v4-flash 默认开启思考，会先输出 reasoning_content 吃掉 token 预算，
+    导致 content 为空（finish_reason=length）。正确做法是显式传
+    thinking.type=disabled 关闭思考（reasoning.enabled=False 是 OpenAI 系写法，
+    DeepSeek 不识别，实测无效）。此处关闭后，content 应为正常正文；
+    仍保留一次更大预算重试作为兜底。
     """
     if not API_KEY:
         print("❌ DEEPSEEK_API_KEY 未设置")
@@ -72,7 +74,8 @@ def call_deepseek(system_msg, user_msg, max_tokens=2000, temperature=0.3):
                 {"role": "user", "content": user_msg}
             ],
             "max_tokens": mt,
-            "temperature": temperature
+            "temperature": temperature,
+            "thinking": {"type": "disabled"},
         }
         resp = requests.post(API_URL, json=payload, headers=headers, timeout=120)
         if resp.status_code != 200:

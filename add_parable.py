@@ -111,9 +111,10 @@ def _call_deepseek(system_msg, user_msg, timeout=180):
         ],
         'temperature': API_TEMPERATURE,
         'max_tokens': 4000,
-        # 关闭深度推理：与主流程 b478d81 的根治方案一致，
-        # 避免推理占满 token 预算导致 content 返回空。
-        'reasoning': {'enabled': False},
+        # 关闭思考模式：DeepSeek V4 Flash 默认开启思考，不传参即会推理并吃满预算，
+        # 导致 finish_reason=length、content 为空。正确参数是 thinking.type=disabled，
+        # 而 reasoning.enabled=False 是 OpenAI 系写法，DeepSeek 通道不识别（实测无效）。
+        'thinking': {'type': 'disabled'},
     }
 
     resp = requests.post(API_URL, headers=headers, json=payload, timeout=timeout)

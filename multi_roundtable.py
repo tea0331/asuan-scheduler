@@ -74,7 +74,10 @@ def call_deepseek(system_msg, user_msg, max_tokens=800, temperature=0.7, timeout
             {"role": "user", "content": user_msg}
         ],
         "max_tokens": max_tokens,
-        "temperature": temperature
+        "temperature": temperature,
+        # 关闭思考模式：deepseek-v4-flash 默认开启思考，角色发言 max_tokens 又小，
+        # 推理极易吃满预算导致 content 为空。正确参数是 thinking.type=disabled。
+        "thinking": {"type": "disabled"},
     }
     try:
         resp = requests.post(API_URL, json=payload, headers=headers, timeout=timeout)

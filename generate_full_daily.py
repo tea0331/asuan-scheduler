@@ -1498,10 +1498,12 @@ def _call_deepseek_api(system_msg, user_msg, timeout=90):
         ],
         "max_tokens": 8000,
         "temperature": 0.7,
-        # 根治: 关闭深度推理(reasoning_content), 避免超长任务把 token 预算
-        # 全烧进内部推理导致 content 返回空, 进而被误判失败触发降级模板。
-        # (实测同日负载: 开启时 content=0/reasoning=12743; 关闭后 content=3965)
-        "reasoning": {"enabled": False},
+        # 关闭思考模式(thinking), 避免超长任务把 token 预算全烧进内部推理
+        # 导致 content 返回空, 进而被误判失败触发降级模板。
+        # 注意: 正确参数是 thinking.type=disabled(DeepSeek V4 通道识别),
+        # 而非 reasoning.enabled=False(OpenAI 系写法, DeepSeek 不识别, 实测无效)——
+        # b478d81 曾误用 reasoning 参数, 推理实际从未被关闭, 此处为真正根治。
+        "thinking": {"type": "disabled"},
     }
 
     try:

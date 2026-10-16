@@ -53,7 +53,10 @@ def generate_musk_inference(daily_content):
             {'role': 'user', 'content': prompt}
         ],
         'temperature': 0.3,
-        'max_tokens': 2000
+        'max_tokens': 2000,
+        # 关闭思考模式：deepseek-v4-flash 默认开启思考，会先输出 reasoning_content
+        # 吃掉 token 预算，导致 content 为空。正确参数是 thinking.type=disabled。
+        'thinking': {'type': 'disabled'},
     }
     
     try:
@@ -69,8 +72,11 @@ def generate_musk_inference(daily_content):
         if 'choices' in result:
             msg = result['choices'][0]['message']
             text = (msg.get('content') or '').strip()
-            # 部分模型（deepseek-v4-flash 等）可能把正文放在 reasoning_content
+            # 兜底：理论上关闭 thinking 后不应再有 reasoning_content。
+            # 若仍出现，说明推理未被关闭，此兜底会把"思考草稿"当正文（草稿腔），
+            # 属于异常路径，仅作最后保底，正常不应触发。
             if not text and msg.get('reasoning_content'):
+                print('   ⚠️ content 为空，回退到 reasoning_content（异常路径，检查 thinking 参数是否失效）')
                 text = msg['reasoning_content'].strip()
         else:
             print(f'   ❌ 未知响应格式: {result}')
